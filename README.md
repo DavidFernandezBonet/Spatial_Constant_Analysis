@@ -1,1 +1,0 @@
-# Spatial_Constant_Analysis
