@@ -1,0 +1,120 @@
+import os
+
+def create_project_structure():
+
+
+    current_script_dir = os.path.dirname(os.path.realpath(__file__))
+    project_root = os.path.dirname(current_script_dir)
+
+    directory_map = {
+        'source_code': f'{project_root}/src',
+        'edge_lists': f'{project_root}/data/edge_lists',
+        'original_positions': f'{project_root}/data/original_positions',
+        'plots': f'{project_root}/results/plots',
+        'plots_spatial_constant': f'{project_root}/results/plots/spatial_constant',
+        'plots_spatial_constant_gg': f'{project_root}/results/plots/spatial_constant/graph_growth',
+        'plots_spatial_constant_variation': f'{project_root}/results/plots/spatial_constant/variation_analysis',
+        'plots_spatial_constant_variation_N': f'{project_root}/results/plots/spatial_constant/variation_analysis/N',
+        'plots_spatial_constant_variation_prox_mode': f'{project_root}/results/plots/spatial_constant/variation_analysis/prox_mode',
+        'plots_spatial_constant_variation_degree': f'{project_root}/results/plots/spatial_constant/variation_analysis/degree',
+        'plots_clustering_coefficient': f'{project_root}/results/plots/clustering_coefficient',
+        'plots_degree_distribution': f'{project_root}/results/plots/degree_distribution',
+    }
+
+    for key, relative_path in directory_map.items():
+        full_path = os.path.join(project_root, relative_path)
+        os.makedirs(full_path, exist_ok=True)
+
+        if key == 'source_code':
+            with open(os.path.join(full_path, '__init__.py'), 'w') as init_file:
+                init_file.write("# Init file for src package\n")
+
+    with open(os.path.join(project_root, 'README.md'), 'w') as readme_file:
+        readme_file.write("# Project: Spatial Constant Analysis\n")
+
+    print(f"Project structure created under '{project_root}'")
+    return directory_map
+
+class GraphArgs:
+    def __init__(self, code_folder=os.getcwd(), num_points=300, L=1, intended_av_degree=6,
+                 dim=2, proximity_mode="knn_bipartite", directory_map=None, average_degree=None,
+                 edge_list_title=None, false_edges_count=0):
+
+        self.edge_list_title = edge_list_title
+        self.code_folder = code_folder
+        self._num_points = num_points
+        self.L = L
+        self._intended_av_degree = intended_av_degree
+        self._base_proximity_mode = proximity_mode
+        self._false_edges_count = false_edges_count
+        self.update_proximity_mode()
+
+        self._dim = dim
+
+        # Graph properties
+        self.is_bipartite = False
+        self.bipartite_sets = None  # Adding this attribute
+        self.average_degree = average_degree
+        self.mean_clustering_coefficient = None
+
+        # Directory map
+        self.directory_map = directory_map
+
+
+    def update_args_title(self):
+        self.args_title = f"N={self._num_points}_dim={self._dim}_{self._proximity_mode}_k={self._intended_av_degree}"
+        self.edge_list_title = f"edge_list_{self.args_title}.csv"
+
+    @property
+    def num_points(self):
+        return self._num_points
+
+    @num_points.setter
+    def num_points(self, value):
+        self._num_points = value
+        self.update_args_title()
+
+    @property
+    def intended_av_degree(self):
+        return self._intended_av_degree
+
+    @intended_av_degree.setter
+    def intended_av_degree(self, value):
+        self._intended_av_degree = value
+        self.update_args_title()
+
+    @property
+    def proximity_mode(self):
+        return self._proximity_mode
+
+    @proximity_mode.setter
+    def proximity_mode(self, value):
+        self._base_proximity_mode = value  # Update the base proximity mode
+        self.update_proximity_mode()
+        self.update_args_title()
+    @property
+    def false_edges_count(self):
+        return self._false_edges_count
+
+    @false_edges_count.setter
+    def false_edges_count(self, value):
+        self._false_edges_count = value
+        self.update_proximity_mode()
+
+    def update_proximity_mode(self):
+        if self._false_edges_count:
+            self._proximity_mode = self._base_proximity_mode + f"_with_false_edges={self._false_edges_count}"
+        else:
+            self._proximity_mode = self._base_proximity_mode
+
+
+
+
+    @property
+    def dim(self):
+        return self._dim
+
+    @dim.setter
+    def dim(self, value):
+        self._dim = value
+        self.update_args_title()

@@ -78,7 +78,9 @@ class QualityMetrics:
         original_distances = pdist(self.original_points)
         reconstructed_distances = pdist(self.reconstructed_points)
         correlation, _ = pearsonr(original_distances, reconstructed_distances)
-        return correlation
+        # R_squared
+        r_squared = correlation**2
+        return r_squared
 
     def compute_distortion(self, original_positions, reconstructed_positions):
         """
@@ -199,7 +201,10 @@ class GTA_Quality_Metrics:
 
         # Calculate Pearson correlation
         correlation, _ = pearsonr(graph_distances_flat, reconstructed_distances)
-        return correlation
+
+        # R_squared
+        r_squared = correlation**2
+        return r_squared
     
     def evaluate_metrics(self):
         _, self.gta_knn_metric = self.get_gta_knn()

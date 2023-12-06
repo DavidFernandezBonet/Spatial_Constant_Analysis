@@ -1,14 +1,18 @@
 import pandas as pd
 from scipy.sparse.csgraph import connected_components
 from scipy.sparse import coo_matrix
+import scipy.stats
 import igraph as ig
 import networkx as nx
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import product
 from scipy.optimize import curve_fit
-import scienceplots
-plt.style.use(['science', 'ieee'])
+import pickle
+import os
+
+from algorithms import *
+
 def get_largest_component_sparse(sparse_graph, original_node_ids):
     n_components, labels = connected_components(csgraph=sparse_graph, directed=False, return_labels=True)
     if n_components > 1:  # If not connected
@@ -57,7 +61,24 @@ def read_position_df(args):
 
     return original_points_array
 
-def load_graph(args, load_mode='igraph'):
+
+def write_nx_graph_to_edge_list_df(args):
+    # Load the graph from the pickle file
+    pickle_file_path = f"{args.directory_map['edge_lists']}/{args.edge_list_title}"
+    with open(pickle_file_path, 'rb') as f:
+        G = pickle.load(f)
+
+    edge_list = G.edges()
+
+    edge_df = pd.DataFrame(edge_list, columns=["source", "target"])
+
+    # Splitting the filename and extension
+    new_edge_list_name, _ = os.path.splitext(args.edge_list_title)
+    args.edge_list_title = new_edge_list_name + ".csv"
+    edge_df.to_csv(f"{args.directory_map['edge_lists']}/{args.edge_list_title}", index=False)
+    return
+
+def load_graph(args, load_mode='igraph', input_file_type='edge_list'):
     """
         Load a graph from an edge list CSV file, compute its average degree, and
         update the provided args object with the average degree and the number of
@@ -89,8 +110,10 @@ def load_graph(args, load_mode='igraph'):
         """
 
 
+    # TODO: implement different input files, e.g. edge list, pickle networkx...
     # TODO: update edge list if graph is disconnected!
-    file_path = f"{args.directory_map['edge_lists']}/edge_list_{args.args_title}.csv"
+    # TODO: false edge implementation for other types apart from igraph? Is it necessary¿
+    file_path = f"{args.directory_map['edge_lists']}/{args.edge_list_title}"
     df = pd.read_csv(file_path)
 
 
@@ -117,6 +140,7 @@ def load_graph(args, load_mode='igraph'):
     elif load_mode == 'igraph':
 
         tuples = [tuple(x) for x in df.values]
+
         igraph_graph = ig.Graph.TupleList(tuples, directed=False)
         largest_component = get_largest_component_igraph(igraph_graph)
         degrees = largest_component.degree()
@@ -125,6 +149,18 @@ def load_graph(args, load_mode='igraph'):
         args.num_points = len(largest_component.vs)
         print("average degree", average_degree)
         print("num points", args.num_points)
+
+        # Check bipartitedness
+        is_bipartite, types = largest_component.is_bipartite(return_types=True)
+        args.is_bipartite = is_bipartite
+        if is_bipartite:
+            args.bipartite_sets = types
+
+        # Add false edges if necessary
+        if args.false_edges_count:  #TODO: adapt for bipartite case
+            print("ha passat")
+            largest_component = add_random_edges_igraph(largest_component, args.false_edges_count)
+
         return largest_component
 
     elif load_mode == 'networkx':
@@ -150,6 +186,9 @@ class CurveFitting:
         self.fitError = None
         self.sorted_x = None
         self.sorted_y = None
+        self.sorted_y_errors = None
+        self.reduced_chi_squared = None
+        self.r_squared = None
 
     def neg_exponential_model(self, x, a, b, c):
         return a * np.exp(-b * x) + c
@@ -164,8 +203,14 @@ class CurveFitting:
     def spatial_constant_dim2(self, x, a, b):
         return a * np.power(x, 1/2) + b
 
+    def spatial_constant_dim2_linearterm(self, x, a):
+        return a * np.power(x, 1/2)
+
     def spatial_constant_dim3(self, x, a, b):
         return a * np.power(x, 1/3) + b
+
+    def spatial_constant_dim3_linearterm(self, x, a):
+        return a * np.power(x, 1/3)
 
     def small_world_model(self, x, a, b):
         return a * np.log(x) + b
@@ -183,13 +228,23 @@ class CurveFitting:
         elif model_func == self.logarithmic_model:
             a, b, c = self.popt
             return f'$y = {a:.4f} \cdot \log({b:.4f} x) + {c:.4f}$'
+
         elif model_func == self.spatial_constant_dim2:
             a, b = self.popt
             return f'$y = {a:.4f} \cdot x^{{1/2}} + {b:.4f}$'
 
+        elif model_func == self.spatial_constant_dim2_linearterm:
+            a = self.popt[0]
+
+            return f'$y = {a:.4f} \cdot x^{{1/2}} $'
+
         elif model_func == self.spatial_constant_dim3:
             a, b = self.popt
             return f'$y = {a:.4f} \cdot x^{{1/3}} + {b:.4f}$'
+
+        elif model_func == self.spatial_constant_dim3_linearterm:
+            a = self.popt[0]
+            return f'$y = {a:.4f} \cdot x^{{1/3}} $'
 
         elif model_func == self.small_world_model:
             a, b = self.popt
@@ -197,11 +252,12 @@ class CurveFitting:
         else:
             return 'Unknown model'
 
-    def perform_curve_fitting(self, model_func):
+    def perform_curve_fitting(self, model_func, constant_error=None):
         # Sort the x values while keeping y values matched
         sorted_indices = np.argsort(self.x_data)
         self.sorted_x = self.x_data[sorted_indices]
         self.sorted_y = self.y_data[sorted_indices]
+        self.sorted_y_errors = np.full_like(self.y_data, constant_error if constant_error is not None else 1.0)  #TODO: careful with this! Only if we don't have errors
 
         # Perform curve fitting
         self.popt, self.pcov = curve_fit(model_func, self.sorted_x, self.sorted_y)
@@ -211,6 +267,40 @@ class CurveFitting:
         param_combinations = list(product(*[(1, -1)]*len(self.sigma)))
         values = np.array([model_func(self.sorted_x, *(self.popt + np.array(comb) * self.sigma)) for comb in param_combinations])
         self.fitError = np.std(values, axis=0)
+
+
+        # Calculate residuals and reduced chi-squared  #TODO: not working for now, Is there a meaningful way to associate errors?
+        y_fit = model_func(self.sorted_x, *self.popt)
+        residuals = self.sorted_y - y_fit
+        chi_squared = np.sum((residuals / self.sorted_y_errors) ** 2)
+        degrees_of_freedom = len(self.sorted_y) - len(self.popt)
+        self.reduced_chi_squared = chi_squared / degrees_of_freedom
+        print("chi squared", self.reduced_chi_squared)
+
+        # For R squared
+        mean_y = np.mean(self.sorted_y)
+        sst = np.sum((self.sorted_y - mean_y) ** 2)
+        ssr = np.sum(residuals ** 2)
+        self.r_squared = 1 - (ssr / sst)
+        print("R-squared:", self.r_squared)
+
+        # KS test
+        ks_statistic, p_value = scipy.stats.kstest(self.sorted_y, lambda x: model_func(x, *self.popt))
+        print("ks stat", ks_statistic, "p-value", p_value)
+
+        # Perform the Anderson-Darling test on the residuals
+        ad_result = scipy.stats.anderson(residuals)
+
+        # Store the results
+        self.ad_statistic = ad_result.statistic
+        self.ad_critical_values = ad_result.critical_values
+        self.ad_significance_levels = ad_result.significance_level
+
+        # Output results
+        print("Anderson-Darling Statistic:", self.ad_statistic)
+        for i in range(len(self.ad_critical_values)):
+            sl, cv = self.ad_significance_levels[i], self.ad_critical_values[i]
+            print(f"Significance Level {sl}%: Critical Value {cv}")
 
     def plot_fit_with_uncertainty(self, model_func, xlabel, ylabel, title, save_path):
         fig, ax = plt.subplots(figsize=(12, 8), dpi=100, facecolor='w', edgecolor='k')
@@ -226,10 +316,12 @@ class CurveFitting:
         plt.fill_between(self.sorted_x, curveFit - self.fitError, curveFit + self.fitError, color='red', alpha=0.2, label=r'$\pm 1\sigma$ uncertainty')
         plt.fill_between(self.sorted_x, curveFit - 3*self.fitError, curveFit + 3*self.fitError, color='blue', alpha=0.1, label=r'$\pm 3\sigma$ uncertainty')
 
-        # Equation annotation
+        # Equation and reduced chi-squared annotation
         equation = self.get_equation_string(model_func)
+        r_squared_text = f'R2: {self.r_squared:.2f}'
+        annotation_text = f"{equation}\n{r_squared_text}"
         props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
-        plt.text(0.7, 0.05, equation, fontsize=12, bbox=props, transform=ax.transAxes, verticalalignment='top')
+        plt.text(0.7, 0.05, annotation_text, fontsize=12, bbox=props, transform=ax.transAxes, verticalalignment='top')
 
         # Labels and title
         plt.xlabel(xlabel, fontsize=24)
@@ -237,6 +329,7 @@ class CurveFitting:
         plt.title(title, fontsize=28, color='k')
         ax.legend(fontsize=18, loc='best')
 
+        # Save the plot
         plt.savefig(save_path)
 
     def plot_fit_with_uncertainty_for_dataset(self, x, y, model_func, ax, label_prefix, color, y_position):

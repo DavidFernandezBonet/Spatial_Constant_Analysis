@@ -1,6 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from utils import CurveFitting
+import seaborn as sns
+import scienceplots
+
+plt.style.use(['science', 'nature'])
+
 
 def plot_spatial_constant(args, df):
     plt.figure()
@@ -42,24 +47,10 @@ def plot_average_shortest_path(args, df):
     plt.savefig(f"{save_path}/average_shortest_path_vs_random_edges.png")
 
 
-def plot_mean_sp_with_graph_growth(args, df):
-    plt.figure()
-    # Plot Spatial Constant
-    plt.plot(df['num_nodes'], df['mean_shortest_path'], marker='o', label='Mean Shortest Path')
 
 
-    # Set labels and title
-    plt.xlabel('Number of Nodes')
-    plt.ylabel('Mean Shortest Path')
-    plt.title('Mean Shortest Path vs. Number of Nodes')
-    plt.legend()
 
-    # Save the plot
-    save_path = args.directory_map['plots_spatial_constant']
-    plt.savefig(f"{save_path}/mean_sp_vs_graph_growth.png")
-
-
-def plot_mean_sp_with_graph_growth(args, df, plot_filename, model="spatial_constant_dim=2"):
+def plot_mean_sp_with_graph_growth(args, df, plot_filename, model="spatial_constant_dim=2", return_s_and_r2=False):
     # Initialize GraphFitting instance with the data
     curve_fitting = CurveFitting(df['num_nodes'].values, df['mean_shortest_path'].values)
     print(model)
@@ -67,8 +58,16 @@ def plot_mean_sp_with_graph_growth(args, df, plot_filename, model="spatial_const
         model_func = curve_fitting.spatial_constant_dim2
     elif model == "spatial_constant_dim=3":
         model_func = curve_fitting.spatial_constant_dim3
+    if model == "spatial_constant_dim=2_linearterm":
+        model_func = curve_fitting.spatial_constant_dim2_linearterm
+    if model == "spatial_constant_dim=3_linearterm":
+        model_func = curve_fitting.spatial_constant_dim3_linearterm
     elif model == "small_world":
         model_func = curve_fitting.small_world_model
+    elif model == "power_law":
+        model_func = curve_fitting.power_model
+    elif model == "power_law_w_constant":
+        model_func = curve_fitting.power_model_w_constant
 
     # Perform curve fitting using the power model
     curve_fitting.perform_curve_fitting(model_func)
@@ -77,63 +76,21 @@ def plot_mean_sp_with_graph_growth(args, df, plot_filename, model="spatial_const
     xlabel = 'Number of Nodes'
     ylabel = 'Mean Shortest Path'
     title = 'Mean Shortest Path vs. Number of Nodes'
-    save_path = f"{args.directory_map['plots_spatial_constant']}/{plot_filename}"
+    save_path = f"{args.directory_map['plots_spatial_constant_gg']}/{plot_filename}"
 
     # Plot the data with the fitted curve
     curve_fitting.plot_fit_with_uncertainty(model_func, xlabel, ylabel, title, save_path)
+    if return_s_and_r2:
+        return curve_fitting.popt[0], curve_fitting.r_squared  # return spatial constant and r2
+    else:
+        return
 
 
-# def plot_mean_sp_with_num_nodes_large_and_smallworld(args, df, plot_filename):
-#     # Initialize the plot
-#     fig, ax = plt.subplots(figsize=(12, 8), dpi=300)
-#
-#     # Initialize GraphFitting instance for original graph
-#     df_original = df[df['false_edges_introduced'] == False]
-#     curve_fitting_original = CurveFitting(df_original['num_nodes'].values, df_original['mean_shortest_path'].values)
-#     curve_fitting_original.perform_curve_fitting(curve_fitting_original.spatial_constant_dim2)
-#     # curve_fitting_original.plot_fit_with_uncertainty_for_dataset(df_original['num_nodes'].values,
-#     #                                                              df_original['mean_shortest_path'].values,
-#     #                                                              curve_fitting_original.spatial_constant_dim2, ax,
-#     #                                                              label_prefix='Original', color='tab:blue')
-#
-#     # Plot Mean Shortest Path for Original Graphs
-#     plt.scatter(df_original['num_nodes'], df_original['mean_shortest_path'], marker='o', label='Original Graph',
-#                 color='tab:blue')
-#     plt.plot(df_original['num_nodes'],
-#              curve_fitting_original.spatial_constant_dim2(df_original['num_nodes'], *curve_fitting_original.popt),
-#              label='Fit Original', linestyle='--', color='tab:blue')
-#
-#
-#     # Initialize GraphFitting instance for small-world graph
-#     df_small_world = df[df['false_edges_introduced'] == True]
-#     curve_fitting_small_world = CurveFitting(df_small_world['num_nodes'].values,
-#                                              df_small_world['mean_shortest_path'].values)
-#     curve_fitting_small_world.perform_curve_fitting(curve_fitting_small_world.small_world_model)
-#     # curve_fitting_small_world.plot_fit_with_uncertainty_for_dataset(df_small_world['num_nodes'].values,
-#     #                                                                 df_small_world['mean_shortest_path'].values,
-#     #                                                                 curve_fitting_small_world.small_world_model, ax,
-#     #                                                                 label_prefix='Small-World', color='tab:red')
-#
-#     # Plot Mean Shortest Path for Small-World Graphs
-#     plt.scatter(df_small_world['num_nodes'], df_small_world['mean_shortest_path'], marker='x',
-#                 label='Small-World Graph', color='tab:red')
-#     plt.plot(df_small_world['num_nodes'],
-#              curve_fitting_small_world.small_world_model(df_small_world['num_nodes'], *curve_fitting_small_world.popt),
-#              label='Fit Small-World', linestyle='--', color='tab:red')
-#
-#     # Set labels and title
-#     plt.xlabel('Number of Nodes')
-#     plt.ylabel('Mean Shortest Path')
-#     plt.title('Mean Shortest Path vs. Number of Nodes')
-#     plt.legend()
-#
-#     # Save the plot
-#     save_path = f"{args.directory_map['plots_spatial_constant']}/{plot_filename}"
-#     plt.savefig(save_path)
 
 
 def plot_mean_sp_with_num_nodes_large_and_smallworld(args, df, plot_filename):
     fig, ax = plt.subplots(figsize=(12, 8), dpi=100)
+
 
     series_types = df['series_type'].unique()
     colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red']
@@ -153,12 +110,20 @@ def plot_mean_sp_with_num_nodes_large_and_smallworld(args, df, plot_filename):
         plt.plot(sorted_x, sorted_y, label=series,
                  linestyle='--', color=color, zorder=2)
 
+
+
     # Plot for Original Graph
     df_original = df[df['series_type'] == "Original"]
     curve_fitting_original = CurveFitting(df_original['num_nodes'].values, df_original['mean_shortest_path'].values)
+    if args.dim == 2:
+        func_fit = curve_fitting_original.spatial_constant_dim2
+    elif args.dim == 3:
+        func_fit = curve_fitting_original.spatial_constant_dim3
+    else:
+        raise ValueError("Dimension must be 2 or 3")
     curve_fitting_original.plot_fit_with_uncertainty_for_dataset(df_original['num_nodes'].values,
                                                                  df_original['mean_shortest_path'].values,
-                                                                 curve_fitting_original.spatial_constant_dim2,
+                                                                 func_fit,
                                                                  ax, label_prefix='Original', color='tab:blue',
                                                                  y_position=0.95)
     print("STD parameters Original", curve_fitting_original.sigma)
@@ -168,7 +133,7 @@ def plot_mean_sp_with_num_nodes_large_and_smallworld(args, df, plot_filename):
     curve_fitting_small_world = CurveFitting(df_small_world['num_nodes'].values, df_small_world['mean_shortest_path'].values)
     curve_fitting_small_world.plot_fit_with_uncertainty_for_dataset(df_small_world['num_nodes'].values,
                                                                     df_small_world['mean_shortest_path'].values,
-                                                                    curve_fitting_small_world.small_world_model, ax,
+                                                                    curve_fitting_small_world.power_model, ax,
                                                                     label_prefix='Small-World', color='tab:red',
                                                                     y_position=0.85)
 
@@ -183,3 +148,200 @@ def plot_mean_sp_with_num_nodes_large_and_smallworld(args, df, plot_filename):
     # Save the plot
     save_path = f"{args.directory_map['plots_spatial_constant']}/{plot_filename}"
     plt.savefig(save_path)
+
+
+
+def plot_clustering_coefficient_distribution(args, clustering_coefficients, title="Clustering Coefficient Distribution"):
+    plt.figure(figsize=(12, 6))  # Adjusted figure size for potential subplots
+
+    if args.is_bipartite:
+        # Plotting two subplots for each set in a bipartite graph
+        mean_clustering_coefficient_set1 = args.mean_clustering_coefficient_set1
+        mean_clustering_coefficient_set2 = args.mean_clustering_coefficient_set2
+
+        # Clustering Coefficients for Set 1
+        plt.subplot(1, 2, 1)  # First subplot in a 1x2 grid
+        plt.hist(clustering_coefficients[0], bins=20, color='blue', alpha=0.7, rwidth=0.85)
+        plt.title(title + " - Set 1")
+        plt.xlabel('Clustering Coefficient')
+        plt.ylabel('Frequency')
+        plt.legend([f"Mean Clustering Coefficient: {mean_clustering_coefficient_set1:.2f}"])
+
+        # Clustering Coefficients for Set 2
+        plt.subplot(1, 2, 2)  # Second subplot in a 1x2 grid
+        plt.hist(clustering_coefficients[1], bins=20, color='red', alpha=0.7, rwidth=0.85)
+        plt.title(title + " - Set 2")
+        plt.xlabel('Clustering Coefficient')
+        plt.ylabel('Frequency')
+        plt.legend([f"Mean Clustering Coefficient: {mean_clustering_coefficient_set2:.2f}"])
+
+    else:
+        # Plotting a single histogram for non-bipartite graphs
+        mean_clustering_coefficient = args.mean_clustering_coefficient
+        plt.hist(clustering_coefficients, bins=20, color='blue', alpha=0.7, rwidth=0.85)
+        plt.title(title)
+        plt.xlabel('Clustering Coefficient')
+        plt.ylabel('Frequency')
+        plt.legend([f"Mean Clustering Coefficient: {mean_clustering_coefficient:.2f}"])
+
+    plot_folder = args.directory_map['plots_clustering_coefficient']
+    plt.savefig(f"{plot_folder}/clust_coef_{args.args_title}")
+
+
+
+def plot_degree_distribution(args, degree_distribution, title="Degree Distribution"):
+    plt.figure(figsize=(12, 6))  # Adjusted figure size for potential subplots
+
+    if args.is_bipartite:
+        # Plotting two subplots for each set in a bipartite graph
+        average_degree_set1 = args.average_degree_set1
+        average_degree_set2 = args.average_degree_set2
+
+        # Degree Distribution for Set 1
+        plt.subplot(1, 2, 1)  # First subplot in a 1x2 grid
+        plt.bar(range(len(degree_distribution[0])), degree_distribution[0], color='blue', alpha=0.7)
+        plt.title(title + " - Set 1")
+        plt.xlabel('Degree')
+        plt.ylabel('Frequency')
+        plt.legend([f"Average Degree: {average_degree_set1:.2f}"])
+
+        # Degree Distribution for Set 2
+        plt.subplot(1, 2, 2)  # Second subplot in a 1x2 grid
+        plt.bar(range(len(degree_distribution[1])), degree_distribution[1], color='red', alpha=0.7)
+        plt.title(title + " - Set 2")
+        plt.xlabel('Degree')
+        plt.ylabel('Frequency')
+        plt.legend([f"Average Degree: {average_degree_set2:.2f}"])
+
+    else:
+        # Plotting a single bar chart for non-bipartite graphs
+        average_degree = args.average_degree
+        plt.bar(range(len(degree_distribution)), degree_distribution, color='green', alpha=0.7)
+        plt.title(title)
+        plt.xlabel('Degree')
+        plt.ylabel('Frequency')
+        plt.legend([f"Average Degree: {average_degree:.2f}"])
+
+    plot_folder = args.directory_map['plots_degree_distribution']
+    plt.savefig(f"{plot_folder}/degree_dist_{args.args_title}")
+
+
+### Functions for spatial constant variation analysis
+def plot_variation_with_num_points(args, results_df, fixed_proximity_mode, fixed_av_degree):
+    # Filter data for the specific proximity_mode and intended_av_degree
+    # filtered_df = results_df[(results_df['proximity_mode'] == fixed_proximity_mode) &
+    #                          (results_df['intended_av_degree'] == fixed_av_degree)]
+
+    # TODO: make sure that proximity graph can vary but average degree is very similar. Otherwise does not make sense
+    filtered_df = results_df
+    plt.figure(figsize=(10, 6))
+    sns.violinplot(x='num_nodes', y='S', data=filtered_df)
+    plt.title('Variation of Spatial Constant with Number of Points')
+    plt.xlabel('Number of Nodes')
+    plt.ylabel('Spatial Constant (S)')
+    plot_folder = args.directory_map["plots_spatial_constant_variation_N"]
+    plt.savefig(f'{plot_folder}/spatial_constant_variation_N_prox_mode={fixed_proximity_mode}_intended_degree={fixed_av_degree}')
+
+
+def plot_variation_with_proximity_mode(args, results_df, fixed_num_points, fixed_av_degree):
+    # Filter data for the specific num_points and intended_av_degree
+    # filtered_df = results_df[(results_df['num_nodes'] == fixed_num_points) &
+    #                          (results_df['intended_av_degree'] == fixed_av_degree)]
+
+    filtered_df = results_df
+    plt.figure(figsize=(10, 6))
+    sns.violinplot(x='proximity_mode', y='S', data=filtered_df)
+    plt.title('Variation of Spatial Constant with Proximity Mode')
+    plt.xlabel('Proximity Mode')
+    plt.ylabel('Spatial Constant (S)')
+    plot_folder = args.directory_map["plots_spatial_constant_variation_prox_mode"]
+    plt.savefig(f'{plot_folder}/spatial_constant_variation_prox_mode_N={fixed_num_points}_intended_degree={fixed_av_degree}')
+
+def plot_variation_with_av_degree(args, results_df):
+    plt.figure(figsize=(10, 6))
+
+    # Create a scatter plot
+    sns.scatterplot(data=results_df, x='average_degree', y='S',
+                    hue='proximity_mode', size='num_nodes',
+                    sizes=(20, 200), alpha=0.7, legend='full', palette='deep')
+
+    plt.title('Variation of Spatial Constant with Average Degree')
+    plt.xlabel('Average Degree (<k>)')
+    plt.ylabel('Spatial Constant (S)')
+
+    # Adjust legend
+    plt.legend(title='Proximity Mode and Num Nodes', bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+
+    # Save the plot
+    plot_folder = args.directory_map["plots_spatial_constant_variation_degree"]
+    plt.savefig(f'{plot_folder}/spatial_constant_variation_av_degree.png', bbox_inches='tight')
+
+
+def classify_row(row):
+    if row['dim'] == 2 and 'bipartite' not in row['proximity_mode']:
+        return '2D Non-Bipartite'
+    elif row['dim'] == 2 and 'bipartite' in row['proximity_mode']:
+        return '2D Bipartite'
+    elif row['dim'] == 3 and 'bipartite' not in row['proximity_mode']:
+        return '3D Non-Bipartite'
+    else:  # row['dim'] == 3 and 'bipartite' in row['proximity_mode']
+        return '3D Bipartite'
+
+def plot_spatial_constant_variation(args, spatial_constant_variation_results_df):
+
+    ### Predictions
+    constant_scaler = np.sqrt(4.5)
+    bipartite_correction = 1 / 1.2  # 1/np.sqrt(2)   #TODO: i don't know exactly how the correction should look like!
+    super_spatial_constant_3d = 0.66 * constant_scaler
+    super_spatial_constant_2d = 0.517 * constant_scaler
+    super_spatial_constant_2d_bipartite = super_spatial_constant_2d * bipartite_correction
+    super_spatial_constant_3d_bipartite = super_spatial_constant_3d * bipartite_correction
+    predicted_medians = [super_spatial_constant_2d, super_spatial_constant_2d_bipartite, super_spatial_constant_3d,
+                         super_spatial_constant_3d_bipartite]
+
+    groups = ['2D Non-Bipartite', '2D Bipartite', '3D Non-Bipartite', '3D Bipartite']
+    n_class_groups = 4
+    # Apply the classification function to each row
+    spatial_constant_variation_results_df['classification'] = spatial_constant_variation_results_df.apply(classify_row, axis=1)
+
+    # Step 2: Create the Violin Plot
+    plt.figure(figsize=(10, 6))
+    sns.violinplot(x='classification', y='S_general', data=spatial_constant_variation_results_df)
+    plt.title('Violin Plot Spatial Constant')
+    plt.ylabel('Spatial Constant')  # Replace with the name of your variable
+
+    # Plot predictions
+    for i in range(n_class_groups):
+        plt.scatter(x=i, y=predicted_medians[i], color='red', zorder=3)
+
+    plot_folder = args.directory_map["plots_spatial_constant_variation"]
+    plt.savefig(f'{plot_folder}/spatial_constant_variation_violin.png', bbox_inches='tight')
+
+    # Interactive plot
+    import plotly.express as px
+
+    # Create a new column to identify if 'proximity_mode' contains 'false_edges'
+    spatial_constant_variation_results_df['color_group'] = spatial_constant_variation_results_df[
+        'proximity_mode'].apply(
+        lambda x: 'With False Edges' if 'false_edges' in x else 'Without False Edges'
+    )
+
+    # Plot the main violin plot
+    fig = px.violin(spatial_constant_variation_results_df, x='classification', y='S_general', color='color_group',
+                    box=False, points='all', hover_data=spatial_constant_variation_results_df.columns)
+
+    # Add predicted medians as scatter points
+    for i, group in enumerate(groups):
+        fig.add_scatter(x=[group], y=[predicted_medians[i]], mode='markers', marker=dict(color='green'))
+
+    # Update the layout
+    fig.update_layout(
+        title='Interactive Violin Plot of S_general for Different Groups',
+        xaxis_title='Group',
+        yaxis_title='S_general'
+    )
+
+    # Show the plot
+    fig.write_html("violin_plot_S_variation" + '.html')
+    fig.show()
+

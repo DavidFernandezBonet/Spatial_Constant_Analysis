@@ -16,6 +16,194 @@ def get_mean_shortest_path(igraph_graph):
     mean_shortest_path = np.mean(path_lengths)
     return mean_shortest_path
 
+def get_local_clustering_coefficients(igraph_graph):
+    if not isinstance(igraph_graph, ig.Graph):
+        raise ValueError("Graph is not of igraph type")
+    G = igraph_graph
+    # Compute the local clustering coefficient for each node
+    clustering_coefficients = G.transitivity_local_undirected()
+    mean_clustering_coefficient = np.mean(clustering_coefficients)
+
+    return clustering_coefficients
+
+
+def bipartite_clustering_coefficient(igraph_graph):
+    if not isinstance(igraph_graph, ig.Graph):
+        raise ValueError("Graph is not of igraph type")
+    if not igraph_graph.is_bipartite():
+        raise ValueError("Graph is not bipartite")
+
+    G = igraph_graph
+    clustering_coefficients = []
+
+    for u in G.vs:
+        second_order_neighbors = set()
+        for neighbor in u.neighbors():
+            second_order_neighbors.update(neighbor.neighbors())
+        if u in second_order_neighbors:
+            second_order_neighbors.remove(u)
+
+        c_uv_sum = 0
+        for v in second_order_neighbors:
+            intersection = set(u.neighbors()).intersection(set(v.neighbors()))
+            union = set(u.neighbors()).union(set(v.neighbors()))
+            c_uv = len(intersection) / len(union) if len(union) > 0 else 0
+            c_uv_sum += c_uv
+
+        c_u = c_uv_sum / len(second_order_neighbors) if second_order_neighbors else 0
+        clustering_coefficients.append(c_u)
+
+    mean_clustering_coefficient = np.mean(clustering_coefficients)
+
+    return clustering_coefficients, mean_clustering_coefficient
+
+
+def bipartite_clustering_coefficient_optimized(args, igraph_graph):
+    if not isinstance(igraph_graph, ig.Graph):
+        raise ValueError("Graph is not of igraph type")
+    # Check if the graph is bipartite and get the types
+    # is_bipartite, types = igraph_graph.is_bipartite(return_types=True)
+    if not args.is_bipartite:
+        raise ValueError("Graph is not bipartite")
+
+    G = igraph_graph
+    G.vs['type'] = args.bipartite_sets  # Assigning the types as attributes
+
+
+    ## manual computation (deprecated)
+    # G = assign_bipartite_sets(igraph_graph)  # Distinguish set1 and set2
+    # # Identify the two sets
+    type_attribute = G.vs['type'][0]  # Assumes 'type' attribute is used to distinguish the sets
+    set1 = [v for v in G.vs if v['type'] == type_attribute]
+    set2 = [v for v in G.vs if v['type'] != type_attribute]
+
+    # Cache for neighbors and pairwise coefficients
+    neighbors_cache = {}
+    pairwise_coeff_cache = {}
+
+    def get_neighbors(v):
+        if v.index not in neighbors_cache:
+            neighbors_cache[v.index] = set(v.neighbors())
+        return neighbors_cache[v.index]
+
+    def pairwise_coeff(u, v):
+        if (u.index, v.index) in pairwise_coeff_cache:
+            return pairwise_coeff_cache[(u.index, v.index)]
+        if (v.index, u.index) in pairwise_coeff_cache:
+            return pairwise_coeff_cache[(v.index, u.index)]
+
+        neighbors_u = get_neighbors(u)
+        neighbors_v = get_neighbors(v)
+        intersection = neighbors_u.intersection(neighbors_v)
+        union = neighbors_u.union(neighbors_v)
+        c_uv = len(intersection) / len(union) if len(union) > 0 else 0
+
+        pairwise_coeff_cache[(u.index, v.index)] = c_uv
+        return c_uv
+
+    # Function to calculate clustering coefficients for a set
+    def calc_clustering_for_set(node_set):
+        coefficients = []
+        for u in node_set:
+            second_order_neighbors = set()
+            for neighbor in get_neighbors(u):
+                second_order_neighbors.update(get_neighbors(neighbor))
+            if u in second_order_neighbors:
+                second_order_neighbors.remove(u)
+
+            c_uv_sum = sum(pairwise_coeff(u, v) for v in second_order_neighbors)
+            c_u = c_uv_sum / len(second_order_neighbors) if second_order_neighbors else 0
+            coefficients.append(c_u)
+        return coefficients
+
+    clustering_coefficients_set1 = calc_clustering_for_set(set1)
+    clustering_coefficients_set2 = calc_clustering_for_set(set2)
+
+    mean_clustering_coefficient_set1 = np.mean(clustering_coefficients_set1)
+    mean_clustering_coefficient_set2 = np.mean(clustering_coefficients_set2)
+
+    return clustering_coefficients_set1, mean_clustering_coefficient_set1, \
+           clustering_coefficients_set2, mean_clustering_coefficient_set2
+
+
+def assign_bipartite_sets(igraph_graph):
+    if not isinstance(igraph_graph, ig.Graph):
+        raise ValueError("Graph is not of igraph type")
+    if not igraph_graph.is_bipartite():
+        raise ValueError("Graph is not bipartite")
+
+    G = igraph_graph
+    visited = [False] * len(G.vs)
+    type_attribute = [None] * len(G.vs)
+
+    def bfs(start_vertex):
+        queue = [start_vertex]
+        visited[start_vertex] = True
+        type_attribute[start_vertex] = 0  # Assign to set 1
+
+        while queue:
+            vertex = queue.pop(0)
+            current_set = type_attribute[vertex]
+            next_set = 1 if current_set == 0 else 0
+
+            for neighbor in G.vs[vertex].neighbors():
+                if not visited[neighbor.index]:
+                    visited[neighbor.index] = True
+                    type_attribute[neighbor.index] = next_set
+                    queue.append(neighbor.index)
+
+    # Start BFS from the first unvisited node
+    for v in range(len(G.vs)):
+        if not visited[v]:
+            bfs(v)
+
+    G.vs['type'] = type_attribute
+    return G
+
+def get_degree_distribution(igraph_graph):
+    if not isinstance(igraph_graph, ig.Graph):
+        raise ValueError("Graph is not of igraph type")
+    G = igraph_graph
+    # Get the degree of each node
+    degrees = G.degree()
+    # Create a frequency distribution of the degrees
+    max_degree = max(degrees)
+    degree_distribution = [0] * (max_degree + 1)
+    for degree in degrees:
+        degree_distribution[degree] += 1
+    return degree_distribution
+
+
+def get_bipartite_degree_distribution(args, igraph_graph):
+    if not isinstance(igraph_graph, ig.Graph):
+        raise ValueError("Graph is not of igraph type")
+
+    if not args.is_bipartite:
+        raise ValueError("Graph is not bipartite")
+
+    G = igraph_graph
+    G.vs['type'] = args.bipartite_sets  # Assigning the types as attributes
+
+
+    # Separate the vertices into two sets based on type
+    set1_indices = [v.index for v in G.vs if v['type']]
+    set2_indices = [v.index for v in G.vs if not v['type']]
+
+    # Function to calculate degree distribution for a set
+    def calc_degree_distribution(node_indices):
+        degrees = [G.degree(v) for v in node_indices]
+        max_degree = max(degrees)
+        degree_distribution = [0] * (max_degree + 1)
+        for degree in degrees:
+            degree_distribution[degree] += 1
+        return degree_distribution
+
+    # Get degree distribution for each set
+    degree_distribution_set1 = calc_degree_distribution(set1_indices)
+    degree_distribution_set2 = calc_degree_distribution(set2_indices)
+
+    return degree_distribution_set1, degree_distribution_set2
+
 def add_random_edges_igraph(graph, num_edges_to_add):
     possible_edges = [(i, j) for i in range(graph.vcount()) for j in range(i + 1, graph.vcount())]
     possible_edges = [edge for edge in possible_edges if not graph.are_connected(edge[0], edge[1])]
