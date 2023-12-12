@@ -10,15 +10,20 @@ def create_project_structure():
         'source_code': f'{project_root}/src',
         'edge_lists': f'{project_root}/data/edge_lists',
         'original_positions': f'{project_root}/data/original_positions',
+        's_constant_results': f'{project_root}/results/individual_spatial_constant_results',
         'plots': f'{project_root}/results/plots',
+        'plots_original_image': f'{project_root}/results/plots/original_image',
         'plots_spatial_constant': f'{project_root}/results/plots/spatial_constant',
         'plots_spatial_constant_gg': f'{project_root}/results/plots/spatial_constant/graph_growth',
+        'plots_spatial_constant_subgraph_sampling': f'{project_root}/results/plots/spatial_constant/subgraph_sampling',
         'plots_spatial_constant_variation': f'{project_root}/results/plots/spatial_constant/variation_analysis',
         'plots_spatial_constant_variation_N': f'{project_root}/results/plots/spatial_constant/variation_analysis/N',
         'plots_spatial_constant_variation_prox_mode': f'{project_root}/results/plots/spatial_constant/variation_analysis/prox_mode',
         'plots_spatial_constant_variation_degree': f'{project_root}/results/plots/spatial_constant/variation_analysis/degree',
+
         'plots_clustering_coefficient': f'{project_root}/results/plots/clustering_coefficient',
         'plots_degree_distribution': f'{project_root}/results/plots/degree_distribution',
+        'plots_shortest_path_distribution': f'{project_root}/results/plots/shortest_path_distribution',
     }
 
     for key, relative_path in directory_map.items():
@@ -29,8 +34,8 @@ def create_project_structure():
             with open(os.path.join(full_path, '__init__.py'), 'w') as init_file:
                 init_file.write("# Init file for src package\n")
 
-    with open(os.path.join(project_root, 'README.md'), 'w') as readme_file:
-        readme_file.write("# Project: Spatial Constant Analysis\n")
+    # with open(os.path.join(project_root, 'README.md'), 'w') as readme_file:
+    #     readme_file.write("# Project: Spatial Constant Analysis\n")
 
     print(f"Project structure created under '{project_root}'")
     return directory_map
@@ -38,17 +43,18 @@ def create_project_structure():
 class GraphArgs:
     def __init__(self, code_folder=os.getcwd(), num_points=300, L=1, intended_av_degree=6,
                  dim=2, proximity_mode="knn_bipartite", directory_map=None, average_degree=None,
-                 edge_list_title=None, false_edges_count=0):
+                 edge_list_title=None, false_edges_count=0, plot_original=False, title_experimental=None):
 
         self.edge_list_title = edge_list_title
+        self.title_experimental = title_experimental
         self.code_folder = code_folder
         self._num_points = num_points
         self.L = L
         self._intended_av_degree = intended_av_degree
         self._base_proximity_mode = proximity_mode
         self._false_edges_count = false_edges_count
+        self.false_edge_ids = []  # list of tuples containing the false edges added
         self.update_proximity_mode()
-
         self._dim = dim
 
         # Graph properties
@@ -60,10 +66,19 @@ class GraphArgs:
         # Directory map
         self.directory_map = directory_map
 
+        self.plot_original = plot_original  #TODO: implement this as a true false event
+
+        # auxiliary title (original, when graph is well connected and we don't have to grab largest component)
+        self.original_title = None
 
     def update_args_title(self):
-        self.args_title = f"N={self._num_points}_dim={self._dim}_{self._proximity_mode}_k={self._intended_av_degree}"
-        self.edge_list_title = f"edge_list_{self.args_title}.csv"
+        if self._proximity_mode == "experimental":
+            if self.edge_list_title is not None:
+                self.args_title = f"N={self._num_points}_dim={self._dim}_{self._proximity_mode}_{os.path.splitext(self.edge_list_title)[0]}"
+        else:
+            self.args_title = f"N={self._num_points}_dim={self._dim}_{self._proximity_mode}_k={self._intended_av_degree}"
+            self.edge_list_title = f"edge_list_{self.args_title}.csv"
+
 
     @property
     def num_points(self):
@@ -106,8 +121,6 @@ class GraphArgs:
             self._proximity_mode = self._base_proximity_mode + f"_with_false_edges={self._false_edges_count}"
         else:
             self._proximity_mode = self._base_proximity_mode
-
-
 
 
     @property

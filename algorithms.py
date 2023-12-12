@@ -4,7 +4,9 @@ import pandas as pd
 import random
 from nodevectors import GGVec
 import umap
-def get_mean_shortest_path(igraph_graph):
+import multiprocessing
+
+def get_mean_shortest_path(igraph_graph, return_all_paths=False):
     if not isinstance(igraph_graph, ig.Graph):
         raise ValueError("Graph is not of igraph type")
     G = igraph_graph
@@ -14,7 +16,11 @@ def get_mean_shortest_path(igraph_graph):
     path_lengths = [path for row in shortest_paths for path in row if path > 0]
     # Compute metrics
     mean_shortest_path = np.mean(path_lengths)
-    return mean_shortest_path
+
+    if return_all_paths:
+        return mean_shortest_path, path_lengths
+    else:
+        return mean_shortest_path
 
 def get_local_clustering_coefficients(igraph_graph):
     if not isinstance(igraph_graph, ig.Graph):
@@ -236,6 +242,30 @@ def grow_graph_bfs(G, nodes_start, nodes_finish, n_graphs):
 
     return subgraphs
 
+def get_bfs_samples(G, n_graphs, min_nodes):
+    if min_nodes > G.vcount():
+        raise ValueError("min_nodes must be less than or equal to the number of nodes in G")
+
+    subgraphs = []
+    for _ in range(n_graphs):
+        start_node = random.randint(0, G.vcount() - 1)  # Randomize the start node for each subgraph
+        visited = set()
+        queue = [start_node]
+
+        while len(visited) < min_nodes:
+            if not queue:  # If the queue is empty, break the loop
+                break
+            current = queue.pop(0)
+            if current not in visited:
+                visited.add(current)
+                queue.extend(neigh for neigh in G.neighbors(current, mode="ALL") if neigh not in visited)
+
+        # Create subgraph from visited nodes
+        if visited:
+            subgraph = G.subgraph(visited)
+            subgraphs.append(subgraph)
+
+    return subgraphs
 
 
 
@@ -268,6 +298,13 @@ def grow_graph_bfs(G, nodes_start, nodes_finish, n_graphs):
     #
     # return mean_shortest_path
 
+
+def get_minimum_spanning_tree_igraph(igraph_graph, weighted=False):
+    if weighted:
+        mst = igraph_graph.spanning_tree(weights=igraph_graph.es['weight'], return_tree=True)
+    else:
+        mst = igraph_graph.spanning_tree(return_tree=True)
+    return mst
 
 class ImageReconstruction:
     def __init__(self, graph, dim=2):

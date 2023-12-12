@@ -1,4 +1,6 @@
 import numpy as np
+import pandas as pd
+
 from plots import *
 from algorithms import *
 from structure_and_args import *
@@ -12,6 +14,7 @@ if script_dir not in sys.path:
 # Now you can import your module (assuming the file is named your_script.py)
 import create_proximity_graph
 import itertools
+import multiprocessing
 
 def spatial_constant_variation_analysis(num_points_list, proximity_mode_list, intended_av_degree_list, dim_list, false_edges_list):
     spatial_constant_variation_results = []
@@ -53,38 +56,40 @@ def perform_simulation(num_points, proximity_mode, intended_av_degree, dim, fals
     args.dim = dim  # assuming dimension is an important parameter
     args.directory_map = create_project_structure()
     args.intended_av_degree = intended_av_degree
+    args.false_edges_count = false_edges
     create_proximity_graph.write_proximity_graph(args)
 
-    # Introduce false edges
-    args.false_edges_count = false_edges
+
 
     # Load the graph
     igraph_graph = load_graph(args, load_mode='igraph')
     mean_shortest_path = get_mean_shortest_path(igraph_graph)
-    spatial_constant_results = get_spatial_constant_results(args, mean_shortest_path)
+    spatial_constant_results = get_spatial_constant_results(args, mean_shortest_path,
+                                                            average_degree=args.average_degree, num_nodes=args.num_points)
 
     if graph_growth:
         if args.dim == 2:
-            _, S_fit, r_squared = run_simulation_graph_growth(args, n_graphs=50, num_random_edges=0, graph=igraph_graph,
+            _, S_fit, r_squared, dim_fit, r_squared_dim = run_simulation_graph_growth(args, n_graphs=20, num_random_edges=0, graph=igraph_graph,
                                                               model_func="spatial_constant_dim=2_linearterm")
         elif args.dim == 3:
-            _, S_fit, r_squared = run_simulation_graph_growth(args, n_graphs=50, num_random_edges=0, graph=igraph_graph,
+            _, S_fit, r_squared, dim_fit, r_squared_dim = run_simulation_graph_growth(args, n_graphs=20, num_random_edges=0, graph=igraph_graph,
                                                               model_func="spatial_constant_dim=3_linearterm")
         else:
             raise ValueError("Input valid dimension")
 
         spatial_constant_results['S_fit'] = S_fit
-        spatial_constant_results['r_squared'] = r_squared
+        spatial_constant_results['r_squared_S'] = r_squared
+        spatial_constant_results['dim_fit'] = 1/dim_fit  # taking the inverse to get the dimension
+        spatial_constant_results['r_squared_dim'] = r_squared_dim
 
     return spatial_constant_results
 
 
-def get_spatial_constant_results(args, mean_shortest_path):
+def get_spatial_constant_results(args, mean_shortest_path, average_degree, num_nodes):
 
     proximity_mode = args.proximity_mode
     dim = args.dim
-    num_nodes = args.num_points
-    average_degree = args.average_degree
+
 
     S = mean_shortest_path / ((num_nodes)**(1/dim))  # spatial constant
     K_log = mean_shortest_path / (np.log(num_nodes) / np.log(average_degree))     # small-world constant
@@ -93,7 +98,7 @@ def get_spatial_constant_results(args, mean_shortest_path):
     # Save metrics to CSV
     spatial_constant_results = {
         'proximity_mode': proximity_mode,
-        'average_degree': args.average_degree,
+        'average_degree': average_degree,
         'intended_av_degree': args.intended_av_degree,
         'mean_shortest_path': mean_shortest_path,
         'num_nodes': num_nodes,
@@ -144,17 +149,29 @@ def plot_graph_properties(args, igraph_graph):
         plot_clustering_coefficient_distribution(args, [clustering_coefficients_set1, clustering_coefficients_set2])
         plot_degree_distribution(args, [degree_distribution_set1, degree_distribution_set2])
 
+
+
+
     else:
         # For non-bipartite graphs, compute and plot as before
         clustering_coefficients = get_local_clustering_coefficients(igraph_graph)
         degree_distribution = get_degree_distribution(igraph_graph)
-
         args.mean_clustering_coefficient = np.mean(clustering_coefficients)
         # args.average_degree = np.mean(degree_distribution)
 
         plot_clustering_coefficient_distribution(args, clustering_coefficients)
         plot_degree_distribution(args, degree_distribution)
 
+    # Shortest paths
+    mean_shortest_path, shortest_path_dist = get_mean_shortest_path(igraph_graph, return_all_paths=True)
+    plot_shortest_path_distribution(args, shortest_path_dist, mean_shortest_path)
+
+    # Store spatial constant results
+    spatial_constant_results = get_spatial_constant_results(args, mean_shortest_path, average_degree=args.average_degree,
+                                                            num_nodes=args.num_points)
+    spatial_constant_results_df = df = pd.DataFrame([spatial_constant_results])
+    df_path = args.directory_map["s_constant_results"]
+    spatial_constant_results_df.to_csv(f"{df_path}/s_constant_results_{args.args_title}.csv")
 
 
 def run_simulation_false_edges(args, max_edges_to_add=10):
@@ -167,9 +184,14 @@ def run_simulation_false_edges(args, max_edges_to_add=10):
         # Add i random edges
         igraph_graph = add_random_edges_igraph(igraph_graph, i)
 
+        num_nodes = igraph_graph.vcount()
+        degrees = igraph_graph.degree()  # This gets the degree of each vertex
+        avg_degree = sum(degrees) / num_nodes
+
+
         # Compute mean shortest path and other results
         mean_shortest_path = get_mean_shortest_path(igraph_graph)
-        spatial_constant_results = get_spatial_constant_results(args, mean_shortest_path)
+        spatial_constant_results = get_spatial_constant_results(args, mean_shortest_path, average_degree=avg_degree, num_nodes=num_nodes)
         spatial_constant_results['number_of_random_edges'] = i
 
         # Append the results to the DataFrame
@@ -199,10 +221,15 @@ def run_simulation_graph_growth(args, start_n_nodes=100, n_graphs=10, num_random
     subgraphs = grow_graph_bfs(igraph_graph, nodes_start=start_n_nodes, nodes_finish=args.num_points, n_graphs=n_graphs)
 
     for subgraph in subgraphs:
-        args.num_points = subgraph.vcount()
+        # Compute mean shortest path and other results
+        num_nodes = subgraph.vcount()
+        degrees = subgraph.degree()  # This gets the degree of each vertex
+        avg_degree = sum(degrees) / num_nodes
+
         # Compute mean shortest path and other results
         mean_shortest_path = get_mean_shortest_path(subgraph)
-        spatial_constant_results = get_spatial_constant_results(args, mean_shortest_path)
+        spatial_constant_results = get_spatial_constant_results(args, mean_shortest_path, average_degree=avg_degree, num_nodes=num_nodes)
+
         # Append the results to the DataFrame
         results.append(spatial_constant_results)
 
@@ -212,12 +239,129 @@ def run_simulation_graph_growth(args, start_n_nodes=100, n_graphs=10, num_random
     # Filename based on whether random edges were added
     filename_suffix = f"_random_edges_{num_random_edges}" if num_random_edges > 0 else ""
     csv_filename = f"spatial_constant_change_with_graph_growth_data_{args.args_title}_{filename_suffix}.csv"
-    plot_filename = f"mean_sp_vs_graph_growth_{args.args_title}_{filename_suffix}.png"
-
-    # Save the DataFrame and plot
     results_df.to_csv(f"{args.directory_map['plots_spatial_constant_gg']}/{csv_filename}")
-    fit_S, r_squared = plot_mean_sp_with_graph_growth(args, results_df, plot_filename, model=model_func, return_s_and_r2=True)
-    return results_df, fit_S, r_squared
+
+
+    plot_filename_S = f"mean_sp_vs_graph_growth_Sfit_{args.args_title}_{filename_suffix}.png"
+    plot_filename_dim = f"mean_sp_vs_graph_growth_dimfit_{args.args_title}_{filename_suffix}.png"
+
+
+    if "bipartite" in args.proximity_mode:
+        if args.dim == 2:
+            model_func_dim = "power_model_2d_Sconstant"
+        elif args.dim == 3:
+            model_func_dim = "power_model_3d_Sconstant"
+    else:
+        if args.dim == 2:
+            model_func_dim = "power_model_2d_bi_Sconstant"
+        elif args.dim == 3:
+            model_func_dim = "power_model_3d_bi_Sconstant"
+
+    # Plot graph growth and inferred spatial constant with fixed dimension
+    fit_S, r_squared_S = plot_mean_sp_with_graph_growth(args, results_df, plot_filename_S, model=model_func,
+                                                        return_s_and_r2=True)
+    # Plot graph growth and inferred dimension with fixed predicted spatial constant
+    fit_dim, r_squared_dim = plot_mean_sp_with_graph_growth(args, results_df, plot_filename_dim, model=model_func_dim,
+                                                        return_s_and_r2=True)
+    return results_df, fit_S, r_squared_S, fit_dim, r_squared_dim
+
+
+def run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=10, graph=None, add_false_edges=False, add_mst=False):
+    if graph is None:
+        # Load the initial graph
+        igraph_graph = load_graph(args, load_mode='igraph')
+    else:
+        igraph_graph = graph.copy()  # Create a copy if graph is provided
+
+    size_subgraph_list = np.arange(50, args.num_points, size_interval)
+    size_subgraph_list = np.append(size_subgraph_list, args.num_points)
+    size_subgraph_list = np.unique(size_subgraph_list)
+
+
+
+    if add_mst:
+        # Work on a copy of the graph for MST
+        igraph_graph_mst = get_minimum_spanning_tree_igraph(igraph_graph.copy())
+        args.false_edges_count = -1
+        pool = multiprocessing.Pool(multiprocessing.cpu_count())
+        tasks = [(size_subgraphs, args, igraph_graph_mst, n_subgraphs) for size_subgraphs in size_subgraph_list]
+        results = pool.starmap(process_subgraph__bfs_parallel, tasks)
+        pool.close()
+        pool.join()
+        flat_results = [item for sublist in results for item in sublist]
+        mst_df = pd.DataFrame(flat_results)
+
+
+
+    if add_false_edges:
+        all_results = []
+        false_edge_list = [0, 5, 20, 100]
+        for false_edge_number in false_edge_list:
+            args.false_edges_count = false_edge_number
+            # Work on a copy of the graph for false edges
+            igraph_graph_false = add_random_edges_igraph(igraph_graph.copy(), num_edges_to_add=false_edge_number)
+            pool = multiprocessing.Pool(multiprocessing.cpu_count())
+            tasks = [(size_subgraphs, args, igraph_graph_false, n_subgraphs) for size_subgraphs in size_subgraph_list]
+            results = pool.starmap(process_subgraph__bfs_parallel, tasks)
+            pool.close()
+            pool.join()
+            flat_results = [item for sublist in results for item in sublist]
+            results_df = pd.DataFrame(flat_results)
+            all_results.append(results_df)
+
+        if add_mst:
+            plot_spatial_constant_against_subgraph_size_with_false_edges(args, all_results, false_edge_list, mst_case_df=mst_df)  # also adding the mst case
+            all_results.append(mst_df)
+
+        else:
+            plot_spatial_constant_against_subgraph_size_with_false_edges(args, all_results, false_edge_list)
+        csv_filename = f"spatial_constant_subgraph_sampling_{args.args_title}_with_false_edges.csv"
+        combined_df = pd.concat(all_results, ignore_index=True)
+        combined_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}")
+
+    else:
+        #     # Generate subgraphs with BFS
+        igraph_graph_copy = igraph_graph.copy()
+        pool = multiprocessing.Pool(multiprocessing.cpu_count())
+        tasks = [(size_subgraphs, args, igraph_graph_copy, n_subgraphs) for size_subgraphs in size_subgraph_list]
+        results = pool.starmap(process_subgraph__bfs_parallel, tasks)
+        pool.close()
+        pool.join()
+        # Flatten the list of results
+        flat_results = [item for sublist in results for item in sublist]
+
+        # Create DataFrame from results
+        results_df = pd.DataFrame(flat_results)
+
+        csv_filename = f"spatial_constant_subgraph_sampling_{args.args_title}.csv"
+        results_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}")
+        plot_sample_spatial_constant(args, results_df)
+        plot_spatial_constant_against_subgraph_size(args, results_df)
+    return results_df
+
+
+def process_subgraph__bfs_parallel(size_subgraphs, args, igraph_graph, n_subgraphs):
+    results = []
+    if size_subgraphs > args.num_points:
+        print("Careful, assigned sampling of nodes is greater than total number of nodes!")
+        size_subgraphs = args.num_points
+    print("size:", size_subgraphs)
+    n_subgraphs = 1 if size_subgraphs == args.num_points else n_subgraphs
+
+    subgraphs = get_bfs_samples(igraph_graph, n_graphs=n_subgraphs, min_nodes=size_subgraphs)
+
+    for subgraph in subgraphs:
+        num_nodes = subgraph.vcount()
+        degrees = subgraph.degree()
+        avg_degree = sum(degrees) / num_nodes
+
+        mean_shortest_path = get_mean_shortest_path(subgraph)
+        spatial_constant_results = get_spatial_constant_results(args, mean_shortest_path, average_degree=avg_degree,
+                                                                num_nodes=num_nodes)
+        spatial_constant_results["intended_size"] = size_subgraphs
+        results.append(spatial_constant_results)
+
+    return results
 
 def run_simulation_comparison_large_and_small_world(args, start_n_nodes=50, end_n_nodes=1000, n_graphs=10, num_random_edges_ratio=0.015):
     results = []

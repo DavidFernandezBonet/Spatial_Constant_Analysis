@@ -24,11 +24,19 @@ def get_largest_component_sparse(sparse_graph, original_node_ids):
         return largest_component, component_node_ids
     return sparse_graph, original_node_ids
 
-def get_largest_component_igraph(igraph_graph):
+def get_largest_component_igraph(args, igraph_graph):
     components = igraph_graph.clusters()
     if len(components) > 1:
         print("Disconnected Graph!")
         largest = components.giant()
+
+
+        # Write the new edge list with largest component
+        edges = largest.get_edgelist()
+        edge_df = pd.DataFrame(edges, columns=['source', 'target'])
+        edge_list_folder = args.directory_map["edge_lists"]
+        edge_df.to_csv(f"{edge_list_folder}/edge_list_{args.args_title}.csv")
+
         return largest
     return igraph_graph
 
@@ -64,6 +72,7 @@ def read_position_df(args):
 
 def write_nx_graph_to_edge_list_df(args):
     # Load the graph from the pickle file
+    print(args.edge_list_title)
     pickle_file_path = f"{args.directory_map['edge_lists']}/{args.edge_list_title}"
     with open(pickle_file_path, 'rb') as f:
         G = pickle.load(f)
@@ -74,7 +83,9 @@ def write_nx_graph_to_edge_list_df(args):
 
     # Splitting the filename and extension
     new_edge_list_name, _ = os.path.splitext(args.edge_list_title)
+
     args.edge_list_title = new_edge_list_name + ".csv"
+
     edge_df.to_csv(f"{args.directory_map['edge_lists']}/{args.edge_list_title}", index=False)
     return
 
@@ -115,6 +126,7 @@ def load_graph(args, load_mode='igraph', input_file_type='edge_list'):
     # TODO: false edge implementation for other types apart from igraph? Is it necessary¿
     file_path = f"{args.directory_map['edge_lists']}/{args.edge_list_title}"
     df = pd.read_csv(file_path)
+    args.original_title = args.args_title
 
 
     if load_mode == 'sparse':
@@ -138,15 +150,13 @@ def load_graph(args, load_mode='igraph', input_file_type='edge_list'):
         return largest_component, component_node_ids
 
     elif load_mode == 'igraph':
-
         tuples = [tuple(x) for x in df.values]
-
         igraph_graph = ig.Graph.TupleList(tuples, directed=False)
-        largest_component = get_largest_component_igraph(igraph_graph)
+        largest_component = get_largest_component_igraph(args, igraph_graph)
         degrees = largest_component.degree()
         average_degree = np.mean(degrees)
         args.average_degree = average_degree
-        args.num_points = len(largest_component.vs)
+        args.num_points = largest_component.vcount()
         print("average degree", average_degree)
         print("num points", args.num_points)
 
@@ -156,10 +166,10 @@ def load_graph(args, load_mode='igraph', input_file_type='edge_list'):
         if is_bipartite:
             args.bipartite_sets = types
 
-        # Add false edges if necessary
-        if args.false_edges_count:  #TODO: adapt for bipartite case
-            print("ha passat")
-            largest_component = add_random_edges_igraph(largest_component, args.false_edges_count)
+        # # Add false edges if necessary  #TODO: how to guarantee that the false edges are in the largest component? Might be unlucky
+        # if args.false_edges_count:  #TODO: adapt for bipartite case
+        #     print("ha passat")
+        #     largest_component = add_random_edges_igraph(largest_component, args.false_edges_count)
 
         return largest_component
 
@@ -195,6 +205,19 @@ class CurveFitting:
 
     def power_model(self, x, a, b):
         return a * np.power(x, b)
+    def power_model_2d_Sconstant(self, x, a):
+        s = 1.10
+        return s * np.power(x, a)
+    def power_model_2d_bi_Sconstant(self, x, a):
+        s = 0.9
+        return s * np.power(x, a)
+    def power_model_3d_Sconstant(self, x, a):
+        s = 1.4
+        return s * np.power(x, a)
+    def power_model_3d_bi_Sconstant(self, x, a):
+        s = 1.3
+        return s * np.power(x, a)
+
     def power_model_w_constant(self, x, a, b, c):
         return a * np.power(x, b) + c
     def logarithmic_model(self, x, a, b, c):
@@ -222,6 +245,24 @@ class CurveFitting:
         elif model_func == self.power_model:
             a, b = self.popt
             return f'$y = {a:.4f} \cdot x^{{{b:.4f}}}$'
+
+        elif model_func == self.power_model_2d_Sconstant:
+            b = self.popt[0]
+            return f'$y = 1.10 \cdot x^{{{b:.4f}}}$'
+
+        elif model_func == self.power_model_3d_Sconstant:
+            b = self.popt[0]
+            return f'$y = 1.4 \cdot x^{{{b:.4f}}}$'
+
+        elif model_func == self.power_model_2d_bi_Sconstant:
+            b = self.popt[0]
+            return f'$y = 0.9 \cdot x^{{{b:.4f}}}$'
+
+        elif model_func == self.power_model_3d_bi_Sconstant:
+            b = self.popt[0]
+            return f'$y = 1.16 \cdot x^{{{b:.4f}}}$'
+
+
         elif model_func == self.power_model_w_constant:
             a, b, c = self.popt
             return f'$y = {a:.4f} \cdot x^{{{b:.4f}}} + {c: .4f}$'

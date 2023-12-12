@@ -172,66 +172,152 @@ filtered_df = df[df['num_nodes'].isin(nodes_to_include)]
 # filtered_df = filtered_df[(filtered_df['proximity_mode'] != 'delaunay_corrected')]
 # filtered_df = filtered_df[(filtered_df['dim'] != 3)]
 
-predicted_avg_dist = super_spatial_constant_2d * (filtered_df['num_nodes']** (1 / dimensions)) * (filtered_df['average_degree'] ** (-1 / dimensions))
-# Plotting
-plt.figure(figsize=(12, 8))
-plt.scatter(filtered_df['average_degree'], filtered_df['mean_shortest_path'], label='Actual Mean Shortest Path')
-plt.scatter(filtered_df['average_degree'], predicted_avg_dist, color='red', label='Predicted Avg Distance')
 
-# Drawing vertical lines for residuals
-for index, row in filtered_df.iterrows():
-    plt.vlines(x=row['average_degree'], ymin=row['mean_shortest_path'], ymax=predicted_avg_dist[index], color='green', linestyles='dashed')
+#### Uncommented Dec 8
+# predicted_avg_dist = super_spatial_constant_2d * (filtered_df['num_nodes']** (1 / dimensions)) * (filtered_df['average_degree'] ** (-1 / dimensions))
+# # Plotting
+# plt.figure(figsize=(12, 8))
+# plt.scatter(filtered_df['average_degree'], filtered_df['mean_shortest_path'], label='Actual Mean Shortest Path')
+# plt.scatter(filtered_df['average_degree'], predicted_avg_dist, color='red', label='Predicted Avg Distance')
+#
+# # Drawing vertical lines for residuals
+# for index, row in filtered_df.iterrows():
+#     plt.vlines(x=row['average_degree'], ymin=row['mean_shortest_path'], ymax=predicted_avg_dist[index], color='green', linestyles='dashed')
+#
+# plt.title('Mean Shortest Path and Predicted Shortest Path vs Average Degree with Residuals')
+# plt.xlabel('Average Degree')
+# plt.ylabel('Mean Shortest Path')
+# plt.legend()
+#
+# plt.savefig("test_avdegree_behavior.png")
+#
+#
+# predicted_medians = [super_spatial_constant_2d, super_spatial_constant_3d, super_spatial_constant_2d_bipartite, super_spatial_constant_3d_bipartite]  # Replace with your actual values
+# #### Boxplot S plot
+# # Define a new column for grouping in the boxplot
+# filtered_df['Group'] = np.nan
+#
+# # Assign groups based on conditions
+# filtered_df.loc[(filtered_df['dim'] == 2) & (filtered_df['proximity_mode'].str.contains('bipartite')), 'Group'] = 'Dim 2, Bipartite'
+# filtered_df.loc[(filtered_df['dim'] == 2) & (~filtered_df['proximity_mode'].str.contains('bipartite')), 'Group'] = 'Dim 2, Non-Bipartite'
+# filtered_df.loc[(filtered_df['dim'] == 3) & (filtered_df['proximity_mode'].str.contains('bipartite')), 'Group'] = 'Dim 3, Bipartite'
+# filtered_df.loc[(df['dim'] == 3) & (~filtered_df['proximity_mode'].str.contains('bipartite')), 'Group'] = 'Dim 3, Non-Bipartite'
+#
+# # Violin plot
+# plt.figure(figsize=(12, 8))
+# groups = filtered_df['Group'].unique()  # This gets the unique group names
+#
+# # Create the violin plot
+# sns.violinplot(x='Group', y='S_general', data=filtered_df, inner='quartile')
+#
+# # Add predicted medians as scatter points
+# for i, group in enumerate(groups):
+#     plt.scatter(x=i, y=predicted_medians[i], color='red', zorder=3)
+#
+# plt.title('Violin Plot of S_general for Different Groups')
+# plt.ylabel('S_general')
+# plt.xlabel('Group')
+# plt.xticks(rotation=45)
+#
+# plt.savefig("s_general_violinplot.png")
+#
+#
+#
+# # Interactive plot
+# import plotly.express as px
+#
+# # Assuming df is your DataFrame
+# fig = px.violin(filtered_df, x='Group', y='S_general', box=False, points='all', hover_data=filtered_df.columns)
+#
+# # Add predicted medians as scatter points
+# for i, group in enumerate(groups):
+#     fig.add_scatter(x=[group], y=[predicted_medians[i]], mode='markers', marker=dict(color='red'))
+# fig.update_layout(title='Interactive Violin Plot of S_general for Different Groups',
+#                   xaxis_title='Group',
+#                   yaxis_title='S_general')
+# fig.show()
+# fig.write_html("spatial_constant_interactive" + '.html')
 
-plt.title('Mean Shortest Path and Predicted Shortest Path vs Average Degree with Residuals')
-plt.xlabel('Average Degree')
-plt.ylabel('Mean Shortest Path')
-plt.legend()
 
-plt.savefig("test_avdegree_behavior.png")
+big_df = pd.read_csv("/home/david/PycharmProjects/Spatial_Constant_Analysis/results/plots/spatial_constant/variation_analysis/spatial_constant_variation_df_lots_of_data_w_false_edges.csv")
+
+big_df['S_general_log'] = big_df['mean_shortest_path'] / (big_df['num_nodes']**(1/big_df['dim']) / np.log(big_df['average_degree']))  # trying stuff out
+big_df['S_general_log2'] = big_df['mean_shortest_path'] / (np.log(big_df['num_nodes']) / np.log(big_df['average_degree']))  # same as general smallworld
+big_df.to_csv('/home/david/PycharmProjects/Spatial_Constant_Analysis/results/plots/spatial_constant/big_df2.csv')
+
+def classify_row(row):
+    if row['dim'] == 2 and 'bipartite' not in row['proximity_mode']:
+        return '2D Non-Bipartite'
+    elif row['dim'] == 2 and 'bipartite' in row['proximity_mode']:
+        return '2D Bipartite'
+    elif row['dim'] == 3 and 'bipartite' not in row['proximity_mode']:
+        return '3D Non-Bipartite'
+    else:  # row['dim'] == 3 and 'bipartite' in row['proximity_mode']
+        return '3D Bipartite'
+
+def assign_color(proximity_mode):
+    if 'false_edges' in proximity_mode:
+        false_edges_count = int(proximity_mode.split('=')[-1])
+        if false_edges_count == 1:
+            return 'green'
+        elif false_edges_count == 10:
+            return 'yellow'
+        elif false_edges_count == 100:
+            return 'red'
+    return 'blue'
+
+def plot_spatial_constant_variation(spatial_constant_variation_results_df, variable_of_interest="S_general"):
+
+    ### Predictions
+    constant_scaler = np.sqrt(4.5)
+    bipartite_correction = 1 / 1.2  # 1/np.sqrt(2)   #TODO: i don't know exactly how the correction should look like!
+    super_spatial_constant_3d = 0.66 * constant_scaler
+    super_spatial_constant_2d = 0.517 * constant_scaler
+    super_spatial_constant_2d_bipartite = super_spatial_constant_2d * bipartite_correction
+    super_spatial_constant_3d_bipartite = super_spatial_constant_3d * bipartite_correction
+    predicted_medians = [super_spatial_constant_2d, super_spatial_constant_2d_bipartite, super_spatial_constant_3d,
+                         super_spatial_constant_3d_bipartite]
+
+    groups = ['2D Non-Bipartite', '2D Bipartite', '3D Non-Bipartite', '3D Bipartite']
+    n_class_groups = 4
+    # Apply the classification function to each row
+    spatial_constant_variation_results_df['classification'] = spatial_constant_variation_results_df.apply(classify_row, axis=1)
+
+    # Interactive plot
+    import plotly.express as px
 
 
-predicted_medians = [super_spatial_constant_2d, super_spatial_constant_3d, super_spatial_constant_2d_bipartite, super_spatial_constant_3d_bipartite]  # Replace with your actual values
-#### Boxplot S plot
-# Define a new column for grouping in the boxplot
-filtered_df['Group'] = np.nan
+    # # Create a new column to identify if 'proximity_mode' contains 'false_edges'
 
-# Assign groups based on conditions
-filtered_df.loc[(filtered_df['dim'] == 2) & (filtered_df['proximity_mode'].str.contains('bipartite')), 'Group'] = 'Dim 2, Bipartite'
-filtered_df.loc[(filtered_df['dim'] == 2) & (~filtered_df['proximity_mode'].str.contains('bipartite')), 'Group'] = 'Dim 2, Non-Bipartite'
-filtered_df.loc[(filtered_df['dim'] == 3) & (filtered_df['proximity_mode'].str.contains('bipartite')), 'Group'] = 'Dim 3, Bipartite'
-filtered_df.loc[(df['dim'] == 3) & (~filtered_df['proximity_mode'].str.contains('bipartite')), 'Group'] = 'Dim 3, Non-Bipartite'
+    # # Basic color scheme blue/red
+    # spatial_constant_variation_results_df['color_group'] = spatial_constant_variation_results_df[
+    #     'proximity_mode'].apply(
+    #     lambda x: 'With False Edges' if 'false_edges' in x else 'Without False Edges'
+    # )
 
-# Violin plot
-plt.figure(figsize=(12, 8))
-groups = filtered_df['Group'].unique()  # This gets the unique group names
+    # #  Gradient color blue to red
+    spatial_constant_variation_results_df['color_group'] = spatial_constant_variation_results_df[
+        'proximity_mode'].apply(assign_color)
 
-# Create the violin plot
-sns.violinplot(x='Group', y='S_general', data=filtered_df, inner='quartile')
+    # Plot the main violin plot
+    fig = px.violin(spatial_constant_variation_results_df, x='classification', y=variable_of_interest, color='color_group',
+                    box=False, points='all', hover_data=spatial_constant_variation_results_df.columns)
 
-# Add predicted medians as scatter points
-for i, group in enumerate(groups):
-    plt.scatter(x=i, y=predicted_medians[i], color='red', zorder=3)
+    # fig = px.violin(spatial_constant_variation_results_df, x='classification', y=variable_of_interest,
+    #                 color='average_degree',  # Use 'average_degree' for color coding
+    #                 )  # Choosing a color scale
 
-plt.title('Violin Plot of S_general for Different Groups')
-plt.ylabel('S_general')
-plt.xlabel('Group')
-plt.xticks(rotation=45)
+    # Add predicted medians as scatter points
+    for i, group in enumerate(groups):
+        fig.add_scatter(x=[group], y=[predicted_medians[i]], mode='markers', marker=dict(color='green'))
 
-plt.savefig("s_general_violinplot.png")
+    # Update the layout
+    fig.update_layout(
+        title='Interactive Violin Plot of S_general for Different Groups',
+        xaxis_title='Group',
+        yaxis_title='S_general'
+    )
+    # Show the plot
+    fig.show()
 
-
-
-# Interactive plot
-import plotly.express as px
-
-# Assuming df is your DataFrame
-fig = px.violin(filtered_df, x='Group', y='S_general', box=False, points='all', hover_data=filtered_df.columns)
-
-# Add predicted medians as scatter points
-for i, group in enumerate(groups):
-    fig.add_scatter(x=[group], y=[predicted_medians[i]], mode='markers', marker=dict(color='red'))
-fig.update_layout(title='Interactive Violin Plot of S_general for Different Groups',
-                  xaxis_title='Group',
-                  yaxis_title='S_general')
-fig.show()
-fig.write_html("spatial_constant_interactive" + '.html')
+plot_spatial_constant_variation(big_df, variable_of_interest="S_general")

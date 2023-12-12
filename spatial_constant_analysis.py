@@ -17,7 +17,14 @@ from metrics import *
 
 import scienceplots
 plt.style.use(['science', 'nature'])
-
+# plt.rcParams.update({'font.size': 16, 'font.family': 'serif'})
+font_size = 24
+plt.rcParams.update({'font.size': font_size})
+plt.rcParams['axes.labelsize'] = font_size
+plt.rcParams['axes.titlesize'] = font_size + 6
+plt.rcParams['xtick.labelsize'] = font_size
+plt.rcParams['ytick.labelsize'] = font_size
+plt.rcParams['legend.fontsize'] = font_size - 10
 
 
 
@@ -25,31 +32,52 @@ plt.style.use(['science', 'nature'])
 
 # TODO: args_title is not instantiated if you don't call the parameters (maybe just make a config file with the parameters and call them all)
 args = GraphArgs()
-print("Initial proximity_mode:", args.proximity_mode)
-print("Setting proximity_mode to 'knn'...")
+
 args.proximity_mode = "knn"
-print("Proximity_mode after setting to 'knn':", args.proximity_mode)
-print("Setting false_edges_count to 5...")
-args.false_edges_count = 5
-print("Proximity_mode after setting false_edges_count to 5:", args.proximity_mode)
+args.dim = 3
+# print("Proximity_mode after setting to 'knn':", args.proximity_mode)
+# print("Setting false_edges_count to 5...")
+args.false_edges_count = 0   #TODO: this only adds false edges to simulated graphs!
+# print("Proximity_mode after setting false_edges_count to 5:", args.proximity_mode)
 print(args.proximity_mode)
 args.intended_av_degree = 6
 args.num_points = 1000
-print(args.args_title)
 args.directory_map = create_project_structure()  # creates folder and appends the directory map at the args
 
 
-# # Experimental
-# # subgraph_2_nodes_44_edges_56_degree_2.55.pickle  # subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle  # subgraph_8_nodes_160_edges_179_degree_2.24.pickle
-# args.edge_list_title = "subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle"
-# write_nx_graph_to_edge_list_df(args)
+# # # #Experimental
+# subgraph_2_nodes_44_edges_56_degree_2.55.pickle  # subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle  # subgraph_8_nodes_160_edges_179_degree_2.24.pickle
+# pixelgen_cell_2_RCVCMP0000594.csv, pixelgen_cell_1_RCVCMP0000208.csv, pixelgen_cell_3_RCVCMP0000085.csv
+# pixelgen_edgelist_CD3_cell_2_RCVCMP0000009.csv, pixelgen_edgelist_CD3_cell_1_RCVCMP0000610.csv, pixelgen_edgelist_CD3_cell_3_RCVCMP0000096.csv
+args.proximity_mode = "experimental"  # define proximity mode before name!
+args.edge_list_title = "pixelgen_cell_2_RCVCMP0000594.csv"
 
-# # # 1 Simulation
+if os.path.splitext(args.edge_list_title)[1] == ".pickle":
+    write_nx_graph_to_edge_list_df(args)    # activate if format is .pickle file
+igraph_graph_original = load_graph(args, load_mode='igraph')
+plot_graph_properties(args, igraph_graph_original)  # plots clustering coefficient, degree dist, also stores individual spatial constant...
+
+
+# # # # 1 Simulation
 # create_proximity_graph.write_proximity_graph(args)
-
-
 # igraph_graph_original = load_graph(args, load_mode='igraph')
-# plot_graph_properties(args, igraph_graph_original)
+# # igraph_graph_original = get_minimum_spanning_tree_igraph(igraph_graph_original)  # careful with activating this
+# # plot_graph_properties(args, igraph_graph_original)
+# plot_original_image(args)
+
+
+# # # # Watts-Storgatz
+# # Parameters for the Watts-Strogatz graph
+# p = 0   # Rewiring probability
+# # Create the Watts-Strogatz small-world graph
+# args.dim=1
+# igraph_graph_original = ig.Graph.Watts_Strogatz(args.dim, args.num_points, 1, p)
+# print("graph_created!")
+
+
+run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=20, graph=igraph_graph_original,
+                                 add_false_edges=True, add_mst=False)
+
 
 #### Reconstruction pipeline
 # igraph_graph_original, _ = load_graph(args, load_mode='sparse')
@@ -85,13 +113,23 @@ args.directory_map = create_project_structure()  # creates folder and appends th
 
 
 
-#### Many graphs simulation
-# num_points_list = [1000, 2000, 3000]
-num_points_list = [1000, 2000, 5000, 10000]
-# proximity_mode_list = ["knn", "epsilon-ball", "epsilon_bipartite", "knn_bipartite", "delaunay_corrected"]
-proximity_mode_list = ["knn",   "knn_bipartite", "delaunay_corrected", "epsilon-ball", "epsilon_bipartite"]
-intended_av_degree_list = [6, 9, 15, 30]
-false_edges_list = [0, 1, 10, 100]
-dim_list = [2, 3]
-spatial_constant_variation_analysis(num_points_list, proximity_mode_list, intended_av_degree_list, dim_list, false_edges_list)
+### Many graphs simulation
+
+# num_points_list = [500, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
+# # proximity_mode_list = ["knn", "epsilon-ball", "epsilon_bipartite", "knn_bipartite", "delaunay_corrected"]
+# proximity_mode_list = ["knn",   "knn_bipartite", "delaunay_corrected", "epsilon-ball", "epsilon_bipartite"]
+# intended_av_degree_list = [6, 9, 15, 30]
+# false_edges_list = [0, 1, 10, 100]
+# dim_list = [2, 3]
+
+
+# # Simple simulation to test stuff
+# num_points_list = [500, 1000]
+# proximity_mode_list = ["knn",   "knn_bipartite"]
+# intended_av_degree_list = [6]
+# false_edges_list = [0]
+# dim_list = [2, 3]
+
+
+# spatial_constant_variation_analysis(num_points_list, proximity_mode_list, intended_av_degree_list, dim_list, false_edges_list)
 

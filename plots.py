@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+
 from utils import CurveFitting
 import seaborn as sns
 import scienceplots
@@ -58,10 +60,22 @@ def plot_mean_sp_with_graph_growth(args, df, plot_filename, model="spatial_const
         model_func = curve_fitting.spatial_constant_dim2
     elif model == "spatial_constant_dim=3":
         model_func = curve_fitting.spatial_constant_dim3
-    if model == "spatial_constant_dim=2_linearterm":
+    elif model == "spatial_constant_dim=2_linearterm":
         model_func = curve_fitting.spatial_constant_dim2_linearterm
-    if model == "spatial_constant_dim=3_linearterm":
+    elif model == "spatial_constant_dim=3_linearterm":
         model_func = curve_fitting.spatial_constant_dim3_linearterm
+
+
+    elif model == "power_model_2d_Sconstant":
+        model_func = curve_fitting.power_model_2d_Sconstant
+    elif model == "power_model_3d_Sconstant":
+        model_func = curve_fitting.power_model_3d_Sconstant
+    elif model == "power_model_2d_bi_Sconstant":
+        model_func = curve_fitting.power_model_2d_bi_Sconstant
+    elif model == "power_model_3d_bi_Sconstant":
+        model_func = curve_fitting.power_model_3d_bi_Sconstant
+
+
     elif model == "small_world":
         model_func = curve_fitting.small_world_model
     elif model == "power_law":
@@ -184,8 +198,9 @@ def plot_clustering_coefficient_distribution(args, clustering_coefficients, titl
         plt.ylabel('Frequency')
         plt.legend([f"Mean Clustering Coefficient: {mean_clustering_coefficient:.2f}"])
 
+    print("hello", args.args_title)
     plot_folder = args.directory_map['plots_clustering_coefficient']
-    plt.savefig(f"{plot_folder}/clust_coef_{args.args_title}")
+    plt.savefig(f"{plot_folder}/clust_coef_{args.args_title}.png")
 
 
 
@@ -224,57 +239,29 @@ def plot_degree_distribution(args, degree_distribution, title="Degree Distributi
 
     plot_folder = args.directory_map['plots_degree_distribution']
     plt.savefig(f"{plot_folder}/degree_dist_{args.args_title}")
+    plt.close()
+
+def plot_shortest_path_distribution(args, shortest_path_dist, mean_shortest_path, title="Shortest Path Distribution"):
+    # Plotting a single bar chart for non-bipartite graphs
+    plt.figure(figsize=(12, 6))  # Adjusted figure size for potential subplots
+    unique_paths, counts = np.unique(shortest_path_dist, return_counts=True)
+    plt.bar(unique_paths, counts, color='blue', alpha=0.7)
+
+    # Add a vertical line for the mean shortest path
+    plt.axvline(x=mean_shortest_path, color='red', linestyle='--', linewidth=2, label=f"Mean: {mean_shortest_path:.2f}")
+
+    plt.title(title)
+    plt.xlabel('Shortest Path')
+    plt.ylabel('Frequency')
+    plt.legend()
+
+    plot_folder = args.directory_map['plots_shortest_path_distribution']
+    plt.savefig(f"{plot_folder}/plots_shortest_path_distribution_{args.args_title}")
+
 
 
 ### Functions for spatial constant variation analysis
-def plot_variation_with_num_points(args, results_df, fixed_proximity_mode, fixed_av_degree):
-    # Filter data for the specific proximity_mode and intended_av_degree
-    # filtered_df = results_df[(results_df['proximity_mode'] == fixed_proximity_mode) &
-    #                          (results_df['intended_av_degree'] == fixed_av_degree)]
 
-    # TODO: make sure that proximity graph can vary but average degree is very similar. Otherwise does not make sense
-    filtered_df = results_df
-    plt.figure(figsize=(10, 6))
-    sns.violinplot(x='num_nodes', y='S', data=filtered_df)
-    plt.title('Variation of Spatial Constant with Number of Points')
-    plt.xlabel('Number of Nodes')
-    plt.ylabel('Spatial Constant (S)')
-    plot_folder = args.directory_map["plots_spatial_constant_variation_N"]
-    plt.savefig(f'{plot_folder}/spatial_constant_variation_N_prox_mode={fixed_proximity_mode}_intended_degree={fixed_av_degree}')
-
-
-def plot_variation_with_proximity_mode(args, results_df, fixed_num_points, fixed_av_degree):
-    # Filter data for the specific num_points and intended_av_degree
-    # filtered_df = results_df[(results_df['num_nodes'] == fixed_num_points) &
-    #                          (results_df['intended_av_degree'] == fixed_av_degree)]
-
-    filtered_df = results_df
-    plt.figure(figsize=(10, 6))
-    sns.violinplot(x='proximity_mode', y='S', data=filtered_df)
-    plt.title('Variation of Spatial Constant with Proximity Mode')
-    plt.xlabel('Proximity Mode')
-    plt.ylabel('Spatial Constant (S)')
-    plot_folder = args.directory_map["plots_spatial_constant_variation_prox_mode"]
-    plt.savefig(f'{plot_folder}/spatial_constant_variation_prox_mode_N={fixed_num_points}_intended_degree={fixed_av_degree}')
-
-def plot_variation_with_av_degree(args, results_df):
-    plt.figure(figsize=(10, 6))
-
-    # Create a scatter plot
-    sns.scatterplot(data=results_df, x='average_degree', y='S',
-                    hue='proximity_mode', size='num_nodes',
-                    sizes=(20, 200), alpha=0.7, legend='full', palette='deep')
-
-    plt.title('Variation of Spatial Constant with Average Degree')
-    plt.xlabel('Average Degree (<k>)')
-    plt.ylabel('Spatial Constant (S)')
-
-    # Adjust legend
-    plt.legend(title='Proximity Mode and Num Nodes', bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-
-    # Save the plot
-    plot_folder = args.directory_map["plots_spatial_constant_variation_degree"]
-    plt.savefig(f'{plot_folder}/spatial_constant_variation_av_degree.png', bbox_inches='tight')
 
 
 def classify_row(row):
@@ -345,3 +332,175 @@ def plot_spatial_constant_variation(args, spatial_constant_variation_results_df)
     fig.write_html("violin_plot_S_variation" + '.html')
     fig.show()
 
+
+def plot_original_image(args):
+
+    edge_list_folder = args.directory_map["edge_lists"]
+    original_position_folder = args.directory_map["original_positions"]
+    edges_df = pd.read_csv(f"{edge_list_folder}/edge_list_{args.original_title}.csv")
+    positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.original_title}.csv")
+
+    # Create a plot
+    fig = plt.figure(figsize=(10, 8))
+    if args.dim == 3:
+        ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(positions_df['x'], positions_df['y'], positions_df['z'], facecolors='none', edgecolors='b')
+    elif args.dim == 2:
+        ax = fig.add_subplot(111)
+        ax.scatter(positions_df['x'], positions_df['y'], facecolors='none', edgecolors='b')
+
+    # Draw edges
+    for _, row in edges_df.iterrows():
+        source = positions_df[positions_df['node_ID'] == row['source']].iloc[0]
+        target = positions_df[positions_df['node_ID'] == row['target']].iloc[0]
+        edge_color = 'red' if (row['source'], row['target']) in args.false_edge_ids or (
+        row['target'], row['source']) in args.false_edge_ids else 'k'
+
+        edge_alpha = 1 if (row['source'], row['target']) in args.false_edge_ids or (
+        row['target'], row['source']) in args.false_edge_ids else 0.5
+
+        if args.dim == 3:
+            ax.plot([source['x'], target['x']], [source['y'], target['y']], [source['z'], target['z']],
+                    edge_color, linewidth=0.5, alpha=edge_alpha)
+        else:
+            ax.plot([source['x'], target['x']], [source['y'], target['y']],
+                    edge_color, linewidth=0.5, alpha=edge_alpha)
+
+    plot_folder = args.directory_map["plots_original_image"]
+    plt.savefig(f"{plot_folder}/original_image_{args.args_title}")
+
+def calculate_predicted_s(args):
+    ### Predictions
+    constant_scaler = np.sqrt(4.5)
+    bipartite_correction = 1 / 1.2  # 1/np.sqrt(2)   #TODO: i don't know exactly how the correction should look like!
+    super_spatial_constant_3d = 0.66 * constant_scaler
+    super_spatial_constant_2d = 0.517 * constant_scaler
+    super_spatial_constant_2d_bipartite = super_spatial_constant_2d * bipartite_correction
+    super_spatial_constant_3d_bipartite = super_spatial_constant_3d * bipartite_correction
+
+    if args.dim == 2:
+        if args.is_bipartite:
+            return super_spatial_constant_2d_bipartite  # Replace with actual calculation
+        else:
+            return super_spatial_constant_2d  # Replace with actual calculation
+    elif args.dim == 3:
+        if args.is_bipartite:
+            return super_spatial_constant_3d_bipartite  # Replace with actual calculation
+        else:
+            return super_spatial_constant_3d  # Replace with actual calculation
+
+def plot_sample_spatial_constant(args, dataframe):
+
+    unique_sizes = dataframe['intended_size'].unique()
+    plt.figure(figsize=(10, 6))
+
+    # Determine the global range for all histograms
+    min_value = dataframe['S_general'].min()
+    max_value = dataframe['S_general'].max()
+    bin_edges = np.linspace(min_value, max_value, 21)  # 20 bins across the full range
+
+    for size in unique_sizes:
+        subset = dataframe[dataframe['intended_size'] == size]
+        plt.hist(subset['S_general'], alpha=0.5, label=f'Size {size}', bins=bin_edges)
+
+    predicted_s = calculate_predicted_s(args=args)
+    plt.axvline(predicted_s, color='r', linestyle='dashed', linewidth=2, label='Predicted S')
+
+    plt.xlabel('S_general')
+    plt.ylabel('Frequency')
+    plt.title('Histogram of S_general for each Intended Size')
+    plt.legend()
+
+    plot_folder = f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}"
+    plt.savefig(f"{plot_folder}/subgraph_sampling_{args.args_title}")
+
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+def plot_spatial_constant_against_subgraph_size(args, dataframe):
+    unique_sizes = dataframe['intended_size'].unique()
+    means = []
+    std_devs = []
+    sizes = []
+
+    # Calculate mean and standard deviation for each size
+    for size in unique_sizes:
+        subset = dataframe[dataframe['intended_size'] == size]
+        mean = subset['S_general'].mean()
+        std = subset['S_general'].std()
+        means.append(mean)
+        std_devs.append(std)
+        sizes.append(size)
+
+    plt.figure(figsize=(10, 6))
+
+    sizes = np.array(sizes)
+    means = np.array(means)
+    std_devs = np.array(std_devs)
+
+    # Scatter plot
+    plt.scatter(sizes, means, label='Mean Spatial Constant')
+
+    # Elegant ribbon style
+    ribbon_color = '#6FC276'
+    contour_ribon_color = '#006400'
+    plt.fill_between(sizes, means - std_devs, means + std_devs, color=ribbon_color, alpha=0.3, edgecolor=contour_ribon_color, linewidth=1, linestyle='--')
+
+    # Optionally, plot the predicted S line if needed
+    predicted_s = calculate_predicted_s(args=args)
+    plt.axhline(predicted_s, color='r', linestyle='dashed', linewidth=2, label='Predicted S')
+
+    plt.xlabel('Subgraph Size')
+    plt.ylabel('Mean Spatial Constant')
+    plt.title('Mean Spatial Constant vs. Subgraph Size')
+    plt.legend()
+
+    plot_folder = f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}"
+    plt.savefig(f"{plot_folder}/mean_s_general_vs_intended_size_{args.args_title}.png")
+
+
+
+def plot_spatial_constant_against_subgraph_size_with_false_edges(args, dataframes, false_edge_list, mst_case_df=None):
+    plt.figure(figsize=(10, 6))
+
+    for dataframe, false_edge_count in zip(dataframes, false_edge_list):
+        unique_sizes = dataframe['intended_size'].unique()
+        means = []
+        std_devs = []
+        sizes = []
+
+        # Calculate mean and standard deviation for each size
+        for size in unique_sizes:
+            subset = dataframe[dataframe['intended_size'] == size]
+            mean = subset['S_general'].mean()
+            std = subset['S_general'].std()
+            means.append(mean)
+            std_devs.append(std)
+            sizes.append(size)
+
+        sizes = np.array(sizes)
+        means = np.array(means)
+        std_devs = np.array(std_devs)
+        # Plot each series
+        label = f'False Edges: {false_edge_count}'
+        plt.plot(sizes, means, label=label, marker='o')
+        plt.fill_between(sizes, means - std_devs, means + std_devs, alpha=0.3)
+
+
+
+    if mst_case_df is not None:
+        unique_sizes = mst_case_df['intended_size'].unique()
+        means = [mst_case_df[mst_case_df['intended_size'] == size]['S_general'].mean() for size in unique_sizes]
+        std_devs = [mst_case_df[mst_case_df['intended_size'] == size]['S_general'].std() for size in unique_sizes]
+
+        plt.plot(unique_sizes, means, label='MST', marker='o')
+        plt.fill_between(unique_sizes, np.array(means) - np.array(std_devs), np.array(means) + np.array(std_devs), alpha=0.3)
+
+    plt.xlabel('Subgraph Size')
+    plt.ylabel('Mean Spatial Constant')
+    plt.title('Mean Spatial Constant vs. Subgraph Size')
+    plt.legend()
+
+    plot_folder = args.directory_map['plots_spatial_constant_subgraph_sampling']
+    plt.savefig(f"{plot_folder}/mean_s_general_vs_intended_size_{args.args_title}_false_edge_version.png")
