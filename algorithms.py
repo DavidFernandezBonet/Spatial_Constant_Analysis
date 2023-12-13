@@ -245,7 +245,6 @@ def grow_graph_bfs(G, nodes_start, nodes_finish, n_graphs):
 def get_bfs_samples(G, n_graphs, min_nodes):
     if min_nodes > G.vcount():
         raise ValueError("min_nodes must be less than or equal to the number of nodes in G")
-
     subgraphs = []
     for _ in range(n_graphs):
         start_node = random.randint(0, G.vcount() - 1)  # Randomize the start node for each subgraph
@@ -264,8 +263,29 @@ def get_bfs_samples(G, n_graphs, min_nodes):
         if visited:
             subgraph = G.subgraph(visited)
             subgraphs.append(subgraph)
-
     return subgraphs
+
+
+def get_one_bfs_sample(G, sample_size):
+    if sample_size > G.vcount():
+        raise ValueError("sample_size must be less than or equal to the number of nodes in G")
+
+    start_node = random.randint(0, G.vcount() - 1)  # Randomize the start node for each subgraph
+    visited = set()
+    queue = [start_node]
+
+    while len(visited) < sample_size:
+        if not queue:  # If the queue is empty, break the loop
+            break
+        current = queue.pop(0)
+        if current not in visited:
+            visited.add(current)
+            queue.extend(neigh for neigh in G.neighbors(current, mode="ALL") if neigh not in visited)
+
+    # Create subgraph from visited nodes
+    if visited:
+        subgraph = G.subgraph(visited)
+    return subgraph
 
 
 

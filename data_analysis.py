@@ -266,16 +266,24 @@ def run_simulation_graph_growth(args, start_n_nodes=100, n_graphs=10, num_random
     return results_df, fit_S, r_squared_S, fit_dim, r_squared_dim
 
 
-def run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=10, graph=None, add_false_edges=False, add_mst=False):
+def run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=10, graph=None, add_false_edges=False,
+                                     add_mst=False, parallel=True, false_edge_list=[0,5,20,100]):
+    # TODO: introduce option to not parallelize (can run into memory problems)
+
+    # Set parallel = False if you run into memory issues
     if graph is None:
         # Load the initial graph
         igraph_graph = load_graph(args, load_mode='igraph')
     else:
         igraph_graph = graph.copy()  # Create a copy if graph is provided
 
-    size_subgraph_list = np.arange(50, args.num_points, size_interval)
-    size_subgraph_list = np.append(size_subgraph_list, args.num_points)
-    size_subgraph_list = np.unique(size_subgraph_list)
+    if args.num_points < 10000:   # for too large of a graph it is difficult to get the full shortest path, #TODO: implement sampling
+        size_subgraph_list = np.arange(50, args.num_points, size_interval)
+        size_subgraph_list = np.append(size_subgraph_list, args.num_points)
+        size_subgraph_list = np.unique(size_subgraph_list)
+    else:
+        size_subgraph_list = np.arange(50, 3000, size_interval)
+
 
 
 
@@ -295,7 +303,7 @@ def run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=10, gr
 
     if add_false_edges:
         all_results = []
-        false_edge_list = [0, 5, 20, 100]
+        # false_edge_list = [0, 5, 20, 100]   # now it is a default argument
         for false_edge_number in false_edge_list:
             args.false_edges_count = false_edge_number
             # Work on a copy of the graph for false edges
@@ -321,6 +329,7 @@ def run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=10, gr
 
     else:
         #     # Generate subgraphs with BFS
+        print("running normal bfs")
         igraph_graph_copy = igraph_graph.copy()
         pool = multiprocessing.Pool(multiprocessing.cpu_count())
         tasks = [(size_subgraphs, args, igraph_graph_copy, n_subgraphs) for size_subgraphs in size_subgraph_list]
@@ -337,7 +346,9 @@ def run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=10, gr
         results_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}")
         plot_sample_spatial_constant(args, results_df)
         plot_spatial_constant_against_subgraph_size(args, results_df)
-    return results_df
+        combined_df = results_df
+
+    return combined_df
 
 
 def process_subgraph__bfs_parallel(size_subgraphs, args, igraph_graph, n_subgraphs):
@@ -404,3 +415,22 @@ def run_simulation_comparison_large_and_small_world(args, start_n_nodes=50, end_
     plot_mean_sp_with_num_nodes_large_and_smallworld(args, results_df, plot_filename)
 
     return results_df
+
+
+def subgraph_sampling_analysis_for_different_weight_thresholds(args, weight_thresholds, edge_list_title):
+    combined_dfs = []
+    false_edge_counts = []
+
+    # Step 1: Load graph for different weight_threshold values and run simulation
+    for wt in weight_thresholds:
+        args.edge_list_title = edge_list_title
+        igraph_graph_original = load_graph(args, load_mode='igraph', weight_threshold=wt)
+        false_edge_count = [0, 5, 20, 100]
+        combined_df = run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=20, graph=igraph_graph_original,
+                                         add_false_edges=True, add_mst=False, false_edge_list=false_edge_count)
+        combined_dfs.append(combined_df)
+        false_edge_counts.append(false_edge_count)
+
+
+    # Generate combined plot with subplots
+    plot_spatial_constants_subplots(args, combined_dfs, false_edge_counts, weight_thresholds)

@@ -24,6 +24,7 @@ def create_project_structure():
         'plots_clustering_coefficient': f'{project_root}/results/plots/clustering_coefficient',
         'plots_degree_distribution': f'{project_root}/results/plots/degree_distribution',
         'plots_shortest_path_distribution': f'{project_root}/results/plots/shortest_path_distribution',
+        'plots_weight_distribution': f'{project_root}/results/plots/weight_distribution'
     }
 
     for key, relative_path in directory_map.items():

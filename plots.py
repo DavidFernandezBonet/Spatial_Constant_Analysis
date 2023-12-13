@@ -1,8 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-
-from utils import CurveFitting
+import re
+from curve_fitting import CurveFitting
 import seaborn as sns
 import scienceplots
 
@@ -504,3 +504,124 @@ def plot_spatial_constant_against_subgraph_size_with_false_edges(args, dataframe
 
     plot_folder = args.directory_map['plots_spatial_constant_subgraph_sampling']
     plt.savefig(f"{plot_folder}/mean_s_general_vs_intended_size_{args.args_title}_false_edge_version.png")
+
+
+def plot_spatial_constant_against_subgraph_size_with_multiple_series(args, dataframe, false_edge_counts, ax=None, title=None, mst_case_df=None):
+    # Use provided axis or get/create current active axis
+    if ax is None:
+        ax = plt.gca()
+
+
+    # Unique values in the 'proximity_mode' column
+    proximity_modes = dataframe['proximity_mode'].unique()
+
+    # Loop through each proximity mode
+    for mode in proximity_modes:
+        # Extract the number of false edges from the proximity mode string
+        match = re.search(r'with_false_edges=(\d+)', mode)
+        false_edge_count = int(match.group(1)) if match else 0
+
+        # Filter the DataFrame for the current proximity mode
+        filtered_df = dataframe[dataframe['proximity_mode'] == mode]
+        unique_sizes = filtered_df['intended_size'].unique()
+        means = []
+        std_devs = []
+        sizes = []
+
+        # Calculate mean and standard deviation for each size
+        for size in unique_sizes:
+            subset = filtered_df[filtered_df['intended_size'] == size]
+            mean = subset['S_general'].mean()
+            std = subset['S_general'].std()
+            means.append(mean)
+            std_devs.append(std)
+            sizes.append(size)
+
+        sizes = np.array(sizes)
+        means = np.array(means)
+        std_devs = np.array(std_devs)
+
+        # Plot each series on the given axis
+        label = f'False Edges: {false_edge_count}'
+        ax.plot(sizes, means, label=label, marker='o')
+        ax.fill_between(sizes, means - std_devs, means + std_devs, alpha=0.3)
+
+
+    if mst_case_df is not None:
+        pass
+
+    ax.set_xlabel('Subgraph Size')
+    ax.set_ylabel('Mean Spatial Constant')
+    if title:
+        ax.set_title(title)
+    ax.legend()
+
+    # Save plot if ax is not provided (assumed to be a standalone plot)
+    if ax is None:
+        plot_folder = args.directory_map['plots_spatial_constant_subgraph_sampling']
+        plt.savefig(f"{plot_folder}/mean_s_general_vs_intended_size_{args.args_title}_false_edge_version.png")
+
+
+def plot_spatial_constants_subplots(args, all_dataframes, all_false_edge_lists, weight_thresholds, mst_case_df=None):
+    num_plots = len(weight_thresholds)
+    fig, axs = plt.subplots(1, num_plots, figsize=(10 * num_plots, 6), sharey=True)
+
+    # Ensure axs is iterable when there's only one subplot
+    if num_plots == 1:
+        axs = [axs]
+
+    for idx, wt in enumerate(weight_thresholds):
+        # Extract the DataFrames and false_edge_counts for the current weight threshold
+        dataframes_for_wt = all_dataframes[idx]
+        false_edge_counts_for_wt = all_false_edge_lists[idx]
+
+        # Call the modified plot function for each subplot
+        plot_spatial_constant_against_subgraph_size_with_multiple_series(
+            args, dataframes_for_wt, false_edge_counts_for_wt, ax=axs[idx], title=f"Weight Threshold: {wt}", mst_case_df=mst_case_df
+        )
+
+    plt.tight_layout()
+    plot_folder = args.directory_map['plots_spatial_constant_subgraph_sampling']
+    plt.savefig(f"{plot_folder}/spatial_constant_subgraphs_different_weight_threshold_{args.args_title}_false_edge_version.png")
+    plt.savefig(
+        f"{plot_folder}/spatial_constant_subgraphs_different_weight_threshold_{args.args_title}_false_edge_version.pdf")
+
+
+def plot_weight_distribution(args, edge_list_with_weight_df):
+    # # Histogram Plot
+    # plt.figure(figsize=(12, 6))
+    # plt.subplot(1, 2, 1)  # 1 row, 2 columns, first subplot
+    # plt.hist(edge_list_with_weight_df['weight'], bins=20, color='skyblue', edgecolor='black', log=True)
+    # plt.title('Histogram of Weights')
+    # plt.xscale('log')
+    # plt.xlabel('Weight')
+    # plt.ylabel('Frequency')
+
+    unique_weights = edge_list_with_weight_df['weight'].unique()
+    num_unique_weights = len(unique_weights)
+    plt.figure(figsize=(12, 6))
+    plt.subplot(1, 2, 1)  # 1 row, 2 columns, first subplot
+    plt.hist(edge_list_with_weight_df['weight'], bins=num_unique_weights, color='skyblue', edgecolor='black', log=True)
+    plt.title('Histogram of Weights')
+    plt.xlabel('Weight')
+    plt.ylabel('Frequency')
+
+
+    # Prepare DataFrame for Scatter Plot - Ordered by weight
+    sorted_df = edge_list_with_weight_df.sort_values(by='weight')
+    sorted_df['rank'] = range(1, len(sorted_df) + 1)
+
+    # Scatter Plot - Ordered by weight
+    plt.subplot(1, 2, 2)  # 1 row, 2 columns, second subplot
+    plt.scatter(sorted_df['rank'], sorted_df['weight'], color='tomato')
+    plt.title('Scatter Plot of Weights (Ordered by Rank)')
+    plt.xlabel('Rank')
+    plt.ylabel('Weight')
+
+
+    # Show plots
+    plt.tight_layout()
+    plot_folder = args.directory_map['plots_weight_distribution']
+    plt.savefig(f"{plot_folder}/weight_distribution_{args.args_title}.png")
+
+
