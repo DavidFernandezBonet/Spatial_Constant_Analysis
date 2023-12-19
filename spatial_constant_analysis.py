@@ -32,41 +32,34 @@ plt.rcParams['legend.fontsize'] = font_size - 10
 
 # TODO: args_title is not instantiated if you don't call the parameters (maybe just make a config file with the parameters and call them all)
 args = GraphArgs()
-
-args.proximity_mode = "knn"
-args.dim = 2
+args.proximity_mode = "delaunay_corrected"
+args.dim = 3
 # print("Proximity_mode after setting to 'knn':", args.proximity_mode)
 # print("Setting false_edges_count to 5...")
 args.false_edges_count = 0   #TODO: this only adds false edges to simulated graphs!
 # print("Proximity_mode after setting false_edges_count to 5:", args.proximity_mode)
 print(args.proximity_mode)
-args.intended_av_degree = 6
-args.num_points = 1000
+args.intended_av_degree = 10
+args.num_points = 4000
 args.directory_map = create_project_structure()  # creates folder and appends the directory map at the args
 
-
+#
 # # # # #Experimental
 # # subgraph_2_nodes_44_edges_56_degree_2.55.pickle  # subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle  # subgraph_8_nodes_160_edges_179_degree_2.24.pickle
 # # pixelgen_cell_2_RCVCMP0000594.csv, pixelgen_cell_1_RCVCMP0000208.csv, pixelgen_cell_3_RCVCMP0000085.csv
 # # pixelgen_edgelist_CD3_cell_2_RCVCMP0000009.csv, pixelgen_edgelist_CD3_cell_1_RCVCMP0000610.csv, pixelgen_edgelist_CD3_cell_3_RCVCMP0000096.csv
 # # weinstein_data.csv
 # args.proximity_mode = "experimental"  # define proximity mode before name!
-# args.edge_list_title = "subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle"
+# args.edge_list_title = "weinstein_data.csv"
 #
 # if os.path.splitext(args.edge_list_title)[1] == ".pickle":
 #     write_nx_graph_to_edge_list_df(args)    # activate if format is .pickle file
-# igraph_graph_original = load_graph(args, load_mode='igraph')
-
-# #### For Weinstein data get a sample only
-# sample_size = 3000
-# igraph_graph_original = get_one_bfs_sample(igraph_graph_original, sample_size=sample_size)### Get only a sample
-# args.num_points = sample_size
-
-## Different weighted thresholds
-# # weight_thresholds = [4, 5, 7, 9, 12]
-# weight_thresholds = [10]
-# subgraph_sampling_analysis_for_different_weight_thresholds(args, weight_thresholds, edge_list_title=args.edge_list_title)
-
+#
+# # # Unweighted graph
+# # igraph_graph_original = load_graph(args, load_mode='igraph')
+#
+# # ## Weighted graph
+# igraph_graph_original = load_graph(args, load_mode='igraph', weight_threshold=15)
 
 
 # plot_graph_properties(args, igraph_graph_original)  # plots clustering coefficient, degree dist, also stores individual spatial constant...
@@ -92,6 +85,27 @@ plot_original_image(args)
 # #### Run subgraph sampling simulation
 # run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=20, graph=igraph_graph_original,
 #                                  add_false_edges=True, add_mst=False)
+
+### Run dimension prediction
+get_dimension_estimation(args, graph=igraph_graph_original, n_samples=20, size_interval=100, start_size=100)  # TODO: start_size matters a lot if not uncertainty
+
+
+# #### For Weinstein data get a sample only
+# sample_size = 3000
+# igraph_graph_original = get_one_bfs_sample(igraph_graph_original, sample_size=sample_size)### Get only a sample
+# args.num_points = sample_size
+
+## Different weighted thresholds
+# # weight_thresholds = [4, 5, 7, 9, 12]
+# weight_thresholds = [10]
+# subgraph_sampling_analysis_for_different_weight_thresholds(args, weight_thresholds, edge_list_title=args.edge_list_title)
+
+# ## Weight threshold analysis
+# weight_thresholds = np.arange(1, 50)
+# spatial_constant_and_weight_threshold_analysis(args, weight_thresholds, edge_list_title=args.edge_list_title)
+
+
+
 
 
 #### Reconstruction pipeline

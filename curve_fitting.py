@@ -4,7 +4,7 @@ from itertools import product
 from scipy.optimize import curve_fit
 import scipy.stats
 class CurveFitting:
-    def __init__(self, x_data, y_data):
+    def __init__(self, x_data, y_data, y_error_std=None):
         self.x_data = x_data
         self.y_data = y_data
         self.popt = None
@@ -13,7 +13,8 @@ class CurveFitting:
         self.fitError = None
         self.sorted_x = None
         self.sorted_y = None
-        self.sorted_y_errors = None
+        self.y_error_std = y_error_std
+        self.sorted_y_errors = None  # TODO: this is not well implemented
         self.reduced_chi_squared = None
         self.r_squared = None
 
@@ -23,7 +24,9 @@ class CurveFitting:
     def power_model(self, x, a, b):
         return a * np.power(x, b)
     def power_model_2d_Sconstant(self, x, a):
-        s = 1.10
+        # s = 1.10
+        # s = 0.51
+        s = 0.36
         return s * np.power(x, a)
     def power_model_2d_bi_Sconstant(self, x, a):
         s = 0.9
@@ -61,7 +64,8 @@ class CurveFitting:
             return f'$y = {a:.4f} \exp(-{b:.4f} x) + {c:.4f}$'
         elif model_func == self.power_model:
             a, b = self.popt
-            return f'$y = {a:.4f} \cdot x^{{{b:.4f}}}$'
+            return f'$y = {a:.4f} \cdot x^{{{{1/{1/b:.4f}}}}}$'  ## Works better for dim prediction
+            # return f'$y = {a:.4f} \cdot x^{{{b:.4f}}}$'
 
         elif model_func == self.power_model_2d_Sconstant:
             b = self.popt[0]
@@ -110,7 +114,7 @@ class CurveFitting:
         else:
             return 'Unknown model'
 
-    def perform_curve_fitting(self, model_func, constant_error=None):
+    def perform_curve_fitting(self, model_func, p0=None, constant_error=None):
         # Sort the x values while keeping y values matched
         sorted_indices = np.argsort(self.x_data)
         self.sorted_x = self.x_data[sorted_indices]
@@ -118,7 +122,7 @@ class CurveFitting:
         self.sorted_y_errors = np.full_like(self.y_data, constant_error if constant_error is not None else 1.0)  #TODO: careful with this! Only if we don't have errors
 
         # Perform curve fitting
-        self.popt, self.pcov = curve_fit(model_func, self.sorted_x, self.sorted_y)
+        self.popt, self.pcov = curve_fit(model_func, self.sorted_x, self.sorted_y, sigma=self.y_error_std, p0=p0)
         self.sigma = np.sqrt(np.diag(self.pcov))
 
         # Calculate standard deviation of fit values
@@ -159,6 +163,9 @@ class CurveFitting:
         for i in range(len(self.ad_critical_values)):
             sl, cv = self.ad_significance_levels[i], self.ad_critical_values[i]
             print(f"Significance Level {sl}%: Critical Value {cv}")
+
+        print("Covariance error", self.pcov)
+
 
     def plot_fit_with_uncertainty(self, model_func, xlabel, ylabel, title, save_path):
         fig, ax = plt.subplots(figsize=(12, 8), dpi=100, facecolor='w', edgecolor='k')

@@ -11,10 +11,12 @@ script_dir = "/home/david/PycharmProjects/Spatial_Graph_Denoising"
 if script_dir not in sys.path:
     sys.path.append(script_dir)
 
-# Now you can import your module (assuming the file is named your_script.py)
-import create_proximity_graph
 import itertools
 import multiprocessing
+from functools import partial
+
+
+import create_proximity_graph
 
 def spatial_constant_variation_analysis(num_points_list, proximity_mode_list, intended_av_degree_list, dim_list, false_edges_list):
     spatial_constant_variation_results = []
@@ -42,7 +44,7 @@ def spatial_constant_variation_analysis(num_points_list, proximity_mode_list, in
     plot_spatial_constant_variation(args, spatial_constant_variation_results_df)
 
     csv_folder = args.directory_map['plots_spatial_constant_variation']
-    spatial_constant_variation_results_df.to_csv(f'{csv_folder}/spatial_constant_variation_df.csv')
+    spatial_constant_variation_results_df.to_csv(f'{csv_folder}/spatial_constant_variation_df.csv', index=False)
     print("DF")
     print(spatial_constant_variation_results_df)
     return spatial_constant_variation_results_df
@@ -171,7 +173,7 @@ def plot_graph_properties(args, igraph_graph):
                                                             num_nodes=args.num_points)
     spatial_constant_results_df = df = pd.DataFrame([spatial_constant_results])
     df_path = args.directory_map["s_constant_results"]
-    spatial_constant_results_df.to_csv(f"{df_path}/s_constant_results_{args.args_title}.csv")
+    spatial_constant_results_df.to_csv(f"{df_path}/s_constant_results_{args.args_title}.csv", index=False)
 
 
 def run_simulation_false_edges(args, max_edges_to_add=10):
@@ -199,7 +201,7 @@ def run_simulation_false_edges(args, max_edges_to_add=10):
 
     # Create DataFrame from results
     results_df = pd.DataFrame(results)
-    results_df.to_csv(f"{args.directory_map['plots_spatial_constant']}/spatial_constant_change_with_false_edges_data.csv")
+    results_df.to_csv(f"{args.directory_map['plots_spatial_constant']}/spatial_constant_change_with_false_edges_data.csv", index=False)
     plot_spatial_constant(args, results_df)
     plot_average_shortest_path(args, results_df)
     return results_df
@@ -239,7 +241,7 @@ def run_simulation_graph_growth(args, start_n_nodes=100, n_graphs=10, num_random
     # Filename based on whether random edges were added
     filename_suffix = f"_random_edges_{num_random_edges}" if num_random_edges > 0 else ""
     csv_filename = f"spatial_constant_change_with_graph_growth_data_{args.args_title}_{filename_suffix}.csv"
-    results_df.to_csv(f"{args.directory_map['plots_spatial_constant_gg']}/{csv_filename}")
+    results_df.to_csv(f"{args.directory_map['plots_spatial_constant_gg']}/{csv_filename}", index=False)
 
 
     plot_filename_S = f"mean_sp_vs_graph_growth_Sfit_{args.args_title}_{filename_suffix}.png"
@@ -325,7 +327,7 @@ def run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=10, gr
             plot_spatial_constant_against_subgraph_size_with_false_edges(args, all_results, false_edge_list)
         csv_filename = f"spatial_constant_subgraph_sampling_{args.args_title}_with_false_edges.csv"
         combined_df = pd.concat(all_results, ignore_index=True)
-        combined_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}")
+        combined_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}", index=False)
 
     else:
         #     # Generate subgraphs with BFS
@@ -343,7 +345,7 @@ def run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=10, gr
         results_df = pd.DataFrame(flat_results)
 
         csv_filename = f"spatial_constant_subgraph_sampling_{args.args_title}.csv"
-        results_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}")
+        results_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}", index=False)
         plot_sample_spatial_constant(args, results_df)
         plot_spatial_constant_against_subgraph_size(args, results_df)
         combined_df = results_df
@@ -408,7 +410,7 @@ def run_simulation_comparison_large_and_small_world(args, start_n_nodes=50, end_
     # Save the DataFrame
     filename_suffix = f"_smallworld_e={num_random_edges_ratio}"
     csv_filename = f"mean_sp_vs_num_nodes_data{filename_suffix}.csv"
-    results_df.to_csv(f"{args.directory_map['plots_spatial_constant']}/{csv_filename}")
+    results_df.to_csv(f"{args.directory_map['plots_spatial_constant']}/{csv_filename}", index=False)
 
     # Plot
     plot_filename = f"mean_sp_vs_num_nodes{filename_suffix}.png"
@@ -434,3 +436,92 @@ def subgraph_sampling_analysis_for_different_weight_thresholds(args, weight_thre
 
     # Generate combined plot with subplots
     plot_spatial_constants_subplots(args, combined_dfs, false_edge_counts, weight_thresholds)
+
+
+def spatial_constant_and_weight_threshold_analysis(args, weight_thresholds, edge_list_title):
+    results = []
+    variable_of_interest = 'S_general'
+    # TODO: ensure that the graph is weighted
+    for wt in weight_thresholds:
+        print("Weight threshold", wt)
+        args.edge_list_title = edge_list_title
+        igraph_graph_original = load_graph(args, load_mode='igraph', weight_threshold=wt)
+        mean_shortest_path = get_mean_shortest_path(igraph_graph_original)
+        sp_results = get_spatial_constant_results(args, mean_shortest_path=mean_shortest_path,
+                                                  average_degree=args.average_degree, num_nodes=args.num_points)
+
+        spatial_constant = sp_results[variable_of_interest]
+        results.append((wt, spatial_constant))
+
+    # Convert results to DataFrame
+    df = pd.DataFrame(results, columns=['Weight Threshold', variable_of_interest])
+    df_folder = args.directory_map['plots_spatial_constant_weighted_threshold']
+    output_file = f'{df_folder}/spatial_constant_vs_weight_threshold{args.args_title}.csv'  # Define your output file path here
+    df.to_csv(output_file, index=False)
+
+    # Now results is a list of tuples (weight_threshold, mean_s_general)
+    plot_s_general_vs_weight_threshold(args, results)
+
+
+def get_dimension_estimation(args, graph, n_samples=20, size_interval=100, start_size=200):
+    """
+    n_samples: how many subgraphs to get for the same subgraph size (gain statistical power)
+    size_interval: interval distance between the sizes
+    """
+
+    # Compute all the sizes list
+    if args.num_points < 10000:   # for too large of a graph it is difficult to get the full shortest path, #TODO: implement sampling
+        size_subgraph_list = np.arange(start_size, args.num_points, size_interval)
+        size_subgraph_list = np.append(size_subgraph_list, args.num_points)
+        size_subgraph_list = np.unique(size_subgraph_list)
+    else:
+        size_subgraph_list = np.arange(start_size, 3000, size_interval)
+
+
+    mean_shortest_path = get_mean_shortest_path(graph)
+    sp_results_big = get_spatial_constant_results(args, mean_shortest_path=mean_shortest_path,
+                                                  average_degree=args.average_degree, num_nodes=args.num_points)
+
+    # Generate local statistics by performing several BFS sampling
+    igraph_graph_copy = graph.copy()
+    pool = multiprocessing.Pool(multiprocessing.cpu_count())
+    tasks = [(size_subgraphs, args, igraph_graph_copy, n_samples) for size_subgraphs in size_subgraph_list]
+    sp_results_df_list = pool.starmap(process_subgraph__bfs_parallel, tasks)
+    flat_sp_results_df_list = [item for sublist in sp_results_df_list for item in sublist]
+    sp_results_dataframe = pd.DataFrame(flat_sp_results_df_list)
+
+    csv_plot_folder = args.directory_map['plots_predicted_dimension']
+    sp_results_dataframe.to_csv(f"{csv_plot_folder}/dimension_prediction_{args.args_title}.csv", index=False)
+
+
+
+    # Group resulting data
+    sizes, means_L, std_devs_L = compute_mean_std_per_group(sp_results_dataframe, 'intended_size', 'mean_shortest_path')
+    # sizes, means_k, std_devs_k = compute_mean_std_per_group(sp_results_df, 'intended_size', 'average_degree')
+    std_devs_L = np.nan_to_num(std_devs_L)
+    std_devs_L[-1] = 0.1
+
+    # Perform the fit
+    # TODO: introduce y_error (right now not working with the fit. probably std 0)
+    ### This gets priority to the final points, as 1st points have more uncertainty... Doesn't work well with Weinstein data, but well with simulated?
+    curve_fit = CurveFitting(x_data=sizes, y_data=means_L, y_error_std=std_devs_L)
+    print("STD", std_devs_L)
+    ### Fit does not consider stds here
+    # curve_fit = CurveFitting(x_data=sizes, y_data=means_L)
+
+
+    fixed_a = sp_results_big['S']  # Fixed parameter
+    # fixed_a_model_func = partial(curve_fit.power_model, a=fixed_a)
+    print("final S", sp_results_big['S'])
+
+    # fixed_a_model_func = curve_fit.power_model_2d_Sconstant
+
+
+    fixed_a_model_func = curve_fit.power_model  # 2 parameters - constant and exponent
+
+    curve_fit.perform_curve_fitting(model_func=fixed_a_model_func)
+    plot_folder = args.directory_map['plots_predicted_dimension']
+    curve_fit.plot_fit_with_uncertainty(model_func=fixed_a_model_func, xlabel='N', ylabel='Mean Shortest Path',
+                                        title='Mean Shortest Path vs. N - Dim fit',
+                                        save_path=f'{plot_folder}/dimension_prediction_{args.args_title}.pdf')
+

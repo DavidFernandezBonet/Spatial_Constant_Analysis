@@ -1,7 +1,8 @@
 import pandas as pd
 import os
 
-# Replace 'your_file.parquet' with the path to your .parquet file
+### Before anything, get the data from their website. It will be a .pxl file that contains an edge list with .parquet extension. Use that
+### https://software.pixelgen.com/datasets
 edge_list_name = 'edgelist_CD3.parquet' #edge_list_human_1k.parquet  # edgelist_CD3.parquet
 df = pd.read_parquet(edge_list_name)
 pd.set_option('display.max_columns', None)

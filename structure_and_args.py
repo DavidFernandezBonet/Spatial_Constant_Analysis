@@ -13,13 +13,18 @@ def create_project_structure():
         's_constant_results': f'{project_root}/results/individual_spatial_constant_results',
         'plots': f'{project_root}/results/plots',
         'plots_original_image': f'{project_root}/results/plots/original_image',
+
+
         'plots_spatial_constant': f'{project_root}/results/plots/spatial_constant',
         'plots_spatial_constant_gg': f'{project_root}/results/plots/spatial_constant/graph_growth',
         'plots_spatial_constant_subgraph_sampling': f'{project_root}/results/plots/spatial_constant/subgraph_sampling',
         'plots_spatial_constant_variation': f'{project_root}/results/plots/spatial_constant/variation_analysis',
-        'plots_spatial_constant_variation_N': f'{project_root}/results/plots/spatial_constant/variation_analysis/N',
-        'plots_spatial_constant_variation_prox_mode': f'{project_root}/results/plots/spatial_constant/variation_analysis/prox_mode',
-        'plots_spatial_constant_variation_degree': f'{project_root}/results/plots/spatial_constant/variation_analysis/degree',
+        'plots_spatial_constant_weighted_threshold': f'{project_root}/results/plots/spatial_constant/weighted_threshold',
+        # 'plots_spatial_constant_variation_N': f'{project_root}/results/plots/spatial_constant/variation_analysis/N',
+        # 'plots_spatial_constant_variation_prox_mode': f'{project_root}/results/plots/spatial_constant/variation_analysis/prox_mode',
+        # 'plots_spatial_constant_variation_degree': f'{project_root}/results/plots/spatial_constant/variation_analysis/degree',
+
+        'plots_predicted_dimension': f'{project_root}/results/plots/predicted_dimension',
 
         'plots_clustering_coefficient': f'{project_root}/results/plots/clustering_coefficient',
         'plots_degree_distribution': f'{project_root}/results/plots/degree_distribution',

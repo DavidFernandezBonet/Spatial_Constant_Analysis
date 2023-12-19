@@ -415,9 +415,6 @@ def plot_sample_spatial_constant(args, dataframe):
     plt.savefig(f"{plot_folder}/subgraph_sampling_{args.args_title}")
 
 
-import matplotlib.pyplot as plt
-import numpy as np
-
 def plot_spatial_constant_against_subgraph_size(args, dataframe):
     unique_sizes = dataframe['intended_size'].unique()
     means = []
@@ -504,6 +501,15 @@ def plot_spatial_constant_against_subgraph_size_with_false_edges(args, dataframe
 
     plot_folder = args.directory_map['plots_spatial_constant_subgraph_sampling']
     plt.savefig(f"{plot_folder}/mean_s_general_vs_intended_size_{args.args_title}_false_edge_version.png")
+
+
+
+    plt.yscale('log')
+    plt.savefig(f"{plot_folder}/mean_s_general_vs_intended_size_{args.args_title}_false_edge_loglin_version.png")
+
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.savefig(f"{plot_folder}/mean_s_general_vs_intended_size_{args.args_title}_false_edge_loglog_version.png")
 
 
 def plot_spatial_constant_against_subgraph_size_with_multiple_series(args, dataframe, false_edge_counts, ax=None, title=None, mst_case_df=None):
@@ -625,3 +631,16 @@ def plot_weight_distribution(args, edge_list_with_weight_df):
     plt.savefig(f"{plot_folder}/weight_distribution_{args.args_title}.png")
 
 
+def plot_s_general_vs_weight_threshold(args, results):
+
+    weight_thresholds, s_generals = zip(*results)
+
+    # Scatter Plot
+    plt.figure(figsize=(10, 6))
+    plt.plot(weight_thresholds, s_generals, marker='o', color='blue', linestyle='-', linewidth=2, markersize=8)
+    plt.title('Mean S_general vs. Weight Threshold')
+    plt.xlabel('Weight Threshold')
+    plt.ylabel('Mean S_general')
+    plot_folder = args.directory_map['plots_spatial_constant_weighted_threshold']
+    plt.savefig(f"{plot_folder}/spatial_constant_vs_weight_threshold{args.args_title}.png")
+    plt.savefig(f"{plot_folder}/spatial_constant_vs_weight_threshold{args.args_title}.pdf")

@@ -326,6 +326,31 @@ def get_minimum_spanning_tree_igraph(igraph_graph, weighted=False):
         mst = igraph_graph.spanning_tree(return_tree=True)
     return mst
 
+def compute_mean_std_per_group(dataframe, group_column, value_column):
+    """
+    When we repeat a simulation in the same settings to get statistical power.
+    "group_column" should be the x variable (e.g. size)
+    "value column" should be the y variable (e.g. spatial constant)
+    This groups the results and extracts the mean and std
+    """
+
+    unique_groups = dataframe[group_column].unique()
+    means = []
+    std_devs = []
+    groups = []
+
+    # Calculate mean and standard deviation for each group
+    for group in unique_groups:
+        subset = dataframe[dataframe[group_column] == group]
+        mean = subset[value_column].mean()
+        std = subset[value_column].std()
+        means.append(mean)
+        std_devs.append(std)
+        groups.append(group)
+    # usage:
+    # sizes, means, std_devs = compute_mean_std_per_group(df, 'intended_size', 'S_general')
+    return np.array(groups), np.array(means), np.array(std_devs)
+
 class ImageReconstruction:
     def __init__(self, graph, dim=2):
         """
