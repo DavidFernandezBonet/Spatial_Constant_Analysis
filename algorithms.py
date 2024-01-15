@@ -408,6 +408,7 @@ class ImageReconstruction:
 
             # initialize node2vec object, similarly for SparseOTF and DenseOTF
 
+            # Temporary file without header
             with tempfile.NamedTemporaryFile(mode='w+', delete=False) as tmp_file:
                 with open(edge_list_path, 'r') as f:
                     next(f)  # Skip the header line
@@ -415,26 +416,22 @@ class ImageReconstruction:
                         tmp_file.write(line)
 
             g = node2vec.PreComp(p=1, q=1, workers=4, verbose=True)
-            # alternatively, can specify ``extend=True`` for using node2vec+
 
-            # load graph from edgelist file
+            # load graph from temporary edgelist file
             g.read_edg(tmp_file.name, weighted=False, directed=False, delimiter=',')
-            # precompute and save 2nd order transition probs (for PreComp only)
             g.preprocess_transition_probs()
-
-
-
-            # alternatively, generate the embeddings directly using ``embed``
             node_embeddings = g.embed()
-            print(node_embeddings)
 
+            # Reorder nodes so they match the embeddings
+            node_ids = g.nodes  # Get the list of node IDs
+            idx_to_id = {idx: int(node_id) for idx, node_id in enumerate(node_ids)}
+            reordered_array = np.empty_like(node_embeddings)
 
-
-            # # initialize SparseGraph object
-            # pecanpy_graph = pecanpy.graph.AdjlstGraph()
-            # # read graph from edgelist
-            # pecanpy_graph.read(edge_list_path, weighted=False, directed=False, delimiter=',')  #TODO: header will annoy
-
+            # Iterate over the existing array and reorder
+            for node_id, row in enumerate(node_embeddings):
+                index = idx_to_id[node_id]  # Find the new index for this row
+                reordered_array[index] = row  # Place the row in the new position
+            node_embeddings = reordered_array
 
 
         elif self.node_embedding_mode == "landmark_isomap":
