@@ -10,9 +10,11 @@ def create_project_structure():
         'source_code': f'{project_root}/src',
         'edge_lists': f'{project_root}/data/edge_lists',
         'original_positions': f'{project_root}/data/original_positions',
+        'reconstructed_positions': f'{project_root}/data/reconstructed_positions',
         's_constant_results': f'{project_root}/results/individual_spatial_constant_results',
         'plots': f'{project_root}/results/plots',
         'plots_original_image': f'{project_root}/results/plots/original_image',
+        'plots_reconstructed_image': f'{project_root}/results/plots/reconstructed_image',
 
 
         'plots_spatial_constant': f'{project_root}/results/plots/spatial_constant',
@@ -48,7 +50,7 @@ def create_project_structure():
 
 class GraphArgs:
     def __init__(self, code_folder=os.getcwd(), num_points=300, L=1, intended_av_degree=6,
-                 dim=2, proximity_mode="knn_bipartite", directory_map=None, average_degree=None,
+                 dim=2, proximity_mode="knn", directory_map=None, average_degree=None,
                  edge_list_title=None, false_edges_count=0, plot_original=False, title_experimental=None):
 
         self.edge_list_title = edge_list_title

@@ -3,8 +3,15 @@ import numpy as np
 import pandas as pd
 import random
 from nodevectors import GGVec
+from nodevectors import Node2Vec
 import umap
+from sklearn import manifold
 import multiprocessing
+
+import pecanpy
+import tempfile
+from pecanpy import pecanpy as node2vec
+
 
 def get_mean_shortest_path(igraph_graph, return_all_paths=False):
     if not isinstance(igraph_graph, ig.Graph):
@@ -352,7 +359,8 @@ def compute_mean_std_per_group(dataframe, group_column, value_column):
     return np.array(groups), np.array(means), np.array(std_devs)
 
 class ImageReconstruction:
-    def __init__(self, graph, dim=2):
+    def __init__(self, graph, dim=2, node_embedding_mode="ggvec", manifold_learning_mode="UMAP",
+                 node_embedding_components=64, manifold_learning_neighbors=15):
         """
         Initialize the ImageReconstruction object.
 
@@ -361,14 +369,78 @@ class ImageReconstruction:
         """
         self.graph = graph
         self.dim = dim
+        self.node_embedding_components = node_embedding_components
+        self.manifold_learning_neighbors = manifold_learning_neighbors
+        self.node_embedding_mode = node_embedding_mode
+        self.manifold_learning_mode = manifold_learning_mode
 
-    def compute_embeddings(self):
+    def compute_embeddings(self, args=None):
         """
         Compute node embeddings using ggvec.
         """
         # graph = ig.Graph.TupleList(self.edge_list, directed=False)
-        ggvec_model = GGVec()
-        node_embeddings = ggvec_model.fit_transform(self.graph)
+        if self.node_embedding_mode == 'ggvec':
+            ggvec_model = GGVec(n_components=self.node_embedding_components)
+            node_embeddings = ggvec_model.fit_transform(self.graph)
+
+        # TODO: implement node2vec compatible with python 3.10 (problem with how nodevectors calls gensim, update nodevectors)
+        # TODO: or try pecanpy again
+        elif self.node_embedding_mode == "node2vec":
+            # raise ValueError("Not implemented yet")
+            ### nodevectors
+            # node2vec_model = Node2Vec(n_components=self.node_embedding_components)
+            # node_embeddings = node2vec_model.fit_transform(self.graph)
+
+            ### pecanpy
+
+            edge_list_folder = args.directory_map['edge_lists']
+            edge_list_path = f'{edge_list_folder}/{args.edge_list_title}'
+            # adj_mat = np.array(self.graph.toarray())
+            # print("adj mat", adj_mat)
+            # node_ids = [str(i) for i in range(adj_mat.shape[0])]
+            # g = pecanpy.graph.SparseGraph.from_mat(self.graph, node_ids)
+            #
+            # indptr, indices, data = g.to_csr()  # convert to csr
+            #
+            # dense_mat = g.to_dense()  # convert to dense adjacency matrix
+            #
+            # g.save(edg_outpath)  # save the graph to an edge list file
+
+            # initialize node2vec object, similarly for SparseOTF and DenseOTF
+
+            with tempfile.NamedTemporaryFile(mode='w+', delete=False) as tmp_file:
+                with open(edge_list_path, 'r') as f:
+                    next(f)  # Skip the header line
+                    for line in f:
+                        tmp_file.write(line)
+
+            g = node2vec.PreComp(p=1, q=1, workers=4, verbose=True)
+            # alternatively, can specify ``extend=True`` for using node2vec+
+
+            # load graph from edgelist file
+            g.read_edg(tmp_file.name, weighted=False, directed=False, delimiter=',')
+            # precompute and save 2nd order transition probs (for PreComp only)
+            g.preprocess_transition_probs()
+
+
+
+            # alternatively, generate the embeddings directly using ``embed``
+            node_embeddings = g.embed()
+            print(node_embeddings)
+
+
+
+            # # initialize SparseGraph object
+            # pecanpy_graph = pecanpy.graph.AdjlstGraph()
+            # # read graph from edgelist
+            # pecanpy_graph.read(edge_list_path, weighted=False, directed=False, delimiter=',')  #TODO: header will annoy
+
+
+
+        elif self.node_embedding_mode == "landmark_isomap":
+            node_embeddings = self.landmark_isomap()
+        else:
+            raise ValueError('Please input a valid node embedding mode')
 
         return node_embeddings
 
@@ -378,14 +450,146 @@ class ImageReconstruction:
 
         :param embeddings: High-dimensional embeddings of nodes.
         """
-        umap_model = umap.UMAP(n_components=self.dim)
-        reduced_embeddings = umap_model.fit_transform(embeddings)
+
+        if self.manifold_learning_mode == 'UMAP':
+            umap_model = umap.UMAP(n_components=self.dim, n_neighbors=self.manifold_learning_neighbors, min_dist=1)
+            reduced_embeddings = umap_model.fit_transform(embeddings)
+        else:
+            raise ValueError('Please input a valid manifold learning mode')
+
         return reduced_embeddings
 
-    def reconstruct(self):
+    def write_positions(self, args, np_positions, output_path):
+        # Write standard dataframe format:
+        if args.dim == 2:
+            positions_df = pd.DataFrame(np_positions, columns=['x', 'y'])
+        elif args.dim == 3:
+            positions_df = pd.DataFrame(np_positions, columns=['x', 'y', 'z'])
+        else:
+            raise ValueError("Please input a valid dimension")
+        node_ids = range(args.num_points)
+        positions_df['node_ID'] = node_ids
+        # Define the output file path
+        title = args.args_title
+        output_file_path = f"{output_path}/positions_{title}.csv"
+
+        # Write the DataFrame to a CSV file
+        positions_df.to_csv(output_file_path, index=True)
+    def reconstruct(self, do_write_positions=False, args=None):
         """
         Perform the entire reconstruction process and return the reconstructed points.
         """
-        embeddings = self.compute_embeddings()
-        reconstructed_points = self.reduce_dimensions(embeddings)
+        embeddings = self.compute_embeddings(args)
+
+        if self.node_embedding_mode != 'landmark_isomap':
+            reconstructed_points = self.reduce_dimensions(embeddings)
+        else:  # in landmark isomap the result is already the reconstructed points
+            reconstructed_points = embeddings
+
+        if do_write_positions:
+            if args == None:
+                raise ValueError("Pass args to the function please")
+            output_path = args.directory_map["reconstructed_positions"]
+            self.write_positions(args, np_positions=np.array(reconstructed_points), output_path=output_path)
         return reconstructed_points
+
+
+    def landmark_isomap(self):
+        def from_edge_list_to_dict(edge_list):
+            import collections
+            dict_graph = collections.defaultdict(set)
+            for edge in edge_list:
+                i, j = edge[0], edge[1]
+                dict_graph[i].add(j)
+                dict_graph[j].add(i)
+            return dict_graph
+
+        def bfs_single_source(graph, source):
+            from collections import deque
+            # Initialize distance dictionary with infinite distance for all nodes except source
+            distances = {node: float('inf') for node in graph}
+            distances[source] = 0
+
+            # Initialize queue with source node
+            queue = deque([source])
+
+            # Traverse graph using BFS
+            while queue:  # while there are nodes in the queue
+                node = queue.popleft()
+                # Visit all neighbors of current node
+                for neighbor in graph[node]:
+                    # Update distance and add to queue if not already visited
+                    if distances[neighbor] == float('inf'):  # (if not visited before)
+                        distances[neighbor] = distances[node] + 1
+                        queue.append(neighbor)
+            return distances
+
+        def sparse_matrix_to_edge_list(sparse_matrix):
+            rows, cols = sparse_matrix.nonzero()
+            edge_list = np.column_stack((rows, cols))
+            return edge_list
+        def symmetrize(a):
+            """
+            Return a symmetrized version of NumPy array a.
+
+            Values 0 are replaced by the array value at the symmetric
+            position (with respect to the diagonal), i.e. if a_ij = 0,
+            then the returned array a' is such that a'_ij = a_ji.
+
+            Diagonal values are left untouched.
+
+            a -- square NumPy array, such that a_ij = 0 or a_ji = 0,
+            for i != j.
+            """
+            return a + a.T - np.diag(a.diagonal())
+
+        # np_edge_list = np.array(get_edge_list_as_df(self.args))
+        np_edge_list = sparse_matrix_to_edge_list(self.graph)
+
+        # np_edge_list = np.unique(
+        #     np.genfromtxt(self.args.title_edge_list, dtype=int), axis=0) - 1
+
+        dict_graph = from_edge_list_to_dict(np_edge_list)
+        N = len(dict_graph)
+
+        # Select random landmarks
+        selected_landmarks = np.random.choice(np.arange(N), self.node_embedding_components, replace=False)
+
+        # Initialize distance from every node to every landmark (NxD matrix)
+        all_distances_to_landmarks = np.empty((N, self.node_embedding_components))
+        # Single source BFS using landmarks as sources
+        for j, landmark in enumerate(selected_landmarks):
+            short_path = bfs_single_source(dict_graph, landmark)
+            for sp_node_id, sp_length in short_path.items():
+                all_distances_to_landmarks[sp_node_id][j] = sp_length
+
+        # Landmark DxD distance matrix (symmetric positive)
+        landmark_distance_matrix = all_distances_to_landmarks[selected_landmarks]
+        landmark_distance_matrix = symmetrize(landmark_distance_matrix)
+
+        # np.set_printoptions(threshold=sys.maxsize)
+        # print("LANDMARK DISTANCE DXD", landmark_distance_matrix)
+        # print("L2 DXD", all_distances_to_landmarks2[selected_landmarks])
+        def landmark_MDS(diss_matrix_landmarks, all_distance_to_landmarks):
+            """
+            1. Apply MDS to position landmark nodes
+            2. Use landmark positions eigenvalues (moore penrose inverse) to position the rest of the nodes
+            """
+            mds = manifold.MDS(n_components=self.dim, metric=True, random_state=2,
+                               dissimilarity="precomputed")
+
+            L = np.array(mds.fit_transform(diss_matrix_landmarks))  # landmark_coordinates --> good results
+
+            # Triangulate all points
+            D2 = diss_matrix_landmarks ** 2
+            D2_all = all_distance_to_landmarks ** 2
+            mean_column = D2.mean(axis=0)
+            L_slash = np.linalg.pinv(L)
+            recovered_positions = np.transpose(0.5 * L_slash.dot(np.transpose(mean_column - D2_all)))
+            return recovered_positions
+
+        recovered_positions = landmark_MDS(landmark_distance_matrix, all_distances_to_landmarks)
+        vectors = recovered_positions
+        return vectors
+
+

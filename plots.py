@@ -333,12 +333,21 @@ def plot_spatial_constant_variation(args, spatial_constant_variation_results_df)
     fig.show()
 
 
-def plot_original_image(args):
+def plot_original_or_reconstructed_image(args, image_type="original"):
+    # image_type: original or reconstructed
 
     edge_list_folder = args.directory_map["edge_lists"]
-    original_position_folder = args.directory_map["original_positions"]
-    edges_df = pd.read_csv(f"{edge_list_folder}/edge_list_{args.original_title}.csv")
-    positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.original_title}.csv")
+
+    if image_type=="original":
+        original_position_folder = args.directory_map["original_positions"]
+        edges_df = pd.read_csv(f"{edge_list_folder}/edge_list_{args.original_title}.csv")
+        positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.original_title}.csv")
+    elif image_type=="reconstructed":
+        reconstructed_position_folder = args.directory_map["reconstructed_positions"]
+        edges_df = pd.read_csv(f"{edge_list_folder}/edge_list_{args.original_title}.csv")
+        positions_df = pd.read_csv(f"{reconstructed_position_folder}/positions_{args.original_title}.csv")
+    else:
+        raise ValueError("Please specify a correct value for image_type, either original or reconstructed.")
 
     # Create a plot
     fig = plt.figure(figsize=(10, 8))
@@ -351,7 +360,7 @@ def plot_original_image(args):
 
     # Draw edges
     for _, row in edges_df.iterrows():
-        source = positions_df[positions_df['node_ID'] == row['source']].iloc[0]
+        source = positions_df[positions_df['node_ID'] == row['source']].iloc[0]   #TODO is this the most efficient?
         target = positions_df[positions_df['node_ID'] == row['target']].iloc[0]
         edge_color = 'red' if (row['source'], row['target']) in args.false_edge_ids or (
         row['target'], row['source']) in args.false_edge_ids else 'k'
@@ -366,8 +375,13 @@ def plot_original_image(args):
             ax.plot([source['x'], target['x']], [source['y'], target['y']],
                     edge_color, linewidth=0.5, alpha=edge_alpha)
 
-    plot_folder = args.directory_map["plots_original_image"]
-    plt.savefig(f"{plot_folder}/original_image_{args.args_title}")
+    if image_type == "original":
+        plot_folder = args.directory_map["plots_original_image"]
+        plt.savefig(f"{plot_folder}/original_image_{args.args_title}")
+    else:
+        plot_folder = args.directory_map["plots_reconstructed_image"]
+        plt.savefig(f"{plot_folder}/reconstructed_image_{args.args_title}")
+
 
 def calculate_predicted_s(args):
     ### Predictions

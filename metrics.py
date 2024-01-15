@@ -196,8 +196,6 @@ class GTA_Quality_Metrics:
 
         # Distance matrix for sampled reconstructed points
         reconstructed_distances = pdist(sampled_reconstructed_points)
-        print(reconstructed_distances[0])
-        print(len(graph_distances_flat), len(reconstructed_distances))
 
         # Calculate Pearson correlation
         correlation, _ = pearsonr(graph_distances_flat, reconstructed_distances)
