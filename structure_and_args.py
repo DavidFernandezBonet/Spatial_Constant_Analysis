@@ -12,6 +12,7 @@ def create_project_structure():
         'original_positions': f'{project_root}/data/original_positions',
         'reconstructed_positions': f'{project_root}/data/reconstructed_positions',
         'pixelgen_data': f'{project_root}/data/pixelgen_data',
+        'colorfolder': f'{project_root}/data/colorcode',
 
         's_constant_results': f'{project_root}/results/individual_spatial_constant_results',
         'plots': f'{project_root}/results/plots',
@@ -89,6 +90,11 @@ class GraphArgs:
 
         # auxiliary title (original, when graph is well connected and we don't have to grab largest component)
         self.original_title = None
+
+        self.node_ids_map_old_to_new = None
+        self.colorfile = None  # filename where the color ids are stored. It is a dataframe with Node_ID, color in columns
+        self.colorcode = {0: "black", 1: "green", 2: "red"}  # what colors to plot
+
 
 
     def update_args_title(self):

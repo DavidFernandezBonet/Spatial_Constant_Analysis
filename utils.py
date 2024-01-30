@@ -1,6 +1,7 @@
 import pandas as pd
 from scipy.sparse.csgraph import connected_components
 from scipy.sparse import coo_matrix
+from scipy.sparse import find
 import scipy.stats
 import igraph as ig
 import networkx as nx
@@ -14,7 +15,7 @@ import os
 from algorithms import *
 from plots import plot_weight_distribution
 
-def get_largest_component_sparse(sparse_graph, original_node_ids):
+def get_largest_component_sparse(args, sparse_graph, original_node_ids):
     n_components, labels = connected_components(csgraph=sparse_graph, directed=False, return_labels=True)
     if n_components > 1:  # If not connected
         print("Disconnected graph! Finding largest component...")
@@ -23,6 +24,20 @@ def get_largest_component_sparse(sparse_graph, original_node_ids):
         component_node_indices = np.where(labels == largest_component_label)[0]
         component_node_ids = original_node_ids[component_node_indices]
         largest_component = sparse_graph[component_node_indices][:, component_node_indices]
+
+        args.num_points = largest_component.shape[0]
+        # Largeset component to an edge list
+        rows, cols, _ = find(largest_component)
+        edges = list(zip(rows, cols))
+        edge_df = pd.DataFrame(edges, columns=['source', 'target'])
+        edge_list_folder = args.directory_map["edge_lists"]
+        edge_df.to_csv(f"{edge_list_folder}/edge_list_{args.args_title}.csv")
+
+        if args.colorcode:  # We are only interested in keeping the indices if we want to plot colors in principle
+            # Componenent ids to dictionary
+            node_id_mapping = {old_id: new_index for new_index, old_id in enumerate(component_node_ids)}
+            args.node_ids_map_old_to_new = node_id_mapping
+
         return largest_component, component_node_ids
     return sparse_graph, original_node_ids
 
@@ -32,7 +47,7 @@ def get_largest_component_igraph(args, igraph_graph):
         print("Disconnected Graph!")
         largest = components.giant()
 
-
+        args.num_points = largest.vcount()
         # Write the new edge list with largest component
         edges = largest.get_edgelist()
         edge_df = pd.DataFrame(edges, columns=['source', 'target'])
@@ -51,7 +66,9 @@ def get_largest_component_networkx(networkx_graph):
 
 def read_edge_list(args):
     file_path = f"{args.directory_map['edge_lists']}/edge_list_{args.args_title}.csv"
+    print("alerta file path", file_path)
     edge_list_df = pd.read_csv(file_path)
+
     return edge_list_df
 
 
@@ -227,12 +244,13 @@ def load_graph(args, load_mode='igraph', input_file_type='edge_list', weight_thr
         sparse_graph = sparse_graph_coo.tocsr()
 
         original_node_ids = np.arange(n_nodes)
-        largest_component, component_node_ids = get_largest_component_sparse(sparse_graph, original_node_ids)
+        largest_component, component_node_ids = get_largest_component_sparse(args, sparse_graph, original_node_ids)
         # Compute average degree
         degrees = largest_component.sum(axis=0).A1  # Sum of non-zero entries in each column (or row)
         average_degree = np.mean(degrees)
         args.average_degree = average_degree
         args.num_points = largest_component.shape[0]
+        args.component_node_ids = component_node_ids
         return largest_component, component_node_ids
 
     elif load_mode == 'igraph':
@@ -311,3 +329,36 @@ def remove_false_edges_igraph(graph, false_edges):
             graph.delete_edges(edge_id)
 
     return graph
+
+def validate_edge_list_numbers(edge_list, reconstructed_positions):
+    """
+    Validate the edge list.
+
+    Parameters:
+    edge_list (pd.DataFrame): DataFrame containing the edge list with 'source' and 'target' columns.
+    reconstructed_positions (list or array): List or array of reconstructed positions.
+
+    Returns:
+    bool: True if the edge list is valid, False otherwise.
+    """
+    n = len(reconstructed_positions) - 1
+    expected_set = set(range(n + 1))
+
+    # Create a set of all values in 'source' and 'target'
+    edge_values = set(edge_list['source']).union(set(edge_list['target']))
+
+    if edge_values == expected_set:
+        return True, "Edge list is valid."
+
+    missing = expected_set - edge_values
+    extra = edge_values - expected_set
+
+    mismatch_info = []
+    if missing:
+        mismatch_info.append(f"Missing nodes: {missing}")
+    if extra:
+        mismatch_info.append(f"Extra nodes: {extra}")
+
+    return False, "; ".join(mismatch_info)
+
+    return edge_values == expected_set

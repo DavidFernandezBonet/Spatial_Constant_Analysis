@@ -336,6 +336,35 @@ def plot_spatial_constant_variation(args, spatial_constant_variation_results_df)
 
 
 def plot_original_or_reconstructed_image(args, image_type="original", edges_df=None):
+    def setup_plot(args, figsize=(10, 8)):
+        fig = plt.figure(figsize=figsize)
+        if args.dim == 3:
+            ax = fig.add_subplot(111, projection='3d')
+        elif args.dim == 2:
+            ax = fig.add_subplot(111)
+        return ax
+
+    def plot_positions(ax, positions_df, args, color_df=None):
+        # Merge positions_df with color_df on 'node_ID' if color_df is provided
+        if color_df is not None:
+            merged_df = positions_df.merge(color_df, on='node_ID')
+            colors = merged_df['color']
+            print(colors)
+            print("number of nodes", len(positions_df))
+            print("number of colors mapped to nodes", len(colors))
+            if args.dim == 3:
+                ax.scatter(merged_df['x'], merged_df['y'], merged_df['z'], color=colors)
+            elif args.dim == 2:
+                ax.scatter(merged_df['x'], merged_df['y'], color=colors)
+
+        else:
+            if args.dim == 3:
+                ax.scatter(positions_df['x'], positions_df['y'], positions_df['z'], facecolors='none',
+                           edgecolors='b')
+            elif args.dim == 2:
+                ax.scatter(positions_df['x'], positions_df['y'], facecolors='none', edgecolors='b')
+
+
     # image_type: original, mst, reconstructed
 
     # TODO: this should not be working when we reconstruct with sparse matrices right? The order of the edge list is different (so positions and graph are different)
@@ -348,27 +377,49 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
         original_position_folder = args.directory_map["original_positions"]
         positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.original_title}.csv")
     elif image_type == "reconstructed":
+        edge_list_folder = args.directory_map["edge_lists"]
+        edges_df = pd.read_csv(f"{edge_list_folder}/edge_list_{args.args_title}.csv")
         reconstructed_position_folder = args.directory_map["reconstructed_positions"]
-        positions_df = pd.read_csv(f"{reconstructed_position_folder}/positions_{args.original_title}.csv")
+        positions_df = pd.read_csv(f"{reconstructed_position_folder}/positions_{args.args_title}.csv")
+        is_valid, reason = validate_edge_list_numbers(edges_df, np.array(positions_df))
+        if not is_valid:
+            print("Reason edge list is not valid:", reason)
+            raise ValueError("Edge list numbering is not valid! It should go from 0 to N-1 points")
     else:
         raise ValueError("Please specify a correct value for image_type, either original or reconstructed.")
 
-    # Create a plot
-    fig = plt.figure(figsize=(10, 8))
-    if args.dim == 3:
-        ax = fig.add_subplot(111, projection='3d')
-        ax.scatter(positions_df['x'], positions_df['y'], positions_df['z'], facecolors='none', edgecolors='b')
-    elif args.dim == 2:
-        ax = fig.add_subplot(111)
-        ax.scatter(positions_df['x'], positions_df['y'], facecolors='none', edgecolors='b')
+    ax = setup_plot(args)
+
+    # Plot data
+    if args.colorfile is not None:
+        color_folder = args.directory_map["colorfolder"]
+        color_df = pd.read_csv(f"{color_folder}/{args.colorfile}")
+        color_df['color'] = color_df['color'].map(args.colorcode)
+        # If we selected a largest component then we need to map the node ids to the proper color
+        if args.node_ids_map_old_to_new is not None:
+            print(color_df['node_ID'])
+            print(args.node_ids_map_old_to_new)
+            color_df['node_ID'] = color_df['node_ID'].map(args.node_ids_map_old_to_new)
+
+        # Additional processing for color_df if required
+        plot_positions(ax, positions_df, args, color_df)
+    else:
+        plot_positions(ax, positions_df, args)
+
+    # # Create a plot
+    # fig = plt.figure(figsize=(10, 8))
+    # if args.dim == 3:
+    #     ax = fig.add_subplot(111, projection='3d')
+    #     ax.scatter(positions_df['x'], positions_df['y'], positions_df['z'], facecolors='none', edgecolors='b')
+    # elif args.dim == 2:
+    #     ax = fig.add_subplot(111)
+    #     ax.scatter(positions_df['x'], positions_df['y'], facecolors='none', edgecolors='b')
 
     # Draw edges
-    count = 0
     for _, row in edges_df.iterrows():
-        count += 1
-        print(count)
-        source = positions_df[positions_df['node_ID'] == row['source']].iloc[0]   #TODO is this the most efficient?
+        source = positions_df[positions_df['node_ID'] == row['source']].iloc[0]     # TODO: is this the most efficient?
         target = positions_df[positions_df['node_ID'] == row['target']].iloc[0]
+
         edge_color = 'red' if (row['source'], row['target']) in args.false_edge_ids or (
         row['target'], row['source']) in args.false_edge_ids else 'k'
 
@@ -731,3 +782,26 @@ def plot_s_general_vs_weight_threshold(args, results):
     plot_folder = args.directory_map['plots_spatial_constant_weighted_threshold']
     plt.savefig(f"{plot_folder}/spatial_constant_vs_weight_threshold{args.args_title}.png")
     plt.savefig(f"{plot_folder}/spatial_constant_vs_weight_threshold{args.args_title}.pdf")
+
+def validate_edge_list_numbers(edge_list, reconstructed_positions):
+    n = len(reconstructed_positions) - 1
+    expected_set = set(range(n + 1))
+
+    # Create a set of all values in 'source' and 'target'
+    edge_values = set(edge_list['source']).union(set(edge_list['target']))
+
+    if edge_values == expected_set:
+        return True, "Edge list is valid."
+
+    missing = expected_set - edge_values
+    extra = edge_values - expected_set
+
+    mismatch_info = []
+    if missing:
+        mismatch_info.append(f"Missing nodes: {missing}")
+    if extra:
+        mismatch_info.append(f"Extra nodes: {extra}")
+
+    return False, "; ".join(mismatch_info)
+
+    return edge_values == expected_set

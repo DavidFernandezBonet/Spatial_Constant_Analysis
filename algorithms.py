@@ -365,7 +365,7 @@ class ImageReconstruction:
         """
         Initialize the ImageReconstruction object.
 
-        :param graph: graph of type igraph #TODO: include more types
+        :param graph: graph of type sparse #TODO: include more types
         :param dim: Target dimension for the UMAP reduction (2 or 3).
         """
         self.graph = graph
@@ -426,7 +426,7 @@ class ImageReconstruction:
         elif self.node_embedding_mode == "landmark_isomap":
             node_embeddings = self.landmark_isomap()
 
-        elif self.node_embedding_mode == "PyMDE":
+        elif self.node_embedding_mode == "PyMDE":  # TODO: adapt for weighted case! Needs to accept more than sparse matrices
             retain_fraction = 1
 
             # Load graph in pymde format

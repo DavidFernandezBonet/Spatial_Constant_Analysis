@@ -10,6 +10,7 @@ from scipy.spatial import Delaunay
 import networkx as nx
 import igraph as ig
 import scipy
+from utils import validate_edge_list_numbers
 
 
 class QualityMetrics:
@@ -147,26 +148,35 @@ class GTA_Quality_Metrics:
         """
         :param k: the "k" of the knn metric
         :param threshold: the cpd threshold, mainly due to memory restrictions
-        :param edge_list: DataFrame with two columns, each row representing an edge.
+        :param edge_list: DataFrame with two columns, each row representing an edge. Columns have to be named 'source' and 'target'.
         """
         self.k = k
         self.threshold = threshold
         
-        self.edge_list = edge_list
+        self.edge_list = edge_list[['source', 'target']]
         self.reconstructed_points = reconstructed_points
 
         self.gta_knn_metric = None
         self.gta_cpd_metric = None
         self.gta_knn_individual = None
 
+
     def _extract_neighbors_from_edge_list(self):
         """
         Extracts the neighbors for each node from an edge list.
 
         """
+        # Before extracting the neighbors, validate that the edge list is okay
+        is_valid, reason = validate_edge_list_numbers(self.edge_list, self.reconstructed_points)
+        if not is_valid:
+            print("Reason edge list is not valid:", reason)
+            raise ValueError("Edge list numbering is not valid! It should go from 0 to N-1 points")
+
         # If edge_list is a DataFrame, convert to list of tuples
         if isinstance(self.edge_list, pd.DataFrame):
-            self.edge_list = list(self.edge_list.itertuples(index=False, name=None))
+            # Select only 'source' and 'target' columns and convert to tuples
+            self.edge_list = [(row.source, row.target) for row in self.edge_list.itertuples(index=False)]
+
         neighbors_dict = defaultdict(set)
         for edge in self.edge_list:
             neighbors_dict[edge[0]].add(edge[1])
@@ -238,8 +248,8 @@ class GTA_Quality_Metrics:
     
     def evaluate_metrics(self):
         self.gta_knn_individual, self.gta_knn_metric = self.get_gta_knn()   # Here we could also get the individual gta
-        # self.gta_cpd_metric = self.get_gta_cpd()
-        self.gta_cpd_metric = None
+        self.gta_cpd_metric = self.get_gta_cpd()
+        # self.gta_cpd_metric = None
         quality_metrics = {'GTA_KNN': self.gta_knn_metric, 'GTA_CPD': self.gta_cpd_metric}
 
         print(quality_metrics)

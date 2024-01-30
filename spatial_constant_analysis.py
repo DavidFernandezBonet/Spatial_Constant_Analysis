@@ -29,6 +29,7 @@ plt.rcParams['xtick.labelsize'] = font_size
 plt.rcParams['ytick.labelsize'] = font_size
 plt.rcParams['legend.fontsize'] = font_size - 10
 
+plt.style.use(['science','no-latex', 'nature'])
 
 def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild_learning_mode='UMAP',
                        ground_truth_available=False):
@@ -79,6 +80,7 @@ def main():
     print(args.proximity_mode)
     args.intended_av_degree = 15
     args.num_points = 1000
+    args.colorfile = "weinstein_color.csv"
 
     simulation_or_experiment = "experiment"
 
@@ -100,17 +102,20 @@ def main():
         # weinstein:
         # weinstein_data.csv
         args.proximity_mode = "experimental"  # define proximity mode before name!
-        args.edge_list_title = "weinstein_data.csv"
+        args.edge_list_title = "weinstein_data_january.csv"
         weighted = True
         weight_threshold = 15
 
         if os.path.splitext(args.edge_list_title)[1] == ".pickle":
             write_nx_graph_to_edge_list_df(args)    # activate if format is .pickle file
 
-        if not weighted:
-            igraph_graph_original = load_graph(args, load_mode='igraph')
-        else:
-            igraph_graph_original = load_graph(args, load_mode='igraph', weight_threshold=weight_threshold)
+        ## TODO: uncomment this
+        # if not weighted:
+        #     igraph_graph_original = load_graph(args, load_mode='igraph')
+        # else:
+        #     igraph_graph_original = load_graph(args, load_mode='igraph', weight_threshold=weight_threshold)
+
+
         # plot_graph_properties(args, igraph_graph_original)  # plots clustering coefficient, degree dist, also stores individual spatial constant...
 
 
@@ -196,6 +201,7 @@ def main():
     igraph_graph_original, _ = load_graph(args, load_mode='sparse', weight_threshold=15)
     # igraph_graph_original, _ = load_graph(args, load_mode='sparse', weight_threshold=)
     run_reconstruction(args, sparse_graph=igraph_graph_original, ground_truth_available=False, node_embedding_mode="landmark_isomap")
+
 
 
 
