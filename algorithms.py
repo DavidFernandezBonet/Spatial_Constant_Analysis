@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import random
 from nodevectors import GGVec
-from nodevectors import Node2Vec
+
 import umap
 from sklearn import manifold
 import multiprocessing
@@ -11,6 +11,9 @@ import multiprocessing
 import pecanpy
 import tempfile
 from pecanpy import pecanpy as node2vec
+import torch
+import pymde
+import scipy.sparse as sp
 
 
 def get_mean_shortest_path(igraph_graph, return_all_paths=False):
@@ -231,12 +234,10 @@ def grow_graph_bfs(G, nodes_start, nodes_finish, n_graphs):
 
     # Generate an array of node counts for each subgraph
     node_counts = np.linspace(nodes_start, nodes_finish, n_graphs, dtype=int)
-
     subgraphs = []
     for count in node_counts:
         visited = set()
         queue = [0]  # Start BFS from node 0 (this can be randomized or parameterized)
-
         while len(visited) < count:
             current = queue.pop(0)
             if current not in visited:
@@ -371,7 +372,7 @@ class ImageReconstruction:
         self.dim = dim
         self.node_embedding_components = node_embedding_components
         self.manifold_learning_neighbors = manifold_learning_neighbors
-        self.node_embedding_mode = node_embedding_mode
+        self.node_embedding_mode = node_embedding_mode  # node2vec, ggvec, landmark_isomap, PyMDE
         self.manifold_learning_mode = manifold_learning_mode
 
     def compute_embeddings(self, args=None):
@@ -383,9 +384,9 @@ class ImageReconstruction:
             ggvec_model = GGVec(n_components=self.node_embedding_components)
             node_embeddings = ggvec_model.fit_transform(self.graph)
 
-        # TODO: implement node2vec compatible with python 3.10 (problem with how nodevectors calls gensim, update nodevectors)
-        # TODO: or try pecanpy again
+
         elif self.node_embedding_mode == "node2vec":
+            # TODO: add node_embedding_components
             # raise ValueError("Not implemented yet")
             ### nodevectors
             # node2vec_model = Node2Vec(n_components=self.node_embedding_components)
@@ -395,18 +396,6 @@ class ImageReconstruction:
 
             edge_list_folder = args.directory_map['edge_lists']
             edge_list_path = f'{edge_list_folder}/{args.edge_list_title}'
-            # adj_mat = np.array(self.graph.toarray())
-            # print("adj mat", adj_mat)
-            # node_ids = [str(i) for i in range(adj_mat.shape[0])]
-            # g = pecanpy.graph.SparseGraph.from_mat(self.graph, node_ids)
-            #
-            # indptr, indices, data = g.to_csr()  # convert to csr
-            #
-            # dense_mat = g.to_dense()  # convert to dense adjacency matrix
-            #
-            # g.save(edg_outpath)  # save the graph to an edge list file
-
-            # initialize node2vec object, similarly for SparseOTF and DenseOTF
 
             # Temporary file without header
             with tempfile.NamedTemporaryFile(mode='w+', delete=False) as tmp_file:
@@ -415,12 +404,12 @@ class ImageReconstruction:
                     for line in f:
                         tmp_file.write(line)
 
-            g = node2vec.PreComp(p=1, q=1, workers=4, verbose=True)
+            g = node2vec.PreComp(p=1, q=1, workers=4, verbose=True, )
 
             # load graph from temporary edgelist file
             g.read_edg(tmp_file.name, weighted=False, directed=False, delimiter=',')
             g.preprocess_transition_probs()
-            node_embeddings = g.embed()
+            node_embeddings = g.embed(dim=self.node_embedding_components)
 
             # Reorder nodes so they match the embeddings
             node_ids = g.nodes  # Get the list of node IDs
@@ -436,6 +425,37 @@ class ImageReconstruction:
 
         elif self.node_embedding_mode == "landmark_isomap":
             node_embeddings = self.landmark_isomap()
+
+        elif self.node_embedding_mode == "PyMDE":
+            retain_fraction = 1
+
+            # Load graph in pymde format
+            sparse_matrix_coo = self.graph.tocoo() if not sp.isspmatrix_coo(self.graph) else self.graph
+            rows = sparse_matrix_coo.row
+            cols = sparse_matrix_coo.col
+            edges_np = np.vstack([rows, cols]).T
+            edges = torch.tensor(edges_np,  dtype=torch.int64)
+            graph = pymde.Graph.from_edges(edges, weights=None)
+
+            # Reconstructions work best in the "dense" form, that is, computing the shortest path distances
+            shortest_paths_graph = pymde.preprocess.graph.shortest_paths(graph,
+                                                                         retain_fraction=retain_fraction)  # Takes a while for large graphs
+            full_edges = shortest_paths_graph.edges.to("cpu")
+            deviations = shortest_paths_graph.distances.to("cpu")
+
+            # Create the MDE problem, dense edges, deviations
+            mde = pymde.MDE(args.num_points, self.node_embedding_components, full_edges,
+                            # pymde.penalties.Quadratic(weights=deviations),  # For weights (similarities)
+                            pymde.losses.Quadratic(deviations=deviations),  # For deviations (dissimilarities)
+                            pymde.constraints.Standardized(),
+                            # pymde.constraints.Centered())
+                            # TODO: ANCHOR?
+                            #pymde.constraints.Anchored(anchors=torch.tensor([0, 1, 2, 3]), values=original_points[:4]))
+                            )
+
+            node_embeddings = mde.embed()
+
+
         else:
             raise ValueError('Please input a valid node embedding mode')
 
@@ -590,3 +610,51 @@ class ImageReconstruction:
         return vectors
 
 
+def compute_distance_matrix(coords):
+    """
+    Compute the Euclidean distance matrix for a set of 2D or 3D points. (numpy array)
+
+    :param coords: A Nx2 or Nx3 numpy array of coordinates, where each row is a point.
+    :return: NxN numpy array representing the distance matrix.
+    """
+    expanded_coords = np.expand_dims(coords, axis=1)
+    differences = coords - expanded_coords
+    squared_distances = np.sum(differences**2, axis=-1)
+    distance_matrix = np.sqrt(squared_distances)
+    return distance_matrix
+
+
+def global_efficiency(graph):
+    """ global efficiency for igraph graphs"""
+    distances = graph.shortest_paths_dijkstra()
+    inv_distances = [[1/x if x != 0 else 0 for x in row] for row in distances]
+    sum_inv_distances = sum(sum(row) for row in inv_distances)
+    n = len(distances)
+    return sum_inv_distances / (n * (n - 1))
+
+def local_efficiency(graph):
+    """ local efficiency for igraph graphs"""
+    local_effs = []
+    for vertex in range(graph.vcount()):
+        subgraph = graph.subgraph(graph.neighborhood(vertex, order=1))
+        if subgraph.vcount() > 1:
+            local_effs.append(global_efficiency(subgraph))
+        else:
+            local_effs.append(0)
+    return sum(local_effs) / len(local_effs)
+
+
+def select_false_edges(graph, max_false_edges):
+    """
+    Selects false edge candidates for an igraph
+    """
+    possible_edges = [(i, j) for i in range(graph.vcount()) for j in range(i + 1, graph.vcount())]
+    possible_edges = [edge for edge in possible_edges if not graph.are_connected(edge[0], edge[1])]
+    random_false_edges = random.sample(possible_edges, min(len(possible_edges), max_false_edges))
+    return random_false_edges
+
+def add_specific_random_edges_igraph(graph, false_edges_ids, num_edges_to_add):
+    # Add only the first num_edges_to_add edges from the false_edges list
+    edges_to_add = false_edges_ids[:num_edges_to_add]
+    graph.add_edges(edges_to_add)
+    return graph

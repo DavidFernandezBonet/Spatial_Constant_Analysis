@@ -9,11 +9,11 @@ from collections import defaultdict
 from scipy.spatial import Delaunay
 import networkx as nx
 import igraph as ig
-
+import scipy
 
 
 class QualityMetrics:
-    def __init__(self, original_points, reconstructed_points, k=15, threshold=1000):
+    def __init__(self, original_points, reconstructed_points, k=15, threshold=1000, compute_distortion=False):
         """
         :param k: the "k" of the knn metric
         :param threshold: the cpd threshold, mainly due to memory restrictions
@@ -25,13 +25,38 @@ class QualityMetrics:
         self.reconstructed_points = reconstructed_points
 
 
+        self.knn = None
+        self.cpd = None
+        self.distortion = None
+        self.knn_individual = None
+        self.distortion_individual = None
+
+
     def knn_metric(self, visualize=False):
         num_points = len(self.original_points)
         original_tree = KDTree(self.original_points)
         reconstructed_tree = KDTree(self.reconstructed_points)
         original_neighbors = original_tree.query(self.original_points, self.k + 1)[1][:, 1:]
         reconstructed_neighbors = reconstructed_tree.query(self.reconstructed_points, self.k + 1)[1][:, 1:]
-        shared_neighbors = sum([len(set(original).intersection(set(reconstructed))) for original, reconstructed in zip(original_neighbors, reconstructed_neighbors)])
+
+        # This does the same as below but in one line
+        # shared_neighbors = sum([len(set(original).intersection(set(reconstructed))) for original, reconstructed in zip(original_neighbors, reconstructed_neighbors)])
+
+
+        individual_knn = []
+        count = 0
+        for original, reconstructed in zip(original_neighbors, reconstructed_neighbors):
+            n = len(original)
+            # TODO: this probably raises error if len(reconstructed) < len(original)
+            if count==0:
+                count+=1
+                print("original neighbors", original)
+                print("reconstructed neighbors", reconstructed)
+            individual_knn.append(len(set(original).intersection(set(reconstructed[:n]))) / n)
+
+        self.knn_individual = individual_knn
+        self.knn = sum(individual_knn) / len(individual_knn)
+
 
         # TODO: delete this or get in another function
         point_index = 50  # dummy index
@@ -67,7 +92,9 @@ class QualityMetrics:
             axes[1].set_title('Reconstructed Point and Neighbors')
 
             plt.show()
-        return shared_neighbors / (self.k * num_points)
+
+        return self.knn
+        # return shared_neighbors / (self.k * num_points)
 
     def cpd_metric(self):
         num_points = len(self.original_points)
@@ -95,6 +122,10 @@ class QualityMetrics:
         distortion = np.median(distances)
         return distortion
 
+    def get_distortion(self, original_positions, reconstructed_positions):
+        # TODO: how to account for reflection and scale? Use old pipeline? But that requires artificial positioning of nodes
+        mtx1, mtx2, disparity = scipy.spatial.procrustes(reconstructed_positions, original_positions)
+        distances = np.linalg.norm(mtx1 - mtx2, axis=1)
     def evaluate_metrics(self,  distortion=False):
         knn_result = self.knn_metric()
         cpd_result = self.cpd_metric()
@@ -126,6 +157,7 @@ class GTA_Quality_Metrics:
 
         self.gta_knn_metric = None
         self.gta_cpd_metric = None
+        self.gta_knn_individual = None
 
     def _extract_neighbors_from_edge_list(self):
         """
@@ -150,23 +182,23 @@ class GTA_Quality_Metrics:
         # Use KDTree for the reconstructed points
         reconstructed_tree = KDTree(self.reconstructed_points)
         reconstructed_neighbors = reconstructed_tree.query(self.reconstructed_points, self.k + 1)[1][:, 1:]
-        individual_agt_knn = []
+        individual_gta_knn = []
         for original, reconstructed in zip(original_neighbors, reconstructed_neighbors):
             n = len(original)
             # TODO: this probably raises error if len(reconstructed) < len(original)
-            individual_agt_knn.append(len(set(original).intersection(set(reconstructed[:n]))) / n)
+            individual_gta_knn.append(len(set(original).intersection(set(reconstructed[:n]))) / n)
 
         # Calculate the average agt_knn
-        gta_knn = sum(individual_agt_knn) / len(individual_agt_knn)
+        gta_knn = sum(individual_gta_knn) / len(individual_gta_knn)
 
         # Visualize the distribution if needed
         if visualize:
-            plt.boxplot(individual_agt_knn)
+            plt.boxplot(individual_gta_knn)
             plt.title("Distribution of Individual GTA_KNN")
             plt.ylabel("Shared Neighbors Fraction")
-            plt.savefig("individual_agt_knn_boxplot.png")
+            plt.savefig("individual_gta_knn_boxplot.png")
 
-        return individual_agt_knn, gta_knn
+        return individual_gta_knn, gta_knn
 
 
     def get_gta_cpd(self):
@@ -205,8 +237,9 @@ class GTA_Quality_Metrics:
         return r_squared
     
     def evaluate_metrics(self):
-        _, self.gta_knn_metric = self.get_gta_knn()
-        self.gta_cpd_metric = self.get_gta_cpd()
+        self.gta_knn_individual, self.gta_knn_metric = self.get_gta_knn()   # Here we could also get the individual gta
+        # self.gta_cpd_metric = self.get_gta_cpd()
+        self.gta_cpd_metric = None
         quality_metrics = {'GTA_KNN': self.gta_knn_metric, 'GTA_CPD': self.gta_cpd_metric}
 
         print(quality_metrics)

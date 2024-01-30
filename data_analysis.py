@@ -269,7 +269,7 @@ def run_simulation_graph_growth(args, start_n_nodes=100, n_graphs=10, num_random
 
 
 def run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=10, graph=None, add_false_edges=False,
-                                     add_mst=False, parallel=True, false_edge_list=[0,5,20,100]):
+                                     add_mst=False, parallel=True, false_edge_list=[0,1,2,3,4]):
     # TODO: introduce option to not parallelize (can run into memory problems)
 
     # Set parallel = False if you run into memory issues
@@ -284,7 +284,7 @@ def run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=10, gr
         size_subgraph_list = np.append(size_subgraph_list, args.num_points)
         size_subgraph_list = np.unique(size_subgraph_list)
     else:
-        size_subgraph_list = np.arange(50, 3000, size_interval)
+        size_subgraph_list = np.arange(50, 3000, size_interval)  # For large graphs we just do up to 3000 nodes
 
 
 
@@ -292,6 +292,18 @@ def run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=10, gr
     if add_mst:
         # Work on a copy of the graph for MST
         igraph_graph_mst = get_minimum_spanning_tree_igraph(igraph_graph.copy())
+        print("SHORTEST PATH MST", get_mean_shortest_path(igraph_graph_mst))
+
+        # TODO: plot the mst (only when ground truth is available)
+        if args.proximity_mode != 'experimental':
+            node_ids = igraph_graph_mst.vs['name']
+            edge_list = igraph_graph_mst.get_edgelist()
+            mapped_edge_list = [(node_ids[source], node_ids[target]) for source, target in edge_list]
+            print(edge_list)
+            edge_df = pd.DataFrame(mapped_edge_list, columns=['source', 'target'])
+            plot_original_or_reconstructed_image(args, image_type='mst', edges_df=edge_df)
+
+
         args.false_edges_count = -1
         pool = multiprocessing.Pool(multiprocessing.cpu_count())
         tasks = [(size_subgraphs, args, igraph_graph_mst, n_subgraphs) for size_subgraphs in size_subgraph_list]
@@ -304,12 +316,19 @@ def run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=10, gr
 
 
     if add_false_edges:
+        max_false_edges = max(false_edge_list)  # Assume false_edge_list is defined
+        all_random_false_edges = select_false_edges(igraph_graph, max_false_edges)
+
         all_results = []
         # false_edge_list = [0, 5, 20, 100]   # now it is a default argument
         for false_edge_number in false_edge_list:
             args.false_edges_count = false_edge_number
             # Work on a copy of the graph for false edges
-            igraph_graph_false = add_random_edges_igraph(igraph_graph.copy(), num_edges_to_add=false_edge_number)
+            # # This adds previously computed false edges, so when you add 1 false edge (a,b) that edge will also be present when you add 2 false edges (a,b) (c,d)
+            igraph_graph_false = add_specific_random_edges_igraph(igraph_graph.copy(), all_random_false_edges,
+                                                                  false_edge_number)
+            # # This adds random edges by the number
+            # igraph_graph_false = add_random_edges_igraph(igraph_graph.copy(), num_edges_to_add=false_edge_number)
             pool = multiprocessing.Pool(multiprocessing.cpu_count())
             tasks = [(size_subgraphs, args, igraph_graph_false, n_subgraphs) for size_subgraphs in size_subgraph_list]
             results = pool.starmap(process_subgraph__bfs_parallel, tasks)
@@ -320,11 +339,21 @@ def run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=10, gr
             all_results.append(results_df)
 
         if add_mst:
-            plot_spatial_constant_against_subgraph_size_with_false_edges(args, all_results, false_edge_list, mst_case_df=mst_df)  # also adding the mst case
+            plot_spatial_constant_against_subgraph_size_with_false_edges(args, all_results, false_edge_list,
+                                                                         mst_case_df=mst_df)  # also adding the mst case
             all_results.append(mst_df)
 
         else:
+
+
+
+            # Spatial constant against subgraph size
             plot_spatial_constant_against_subgraph_size_with_false_edges(args, all_results, false_edge_list)
+
+            # Spatial constant against false edge count
+            processed_false_edge_series = aggregate_spatial_constant_by_size(all_results, false_edge_list)
+            plot_false_edges_against_spatial_constant(args, processed_false_edge_series)
+
         csv_filename = f"spatial_constant_subgraph_sampling_{args.args_title}_with_false_edges.csv"
         combined_df = pd.concat(all_results, ignore_index=True)
         combined_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}", index=False)
@@ -372,6 +401,7 @@ def process_subgraph__bfs_parallel(size_subgraphs, args, igraph_graph, n_subgrap
         spatial_constant_results = get_spatial_constant_results(args, mean_shortest_path, average_degree=avg_degree,
                                                                 num_nodes=num_nodes)
         spatial_constant_results["intended_size"] = size_subgraphs
+        spatial_constant_results["false_edge_number"] = args.false_edges_count
         results.append(spatial_constant_results)
 
     return results
@@ -525,3 +555,55 @@ def get_dimension_estimation(args, graph, n_samples=20, size_interval=100, start
                                         title='Mean Shortest Path vs. N - Dim fit',
                                         save_path=f'{plot_folder}/dimension_prediction_{args.args_title}.pdf')
 
+
+def aggregate_spatial_constant_by_size(dataframes, false_edge_list):
+    """
+    WHen adding false edges, we have a "series" for every size of subgraph.
+    The series has "spatial constant" as y-axis and "false edge count" as x-axis
+    This function takes the dataframe and neatly returns each individual series by size ( a dictionary of dictionaries)
+    1st dictionary: size: series
+    2nd dictionary: "false_edges": false_edge_list, "means": spatial_constant_mean_list, "std": ...
+    """
+    # Determine the unique intended_subgraph_sizes across all dataframes
+    all_sizes = set()
+    for df in dataframes:
+        all_sizes.update(df['intended_size'].unique())
+
+    # Initialize a dictionary to hold the aggregated data
+    aggregated_data = {}
+
+    for size in sorted(all_sizes):
+        means = []
+        std_devs = []
+        false_edges = []
+
+        # Iterating over each false edge count
+        for false_edge_count in false_edge_list:
+            combined_subset = None
+
+            # Combine data from all dataframes for the current false edge count
+            for dataframe in dataframes:
+                subset = dataframe[(dataframe['intended_size'] == size) &
+                                   (dataframe['false_edge_number'] == false_edge_count)]
+                if combined_subset is None:
+                    combined_subset = subset
+                else:
+                    combined_subset = pd.concat([combined_subset, subset])
+
+            if combined_subset is not None and not combined_subset.empty:
+                # Calculate mean and standard deviation of S_general
+                mean = combined_subset['S_general'].mean()
+                std = combined_subset['S_general'].std()
+
+                means.append(mean)
+                std_devs.append(std)
+                false_edges.append(false_edge_count)
+
+        # Store the aggregated data
+        aggregated_data[size] = {
+            'false_edges': false_edges,
+            'means': means,
+            'std_devs': std_devs
+        }
+
+    return aggregated_data

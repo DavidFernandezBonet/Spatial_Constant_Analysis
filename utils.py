@@ -17,6 +17,7 @@ from plots import plot_weight_distribution
 def get_largest_component_sparse(sparse_graph, original_node_ids):
     n_components, labels = connected_components(csgraph=sparse_graph, directed=False, return_labels=True)
     if n_components > 1:  # If not connected
+        print("Disconnected graph! Finding largest component...")
         # Find the largest component
         largest_component_label = np.bincount(labels).argmax()
         component_node_indices = np.where(labels == largest_component_label)[0]
@@ -90,9 +91,42 @@ def write_nx_graph_to_edge_list_df(args):
     edge_df.to_csv(f"{args.directory_map['edge_lists']}/{args.edge_list_title}", index=False)
     return
 
+
+def write_nx_graph_to_edge_list_df(args):
+    # Load the graph from the pickle file
+    print(args.edge_list_title)
+    pickle_file_path = f"{args.directory_map['edge_lists']}/{args.edge_list_title}"
+    with open(pickle_file_path, 'rb') as f:
+        G = pickle.load(f)
+
+    edge_list = G.edges()
+
+    # Initial DataFrame with original source and target
+    edge_df = pd.DataFrame(edge_list, columns=["source", "target"])
+
+    # Creating a mapping for unique sequences
+    unique_nodes = pd.unique(edge_df[['source', 'target']].values.ravel('K'))
+    node_to_int = {node: idx for idx, node in enumerate(unique_nodes)}
+
+    # Apply the mapping to create new columns and rename original columns
+    edge_df['source (seq)'] = edge_df['source']
+    edge_df['target (seq)'] = edge_df['target']
+    edge_df['source'] = edge_df['source (seq)'].map(node_to_int)
+    edge_df['target'] = edge_df['target (seq)'].map(node_to_int)
+
+
+
+    # Splitting the filename and extension
+    new_edge_list_name, _ = os.path.splitext(args.edge_list_title)
+
+    # Saving the modified DataFrame
+    args.edge_list_title = new_edge_list_name + ".csv"
+    edge_df.to_csv(f"{args.directory_map['edge_lists']}/{args.edge_list_title}", index=False)
+    return args
+
 def check_edge_list_columns(edge_list_df):
     # Define allowed columns
-    allowed_columns = {'source', 'target', 'weight'}
+    allowed_columns = {'source', 'target', 'weight', 'source (seq)', 'target (seq)'}
     mandatory_columns = {'source', 'target'}
 
     # Check for extra columns
@@ -111,7 +145,13 @@ def check_edge_list_columns(edge_list_df):
     else:
         print("Column 'weight' does not exist. Continuing with unweighted graph procedure")
 
+    if 'source (seq)' in edge_list_df.columns:
+        edge_list_df = edge_list_df.drop('source (seq)', axis=1)
+    if 'target (seq)' in edge_list_df.columns:
+        edge_list_df = edge_list_df.drop('target (seq)', axis=1)
+
     print("Edge list columns are valid.")
+    return edge_list_df
 def load_graph(args, load_mode='igraph', input_file_type='edge_list', weight_threshold=0):
     """
         Load a graph from an edge list CSV file, compute its average degree, and
@@ -144,14 +184,22 @@ def load_graph(args, load_mode='igraph', input_file_type='edge_list', weight_thr
         """
 
 
-    # TODO: implement different input files, e.g. edge list, pickle networkx...
+    # TODO: implement different input files, e.g. edge list, pickle networkx... (csv and pickle compatible now)
     # TODO: update edge list if graph is disconnected!
     # TODO: false edge implementation for other types apart from igraph? Is it necessary¿
     # TODO: implementation for weighed graph
+
+    if args.edge_list_title == None:
+        raise ValueError('Please make sure that a) the edgelist in the data/edge_lists folder and b)'
+                         'the name of the edgelist is correct.')
+
     file_path = f"{args.directory_map['edge_lists']}/{args.edge_list_title}"
-    df = pd.read_csv(file_path)
-    check_edge_list_columns(edge_list_df=df)
+    df = pd.read_csv(file_path)  # edge list
+
+
+    df = check_edge_list_columns(edge_list_df=df)
     args.original_title = args.args_title
+
 
     # Handling of weighted graphs, for now just a simple threshold
     if "weight" in df.columns:
@@ -166,6 +214,7 @@ def load_graph(args, load_mode='igraph', input_file_type='edge_list', weight_thr
 
 
     if load_mode == 'sparse':
+        # TODO: bipartite stuff
         # TODO: this returns also the node_ids as sparse matrices do not keep track of them. If it is used be aware you  need the IDs
         n_nodes = df.max().max() + 1  # Assuming the nodes start from 0
         # Create symmetric edge list: add both (source, target) and (target, source)
@@ -179,6 +228,7 @@ def load_graph(args, load_mode='igraph', input_file_type='edge_list', weight_thr
 
         original_node_ids = np.arange(n_nodes)
         largest_component, component_node_ids = get_largest_component_sparse(sparse_graph, original_node_ids)
+        # Compute average degree
         degrees = largest_component.sum(axis=0).A1  # Sum of non-zero entries in each column (or row)
         average_degree = np.mean(degrees)
         args.average_degree = average_degree
@@ -188,6 +238,7 @@ def load_graph(args, load_mode='igraph', input_file_type='edge_list', weight_thr
     elif load_mode == 'igraph':
         tuples = [tuple(x) for x in df.values]
         igraph_graph = ig.Graph.TupleList(tuples, directed=False)
+
         largest_component = get_largest_component_igraph(args, igraph_graph)
         degrees = largest_component.degree()
         average_degree = np.mean(degrees)
@@ -223,7 +274,40 @@ def load_graph(args, load_mode='igraph', input_file_type='edge_list', weight_thr
 
 
 
+def add_random_edges_to_csrgraph(csr_graph, num_edges_to_add):
+    """
+    Add a specified number of random edges to a graph in CSR format.
+
+    :param csr_graph: Graph in CSR format.
+    :param num_edges_to_add: Number of random edges to add.
+    :param max_weight: Maximum weight of the edges to be added.
+    :return: Graph in CSR format with added edges.
+    """
+    lil_graph = csr_graph.tolil()  # Convert to LIL format for easier modifications
+    num_nodes = lil_graph.shape[0]
+
+    for _ in range(num_edges_to_add):
+        # Randomly select two different nodes
+        node_a, node_b = np.random.choice(num_nodes, 2, replace=False)
+
+        # Add an edge between these nodes with a random weight
+
+        lil_graph[node_a, node_b] = 1
+        lil_graph[node_b, node_a] = 1
+
+    # Convert back to CSR format
+    return lil_graph.tocsr()
 
 
+def remove_false_edges_igraph(graph, false_edges):
+    for edge in false_edges:
+        # Find the edge based on 'name' attribute of the nodes
+        source = graph.vs.find(name=edge[0]).index
+        target = graph.vs.find(name=edge[1]).index
 
+        # Check if the edge exists and then delete it
+        if graph.are_connected(source, target):
+            edge_id = graph.get_eid(source, target)
+            graph.delete_edges(edge_id)
 
+    return graph

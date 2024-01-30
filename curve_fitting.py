@@ -4,7 +4,24 @@ from itertools import product
 from scipy.optimize import curve_fit
 import scipy.stats
 class CurveFitting:
+    """
+    Usage:
+    # Input x and y data
+    curve_fitting_object = CurveFitting(df_original['num_nodes'].values, df_original['mean_shortest_path'].values)
+    # Select curve to fit
+    func_fit = curve_fitting_object.power_model
+    # Perform the fit
+    curve_fitting_object.perform_curve_fitting(model_func=func_fit)
+    # Plot
+    curve_fitting_object.plot_fit_with_uncertainty(self, model_func, xlabel, ylabel, title, save_path)
+
+    """
     def __init__(self, x_data, y_data, y_error_std=None):
+        """
+        x_data: numpy array
+        y_data: numpy array
+        # TODO: check that this is true
+        """
         self.x_data = x_data
         self.y_data = y_data
         self.popt = None
@@ -18,11 +35,28 @@ class CurveFitting:
         self.reduced_chi_squared = None
         self.r_squared = None
 
+        self.fixed_a = None
+        self.fixed_b = None
+
     def neg_exponential_model(self, x, a, b, c):
         return a * np.exp(-b * x) + c
 
+    def linear_model(self, x, a, b):
+        return a*x + b
+    def quadratic_model(self,x, a, b, c):
+        return a*x**2 + b*x + c
+
+    def cubic_model(self,x, a, b, c, d):
+        return a*x**3 + b*x**2 + c*x + d
+
     def power_model(self, x, a, b):
         return a * np.power(x, b)
+
+    def power_model_fixed(self, x, b):
+        return self.fixed_a * np.power(x, b)
+
+    def power_model_fixed_exp(self, x, a):
+        return a * np.power(x, self.fixed_b)
     def power_model_2d_Sconstant(self, x, a):
         # s = 1.10
         # s = 0.51
@@ -58,14 +92,44 @@ class CurveFitting:
     def small_world_model(self, x, a, b):
         return a * np.log(x) + b
 
-    def get_equation_string(self, model_func):
+    def get_equation_string(self, model_func, inverse_display=False):
         if model_func == self.neg_exponential_model:
             a, b, c = self.popt
             return f'$y = {a:.4f} \exp(-{b:.4f} x) + {c:.4f}$'
+
+        elif model_func == self.linear_model:
+            a, b = self.popt
+            return f'$y = {a:.4f}x + {b:.4f}$'
+
+        elif model_func == self.quadratic_model:
+            a, b, c = self.popt
+            return f'$y = {a:.4f}x^2 + {b:.4f}x + {c:.4f}$'
+
+        elif model_func == self.cubic_model:
+            a, b, c, d = self.popt
+            return f'$y = {a:.4f}x^3 + {b:.4f}x^2 + {c:.4f}x + {d:.4f}$'
         elif model_func == self.power_model:
             a, b = self.popt
-            return f'$y = {a:.4f} \cdot x^{{{{1/{1/b:.4f}}}}}$'  ## Works better for dim prediction
-            # return f'$y = {a:.4f} \cdot x^{{{b:.4f}}}$'
+            if inverse_display:
+                return f'$y = {a:.4f} \cdot x^{{{{1/{1/b:.4f}}}}}$'  ## Works better for dim prediction
+            else:
+                return f'$y = {a:.4f} \cdot x^{{{b:.4f}}}$'
+
+        elif model_func == self.power_model_fixed:
+            b = self.popt
+            a = self.fixed_a
+            if inverse_display:
+                return f'$y = {a} \cdot x^{{{{1/{1/b:.4f}}}}}$'  ## Works better for dim prediction
+            else:
+                return f'$y = {a} \cdot x^{{{b}}}$'
+
+        elif model_func == self.power_model_fixed_exp:
+            a = self.popt
+            b = self.fixed_b
+            if inverse_display:
+                return f'$y = {a} \cdot x^{{{{1/{1/b:.4f}}}}}$'  ## Works better for dim prediction
+            else:
+                return f'$y = {a} \cdot x^{{{b}}}$'
 
         elif model_func == self.power_model_2d_Sconstant:
             b = self.popt[0]
@@ -114,9 +178,17 @@ class CurveFitting:
         else:
             return 'Unknown model'
 
+    def calculate_durbin_watson(self, residuals):
+        diff_res = np.diff(residuals)  # Compute the difference of successive residuals
+        sum_diff_res = np.sum(diff_res ** 2)  # Sum of the squared differences
+        sum_res = np.sum(residuals ** 2)  # Sum of the squared residuals
+        return sum_diff_res / sum_res if sum_res > 0 else 0  # Handle division by zero
+
     def perform_curve_fitting(self, model_func, p0=None, constant_error=None):
         # Sort the x values while keeping y values matched
+
         sorted_indices = np.argsort(self.x_data)
+
         self.sorted_x = self.x_data[sorted_indices]
         self.sorted_y = self.y_data[sorted_indices]
         self.sorted_y_errors = np.full_like(self.y_data, constant_error if constant_error is not None else 1.0)  #TODO: careful with this! Only if we don't have errors
@@ -134,10 +206,14 @@ class CurveFitting:
         # Calculate residuals and reduced chi-squared  #TODO: not working for now, Is there a meaningful way to associate errors?
         y_fit = model_func(self.sorted_x, *self.popt)
         residuals = self.sorted_y - y_fit
-        chi_squared = np.sum((residuals / self.sorted_y_errors) ** 2)
-        degrees_of_freedom = len(self.sorted_y) - len(self.popt)
-        self.reduced_chi_squared = chi_squared / degrees_of_freedom
-        print("chi squared", self.reduced_chi_squared)
+
+        if self.y_error_std is not None:
+            # chi_squared = np.sum((residuals / self.sorted_y_errors) ** 2)
+            print("YSTD", self.y_error_std)
+            chi_squared = np.sum((residuals / self.y_error_std) ** 2)   # Here I am using the std errors...
+            degrees_of_freedom = len(self.sorted_y) - len(self.popt)
+            self.reduced_chi_squared = chi_squared / degrees_of_freedom
+            print("chi squared", self.reduced_chi_squared)
 
         # For R squared
         mean_y = np.mean(self.sorted_y)
@@ -167,7 +243,12 @@ class CurveFitting:
         print("Covariance error", self.pcov)
 
 
+        dubson_watson = self.calculate_durbin_watson(residuals=residuals)
+        print("Durbin–Watson statistic", dubson_watson)  # values between 1.5 and 2.5 mean no autocorrelation
+
+
     def plot_fit_with_uncertainty(self, model_func, xlabel, ylabel, title, save_path):
+        plt.close()
         fig, ax = plt.subplots(figsize=(12, 8), dpi=100, facecolor='w', edgecolor='k')
         ax.xaxis.labelpad = 20
         ax.yaxis.labelpad = 20

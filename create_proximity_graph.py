@@ -13,11 +13,77 @@ def generate_random_points(num_points, L, dim):
     Returns:
     - points: list of tuples, each tuple representing the coordinates (x, y)
     """
+
     if dim not in [2, 3]:
         raise ValueError("Dimension must be 2 or 3.")
     points = np.random.rand(num_points, dim) * L
     points = [tuple(point) for point in points]
     return points
+
+
+def generate_random_points_anomaly(num_points, L, dim, hotspot=None, anomaly_strength=1.0):
+    """
+    Generate 'num_points' random 2D/3D points within 'L' range (square or cube) with density anomalies.
+
+    Args:
+    - num_points: Number of points to generate.
+    - L: Range for each dimension.
+    - dim: Dimension of points (2D or 3D).
+    - hotspot: The center of the density anomaly (tuple of length 'dim').
+               If None, a random hotspot is generated within bounds.
+    - anomaly_strength: A multiplier for the density in the hotspot.
+                        Higher values create stronger anomalies.
+
+    Returns:
+    - points: List of tuples, each tuple representing the coordinates (x, y) or (x, y, z).
+    """
+    if dim not in [2, 3]:
+        raise ValueError("Dimension must be 2 or 3.")
+
+    # Generate a random hotspot within bounds if none is provided
+    if hotspot is None:
+        hotspot = np.random.rand(dim) * L
+
+    points = []
+    for _ in range(num_points):
+        if np.random.rand() < anomaly_strength * 0.1:
+            # Generate points near the hotspot
+            point = np.random.normal(loc=hotspot, scale=L*0.1, size=dim)
+            # Ensure points are within bounds
+            point = np.clip(point, 0, L)
+        else:
+            # Generate points uniformly
+            point = np.random.rand(dim) * L
+
+        points.append(tuple(point))
+
+    return points
+
+def generate_random_points_in_circle_or_sphere(num_points, R, dim):
+    """
+    Generate 'num_points' random 2D/3D points within a radius 'R' (circle or sphere)
+    Returns:
+    - points: list of tuples, each tuple representing the coordinates (x, y) or (x, y, z)
+    """
+    if dim not in [2, 3]:
+        raise ValueError("Dimension must be 2 or 3.")
+
+    points = []
+    while len(points) < num_points:
+        # Generate points in a square/cube of side length 2R, centered at origin
+        point = np.random.uniform(-R, R, dim)
+        # Check if the point is inside the circle/sphere
+        if np.sum(point**2) <= R**2:
+            points.append(tuple(point))
+
+    return points
+
+def generate_square_lattice(args):
+    """ Generate a square lattice of points. """
+    points_per_side = int(np.round(args.num_points ** (1 / args.dim)))
+    points = np.linspace(0, args.L, points_per_side)
+    return np.array(np.meshgrid(*([points] * args.dim))).T.reshape(-1, args.dim)
+
 
 def compute_knn_graph(positions, k):
     """
@@ -242,7 +308,7 @@ def compute_proximity_graph(args, positions):
     if base_proximity_mode not in valid_modes:
         raise ValueError("Please input a valid proximity graph")
 
-    print(base_proximity_mode)
+
     if base_proximity_mode == "epsilon-ball" or base_proximity_mode == "epsilon_bipartite":
         radius = compute_epsilon_ball_radius(density=args.num_points, intended_degree=args.intended_av_degree,
                                              dim=args.dim, base_proximity_mode=base_proximity_mode)
@@ -281,6 +347,14 @@ def compute_proximity_graph(args, positions):
         raise ValueError("Please input a valid proximity graph")
     return distances, indices
 
+def compute_lattice(args, positions):
+    """ Compute the nearest neighbors in a square or cubic lattice. """
+    # Number of neighbors: 4 for a square lattice, 6 for a cubic lattice
+    n_neighbors = 4 if args.dim == 2 else 6
+    print(positions.shape)
+    distances, indices = compute_knn_graph(positions, k=n_neighbors+1)
+
+    return distances, indices
 
 
 def write_positions(args, np_positions, output_path):
@@ -298,12 +372,29 @@ def write_positions(args, np_positions, output_path):
     output_file_path = f"{output_path}/positions_{title}.csv"
 
     # Write the DataFrame to a CSV file
-    positions_df.to_csv(output_file_path, index=True)
+    positions_df.to_csv(output_file_path, index=False)
 
 
 def write_proximity_graph(args):
-    points = generate_random_points(num_points=args.num_points, L=args.L, dim=args.dim)
-    distances, indices = compute_proximity_graph(args, positions=points)
+    if args.proximity_mode == "lattice":
+        points = generate_square_lattice(args)
+        args.num_points = len(points)
+        distances, indices = compute_lattice(args, points)
+
+    else:
+        # Without density anomalies
+        points = generate_random_points(num_points=args.num_points, L=args.L, dim=args.dim)
+
+        # ## circle
+        # points = generate_random_points_in_circle_or_sphere(num_points=args.num_points, R=args.L, dim=args.dim)
+
+
+
+        # ## With density anomalies
+        # points = generate_random_points_anomaly(num_points=args.num_points, L=args.L, dim=args.dim, anomaly_strength=1)
+
+
+        distances, indices = compute_proximity_graph(args, positions=points)
 
     position_folder = args.directory_map["original_positions"]
     edge_list_folder = args.directory_map["edge_lists"]

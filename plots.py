@@ -4,7 +4,9 @@ import pandas as pd
 import re
 from curve_fitting import CurveFitting
 import seaborn as sns
+import matplotlib.cm as cm
 import scienceplots
+import matplotlib.colors as mcolors
 
 plt.style.use(['science', 'nature'])
 
@@ -333,18 +335,20 @@ def plot_spatial_constant_variation(args, spatial_constant_variation_results_df)
     fig.show()
 
 
-def plot_original_or_reconstructed_image(args, image_type="original"):
-    # image_type: original or reconstructed
+def plot_original_or_reconstructed_image(args, image_type="original", edges_df=None):
+    # image_type: original, mst, reconstructed
 
-    edge_list_folder = args.directory_map["edge_lists"]
+    # TODO: this should not be working when we reconstruct with sparse matrices right? The order of the edge list is different (so positions and graph are different)
+    if edges_df is None:
+        edge_list_folder = args.directory_map["edge_lists"]
+        edges_df = pd.read_csv(f"{edge_list_folder}/edge_list_{args.original_title}.csv")
 
-    if image_type=="original":
+    # Get the positions
+    if image_type == "original" or image_type == "mst":
         original_position_folder = args.directory_map["original_positions"]
-        edges_df = pd.read_csv(f"{edge_list_folder}/edge_list_{args.original_title}.csv")
         positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.original_title}.csv")
-    elif image_type=="reconstructed":
+    elif image_type == "reconstructed":
         reconstructed_position_folder = args.directory_map["reconstructed_positions"]
-        edges_df = pd.read_csv(f"{edge_list_folder}/edge_list_{args.original_title}.csv")
         positions_df = pd.read_csv(f"{reconstructed_position_folder}/positions_{args.original_title}.csv")
     else:
         raise ValueError("Please specify a correct value for image_type, either original or reconstructed.")
@@ -359,7 +363,10 @@ def plot_original_or_reconstructed_image(args, image_type="original"):
         ax.scatter(positions_df['x'], positions_df['y'], facecolors='none', edgecolors='b')
 
     # Draw edges
+    count = 0
     for _, row in edges_df.iterrows():
+        count += 1
+        print(count)
         source = positions_df[positions_df['node_ID'] == row['source']].iloc[0]   #TODO is this the most efficient?
         target = positions_df[positions_df['node_ID'] == row['target']].iloc[0]
         edge_color = 'red' if (row['source'], row['target']) in args.false_edge_ids or (
@@ -378,6 +385,9 @@ def plot_original_or_reconstructed_image(args, image_type="original"):
     if image_type == "original":
         plot_folder = args.directory_map["plots_original_image"]
         plt.savefig(f"{plot_folder}/original_image_{args.args_title}")
+    elif image_type == "mst":
+        plot_folder = args.directory_map["plots_mst_image"]
+        plt.savefig(f"{plot_folder}/mst_image_{args.args_title}")
     else:
         plot_folder = args.directory_map["plots_reconstructed_image"]
         plt.savefig(f"{plot_folder}/reconstructed_image_{args.args_title}")
@@ -606,6 +616,69 @@ def plot_spatial_constants_subplots(args, all_dataframes, all_false_edge_lists, 
     plt.savefig(
         f"{plot_folder}/spatial_constant_subgraphs_different_weight_threshold_{args.args_title}_false_edge_version.pdf")
 
+def plot_false_edges_against_spatial_constant(args, processed_false_edge_series):
+    plot_folder = args.directory_map['plots_spatial_constant_false_edge_difference']
+
+    # Determine the unique intended_subgraph_sizes across all dataframes
+    all_sizes = set(list(processed_false_edge_series.keys()))
+
+
+    # Create a single plot
+    fig1, ax1 = plt.subplots(figsize=(10, 6))
+
+    cmap_name = 'Oranges_d'
+    colors = sns.color_palette(cmap_name, len(all_sizes))
+    # colors = cm.get_cmap('magma_r', len(all_sizes))
+    cmap = sns.color_palette(cmap_name, as_cmap=True)
+    # Normalizing the size values for the color mapping
+    norm = mcolors.Normalize(vmin=min(all_sizes), vmax=max(all_sizes))
+
+    # Exctract each series and plot
+    for i, size in enumerate(sorted(all_sizes)):
+        plot_folder_fit = args.directory_map['plots_spatial_constant_false_edge_difference_fits']
+        false_edges = processed_false_edge_series[size]["false_edges"]
+        means = processed_false_edge_series[size]["means"]  # Spatial Constant means
+        std_devs = processed_false_edge_series[size]["std_devs"]
+
+        # Plotting the series for the current subgraph size
+        ax1.errorbar(false_edges, means, yerr=std_devs, color=colors[i], label=f'Size: {size}', marker='o')
+        # plt.errorbar(false_edges, means, yerr=std_devs, color=colors(i), label=f'Size: {size}', marker='o')  # for matplotlib
+
+        log_false_edges = np.log(np.array(false_edges) + 1)  # +1 to avoid zero error
+        log_means = np.log(means)
+        curve_fitting_object = CurveFitting(log_false_edges, log_means)
+        func_fit = curve_fitting_object.linear_model
+        curve_fitting_object.perform_curve_fitting(model_func=func_fit)
+        save_path = f"{plot_folder_fit}/false_edge_powerlaw_fit_size={size}_{args.args_title}_fedgelist={false_edges}.pdf"
+        curve_fitting_object.plot_fit_with_uncertainty(model_func=func_fit, xlabel="Log False Edge Count",
+                                                       ylabel="Log Spatial Constant", title=f"Size {size}", save_path=save_path)
+
+    ax1.set_title('Spatial Constant vs False Edge Count')
+    ax1.set_xlabel('False Edge Count')
+    ax1.set_ylabel('Spatial Constant')
+
+    # Creating a colorbar for the sizes
+    sm = cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    cbar = plt.colorbar(sm, ax=ax1)
+    cbar.set_label('Subgraph Size')
+
+    # plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+
+
+    fig1.tight_layout()
+    fig1.savefig(f"{plot_folder}/normal_false_edge_difference_{args.args_title}_fedgelist={false_edges}.pdf")
+
+    ax1.set_xscale('log')
+    fig1.savefig(f"{plot_folder}/semilogX_false_edge_difference_{args.args_title}_fedgelist={false_edges}.pdf")
+
+    ax1.set_yscale('log')
+    ax1.set_xscale('linear')
+    fig1.savefig(f"{plot_folder}/semilogY_false_edge_difference_{args.args_title}_fedgelist={false_edges}.pdf")
+
+    ax1.set_xscale('log')
+    ax1.set_yscale('log')
+    fig1.savefig(f"{plot_folder}/loglog_false_edge_difference_{args.args_title}_fedgelist={false_edges}.pdf")
 
 def plot_weight_distribution(args, edge_list_with_weight_df):
     # # Histogram Plot
