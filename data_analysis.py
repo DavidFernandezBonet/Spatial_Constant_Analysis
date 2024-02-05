@@ -20,19 +20,19 @@ import create_proximity_graph
 
 def spatial_constant_variation_analysis(num_points_list, proximity_mode_list, intended_av_degree_list, dim_list, false_edges_list):
     spatial_constant_variation_results = []
-
+    graph_growth = False  # Turn to true if you want fits for the dimension
     args = GraphArgs()  # caution, this is just to get plot folders but specific graph values are default
     args.directory_map = create_project_structure()  # creates folder and appends the directory map at the args
     # Iterate over all combinations of parameters
     for num_points, proximity_mode, dim, false_edges in itertools.product(num_points_list, proximity_mode_list, dim_list, false_edges_list):
-        if proximity_mode == "delaunay_corrected":
+        if proximity_mode == "delaunay_corrected" or proximity_mode == "lattice":
             # For delaunay_corrected, use only the first value in intended_av_degree_list
             intended_av_degree = intended_av_degree_list[0]
-            result = perform_simulation(num_points, proximity_mode, intended_av_degree, dim, false_edges, graph_growth=True)
+            result = perform_simulation(num_points, proximity_mode, intended_av_degree, dim, false_edges, graph_growth=graph_growth)
             spatial_constant_variation_results.append(result)
         else:
             for intended_av_degree in intended_av_degree_list:
-                result = perform_simulation(num_points, proximity_mode, intended_av_degree, dim, false_edges, graph_growth=True)
+                result = perform_simulation(num_points, proximity_mode, intended_av_degree, dim, false_edges, graph_growth=graph_growth)
                 spatial_constant_variation_results.append(result)
 
     spatial_constant_variation_results_df = pd.DataFrame(spatial_constant_variation_results)
@@ -56,7 +56,6 @@ def perform_simulation(num_points, proximity_mode, intended_av_degree, dim, fals
     args.proximity_mode = proximity_mode
     args.num_points = num_points
     args.dim = dim  # assuming dimension is an important parameter
-    args.directory_map = create_project_structure()
     args.intended_av_degree = intended_av_degree
     args.false_edges_count = false_edges
     create_proximity_graph.write_proximity_graph(args)
@@ -97,6 +96,20 @@ def get_spatial_constant_results(args, mean_shortest_path, average_degree, num_n
     K_log = mean_shortest_path / (np.log(num_nodes) / np.log(average_degree))     # small-world constant
     S_general = mean_shortest_path / ((num_nodes ** (1 / dim)) * (average_degree ** (-1 / dim)))
 
+    if args.dim == 2:
+        if args.is_bipartite:
+            mean_shortest_path_prediction = 1.2 * (args.num_points/(args.average_degree*2))**(1/args.dim)
+        else:
+            mean_shortest_path_prediction = 1.2 * (args.num_points / args.average_degree) ** (1 / args.dim)
+    elif args.dim == 3:
+        if args.is_bipartite:
+            mean_shortest_path_prediction = (1.2*(4/3)) * (args.num_points/(args.average_degree*2))**(1/args.dim)
+        else:
+            mean_shortest_path_prediction = (1.2*(4/3)) * (args.num_points / args.average_degree) ** (1 / args.dim)
+
+    msp_prediction_error = mean_shortest_path_prediction - mean_shortest_path
+    relative_msp_prediction_error = msp_prediction_error / mean_shortest_path
+
     # Save metrics to CSV
     spatial_constant_results = {
         'proximity_mode': proximity_mode,
@@ -107,7 +120,10 @@ def get_spatial_constant_results(args, mean_shortest_path, average_degree, num_n
         'dim': dim,
         'S': S,
         'S_general': S_general,
-        'S_smallworld_general': K_log
+        'S_smallworld_general': K_log,
+        'mean_shortest_path_prediction': mean_shortest_path_prediction,
+        'msp_prediction_error': msp_prediction_error,
+        'relative_msp_prediction_error': relative_msp_prediction_error
     }
     return spatial_constant_results
 
@@ -294,13 +310,15 @@ def run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=10, gr
         igraph_graph_mst = get_minimum_spanning_tree_igraph(igraph_graph.copy())
         print("SHORTEST PATH MST", get_mean_shortest_path(igraph_graph_mst))
 
-        # TODO: plot the mst (only when ground truth is available)
+        # plot the mst (only when ground truth is available)
         if args.proximity_mode != 'experimental':
             node_ids = igraph_graph_mst.vs['name']
             edge_list = igraph_graph_mst.get_edgelist()
             mapped_edge_list = [(node_ids[source], node_ids[target]) for source, target in edge_list]
             print(edge_list)
             edge_df = pd.DataFrame(mapped_edge_list, columns=['source', 'target'])
+            edge_list_folder = args.directory_map["edge_lists"]
+            edge_df.to_csv(f"{edge_list_folder}/mst_{args.args_title}.csv",index=False)
             plot_original_or_reconstructed_image(args, image_type='mst', edges_df=edge_df)
 
 

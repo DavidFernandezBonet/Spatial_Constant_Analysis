@@ -26,12 +26,13 @@ def get_largest_component_sparse(args, sparse_graph, original_node_ids):
         largest_component = sparse_graph[component_node_indices][:, component_node_indices]
 
         args.num_points = largest_component.shape[0]
+        print("Size of largest connected component:", args.num_points)
         # Largeset component to an edge list
         rows, cols, _ = find(largest_component)
         edges = list(zip(rows, cols))
         edge_df = pd.DataFrame(edges, columns=['source', 'target'])
         edge_list_folder = args.directory_map["edge_lists"]
-        edge_df.to_csv(f"{edge_list_folder}/edge_list_{args.args_title}.csv")
+        edge_df.to_csv(f"{edge_list_folder}/edge_list_{args.args_title}.csv", index=False)
 
         if args.colorcode:  # We are only interested in keeping the indices if we want to plot colors in principle
             # Componenent ids to dictionary
@@ -52,7 +53,7 @@ def get_largest_component_igraph(args, igraph_graph):
         edges = largest.get_edgelist()
         edge_df = pd.DataFrame(edges, columns=['source', 'target'])
         edge_list_folder = args.directory_map["edge_lists"]
-        edge_df.to_csv(f"{edge_list_folder}/edge_list_{args.args_title}.csv")
+        edge_df.to_csv(f"{edge_list_folder}/edge_list_{args.args_title}.csv", index=False)
 
         return largest
     return igraph_graph
@@ -66,7 +67,6 @@ def get_largest_component_networkx(networkx_graph):
 
 def read_edge_list(args):
     file_path = f"{args.directory_map['edge_lists']}/edge_list_{args.args_title}.csv"
-    print("alerta file path", file_path)
     edge_list_df = pd.read_csv(file_path)
 
     return edge_list_df
@@ -169,7 +169,7 @@ def check_edge_list_columns(edge_list_df):
 
     print("Edge list columns are valid.")
     return edge_list_df
-def load_graph(args, load_mode='igraph', input_file_type='edge_list', weight_threshold=0):
+def load_graph(args, load_mode='igraph', weight_threshold=0):
     """
         Load a graph from an edge list CSV file, compute its average degree, and
         update the provided args object with the average degree and the number of
@@ -202,7 +202,7 @@ def load_graph(args, load_mode='igraph', input_file_type='edge_list', weight_thr
 
 
     # TODO: implement different input files, e.g. edge list, pickle networkx... (csv and pickle compatible now)
-    # TODO: update edge list if graph is disconnected!
+    # TODO: update edge list if graph is disconnected! Done for igraph and sparse
     # TODO: false edge implementation for other types apart from igraph? Is it necessary¿
     # TODO: implementation for weighed graph
 
@@ -217,6 +217,27 @@ def load_graph(args, load_mode='igraph', input_file_type='edge_list', weight_thr
     df = check_edge_list_columns(edge_list_df=df)
     args.original_title = args.args_title
 
+    # TODO: check that source is not contained in target and viceversa
+    # Convert columns to sets
+    source_set = set(df['source'])
+    target_set = set(df['target'])
+
+    # Maximum value for each set
+    max_source = max(source_set)
+    max_target = max(target_set)
+
+    # Check if sets go from 0 to N
+    source_sequence_check = source_set == set(range(max_source + 1))
+    target_sequence_check = target_set == set(range(max_target + 1))
+
+    # Intersection
+    intersection = source_set.intersection(target_set)
+
+    # Percentage of intersection
+    percentage_source = (len(intersection) / len(source_set)) * 100
+    percentage_target = (len(intersection) / len(target_set)) * 100
+
+    print((source_sequence_check, target_sequence_check, len(intersection), percentage_source, percentage_target))
 
     # Handling of weighted graphs, for now just a simple threshold
     if "weight" in df.columns:
@@ -250,6 +271,11 @@ def load_graph(args, load_mode='igraph', input_file_type='edge_list', weight_thr
         average_degree = np.mean(degrees)
         args.average_degree = average_degree
         args.num_points = largest_component.shape[0]
+        args.component_node_ids = component_node_ids
+        return largest_component, component_node_ids
+
+    elif load_mode == "sparse_weighted":
+        largest_component, component_node_ids = load_graph_sparse_weighted(args, df=df)
         args.component_node_ids = component_node_ids
         return largest_component, component_node_ids
 
@@ -316,6 +342,32 @@ def add_random_edges_to_csrgraph(csr_graph, num_edges_to_add):
     # Convert back to CSR format
     return lil_graph.tocsr()
 
+def add_specific_random_edges_to_csrgraph(csr_graph, false_edges_ids, num_edges_to_add):
+    """
+    Add a specified number of random edges to a graph in CSR format.
+
+    :param csr_graph: Graph in CSR format.
+    :param num_edges_to_add: Number of random edges to add.
+    :param max_weight: Maximum weight of the edges to be added.
+    :return: Graph in CSR format with added edges.
+    """
+    lil_graph = csr_graph.tolil()  # Convert to LIL format for easier modifications
+    num_nodes = lil_graph.shape[0]
+    edges_to_add = false_edges_ids[:num_edges_to_add]
+
+
+    for edge in edges_to_add:
+        # Randomly select two different nodes
+        node_a, node_b = edge[0], edge[1]
+
+        # Add an edge between these nodes with a random weight
+
+        lil_graph[node_a, node_b] = 1
+        lil_graph[node_b, node_a] = 1
+
+    # Convert back to CSR format
+    return lil_graph.tocsr()
+
 
 def remove_false_edges_igraph(graph, false_edges):
     for edge in false_edges:
@@ -361,4 +413,49 @@ def validate_edge_list_numbers(edge_list, reconstructed_positions):
 
     return False, "; ".join(mismatch_info)
 
-    return edge_values == expected_set
+
+def load_graph_sparse_weighted(args, df):
+    """
+    Load a weighted graph from an edge list dataframe, compute its average degree, and
+    update the provided args object with the average degree and the number of nodes in the
+    largest connected component of the graph.
+
+    Parameters:
+    - df: DataFrame containing the edge list with columns ['source', 'target', 'weight']
+    - args: An object to be updated with graph properties
+
+    Returns:
+    - A tuple of the largest connected component as a sparse matrix and an array of node IDs
+    """
+    # Ensure nodes are labeled from 0 to n-1
+    unique_nodes = np.union1d(df['source'].unique(), df['target'].unique())
+    n_nodes = unique_nodes.size
+    node_mapping = {node: i for i, node in enumerate(unique_nodes)}
+
+    # Map original node IDs to new, continuous range
+    mapped_edges = np.vectorize(node_mapping.get)(df[['source', 'target']].values)
+    weights = df['weight'].values
+
+    # Create symmetric edge list: add both (source, target) and (target, source) with their weights
+    edges_symmetric = np.vstack([mapped_edges, mapped_edges[:, [1, 0]]])
+    weights_symmetric = np.hstack([weights, weights])  # Duplicate weights for symmetry
+
+    # Create weighted sparse graph
+    sparse_graph_coo = coo_matrix((weights_symmetric, (edges_symmetric[:, 0], edges_symmetric[:, 1])),
+                                  shape=(n_nodes, n_nodes))
+
+    # Convert COO matrix to CSR format for efficiency
+    sparse_graph = sparse_graph_coo.tocsr()
+
+    # Extract largest connected component, update args, and compute graph properties
+    largest_component, component_node_ids = get_largest_component_sparse(args, sparse_graph, unique_nodes)
+
+    # Compute average degree: sum of weights divided by number of nodes
+    degrees = largest_component.sum(axis=0).A1  # Sum of non-zero entries in each column (or row)
+    average_degree = np.mean(degrees) / 2  # Adjust for symmetric duplication
+    args.average_degree = average_degree
+    args.num_points = largest_component.shape[0]
+    args.component_node_ids = component_node_ids
+
+    return largest_component, component_node_ids
+

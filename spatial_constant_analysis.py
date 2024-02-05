@@ -70,7 +70,7 @@ def main():
     # TODO: args_title is not instantiated if you don't call the parameters (maybe just make a config file with the parameters and call them all)
     args = GraphArgs()
 
-    args.proximity_mode = "lattice"
+    args.proximity_mode = "knn"
     args.dim = 2
 
     # print("Proximity_mode after setting to 'knn':", args.proximity_mode)
@@ -78,11 +78,11 @@ def main():
     args.false_edges_count = 0   #TODO: this only adds false edges to simulated graphs!
     # print("Proximity_mode after setting false_edges_count to 5:", args.proximity_mode)
     print(args.proximity_mode)
-    args.intended_av_degree = 15
+    args.intended_av_degree = 10
     args.num_points = 1000
-    args.colorfile = "weinstein_color.csv"
+    # args.colorfile = "weinstein_color_corrected.csv"
 
-    simulation_or_experiment = "experiment"
+    simulation_or_experiment = "simulation"
 
 
     if simulation_or_experiment == "experiment":
@@ -102,18 +102,18 @@ def main():
         # weinstein:
         # weinstein_data.csv
         args.proximity_mode = "experimental"  # define proximity mode before name!
-        args.edge_list_title = "weinstein_data_january.csv"
+        args.edge_list_title = "weinstein_data_january_corrected.csv"
         weighted = True
-        weight_threshold = 15
+        weight_threshold = 10
 
         if os.path.splitext(args.edge_list_title)[1] == ".pickle":
             write_nx_graph_to_edge_list_df(args)    # activate if format is .pickle file
 
-        ## TODO: uncomment this
-        # if not weighted:
-        #     igraph_graph_original = load_graph(args, load_mode='igraph')
-        # else:
-        #     igraph_graph_original = load_graph(args, load_mode='igraph', weight_threshold=weight_threshold)
+        # TODO: uncomment this
+        if not weighted:
+            igraph_graph_original = load_graph(args, load_mode='igraph')
+        else:
+            igraph_graph_original = load_graph(args, load_mode='igraph', weight_threshold=weight_threshold)
 
 
         # plot_graph_properties(args, igraph_graph_original)  # plots clustering coefficient, degree dist, also stores individual spatial constant...
@@ -154,24 +154,24 @@ def main():
     # igraph_graph_original = ig.Graph.Watts_Strogatz(args.dim, args.num_points, 1, p)
     # print("graph_created!")
 
-    # ------------------------------------------------------------------
-    # ##### Run subgraph sampling (main spatial constant function)
-    # # Linear spaced
-    # false_edge_list = np.arange(0, 100, step=20)
-    #
-    #
-    # # # Log spaced
-    # # false_edge_list = np.logspace(start=0, stop=3, num=20, base=10, dtype=int)
-    # # false_edge_list = np.insert(false_edge_list, 0, 0)
-    #
-    # # ## Artificially add random edges
-    # # igraph_graph_original = add_random_edges_igraph(igraph_graph_original, num_edges_to_add=10)
-    #
-    #
-    # #### Run subgraph sampling simulation  #TODO: main function for the spatial constant plots
-    # run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=20, graph=igraph_graph_original,
-    #                                  add_false_edges=True, add_mst=True, false_edge_list=false_edge_list)
-    # ------------------------------------------------------------------
+    ## ------------------------------------------------------------------
+    ##### Run subgraph sampling (main spatial constant function)
+    # Linear spaced
+    false_edge_list = np.arange(0, 101, step=20)
+
+
+    # # Log spaced
+    # false_edge_list = np.logspace(start=0, stop=3, num=20, base=10, dtype=int)
+    # false_edge_list = np.insert(false_edge_list, 0, 0)
+
+    # ## Artificially add random edges
+    # igraph_graph_original = add_random_edges_igraph(igraph_graph_original, num_edges_to_add=10)
+
+
+    #### Run subgraph sampling simulation  #TODO: main function for the spatial constant plots
+    run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=20, graph=igraph_graph_original,
+                                     add_false_edges=True, add_mst=False, false_edge_list=false_edge_list)
+    ##------------------------------------------------------------------
 
     ### Run dimension prediction ##TODO: I think this is still in development phase, not working too well?
     # get_dimension_estimation(args, graph=igraph_graph_original, n_samples=20, size_interval=100, start_size=100)  # TODO: start_size matters a lot if not uncertainty
@@ -197,9 +197,12 @@ def main():
 
     ### Reconstruction pipeline
 
-    # Weinstein reconstruction probably has messed indices? Due to largest component
-    igraph_graph_original, _ = load_graph(args, load_mode='sparse', weight_threshold=15)
-    # igraph_graph_original, _ = load_graph(args, load_mode='sparse', weight_threshold=)
+
+    # # Reconstruct with weights
+    # igraph_graph_original, _ = load_graph(args, load_mode='sparse_weighted', weight_threshold=10)
+
+    # # Reconstruct unweighted
+    igraph_graph_original, _ = load_graph(args, load_mode='sparse', weight_threshold=10)
     run_reconstruction(args, sparse_graph=igraph_graph_original, ground_truth_available=False, node_embedding_mode="landmark_isomap")
 
 
@@ -219,24 +222,24 @@ def main():
 
 
 
-    ### Many graphs simulation
-
-    # num_points_list = [500, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
+    # ### Many graphs simulation --> Obtains violin plots for spatial constant for several proximity graphs
+    #
+    # num_points_list = [500, 1000, 2000]
     # # proximity_mode_list = ["knn", "epsilon-ball", "epsilon_bipartite", "knn_bipartite", "delaunay_corrected"]
-    # proximity_mode_list = ["knn",   "knn_bipartite", "delaunay_corrected", "epsilon-ball", "epsilon_bipartite"]
+    # proximity_mode_list = ["knn",   "knn_bipartite", "delaunay_corrected", "epsilon-ball", "epsilon_bipartite", "lattice"]
     # intended_av_degree_list = [6, 9, 15, 30]
-    # false_edges_list = [0, 1, 10, 100]
+    # false_edges_list = [0, 5, 20, 100]
     # dim_list = [2, 3]
-
-
-    # # Simple simulation to test stuff
-    # num_points_list = [500, 1000]
-    # proximity_mode_list = ["knn",   "knn_bipartite"]
-    # intended_av_degree_list = [6]
-    # false_edges_list = [0]
-    # dim_list = [2, 3]
-
-
+    #
+    #
+    # # # Simple simulation to test stuff
+    # # num_points_list = [500, 1000]
+    # # proximity_mode_list = ["knn",   "knn_bipartite"]
+    # # intended_av_degree_list = [6]
+    # # false_edges_list = [0]
+    # # dim_list = [2, 3]
+    #
+    #
     # spatial_constant_variation_analysis(num_points_list, proximity_mode_list, intended_av_degree_list, dim_list, false_edges_list)
 
 if __name__ == "__main__":

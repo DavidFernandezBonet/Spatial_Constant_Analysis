@@ -299,7 +299,8 @@ def compute_proximity_graph(args, positions):
     Computes the proximity graph based on the positions and the specified proximity mode
     """
 
-    valid_modes = ["knn", "epsilon-ball", "knn_bipartite", "epsilon_bipartite", "delaunay", "delaunay_corrected"]
+    valid_modes = ["knn", "epsilon-ball", "knn_bipartite", "epsilon_bipartite", "delaunay", "delaunay_corrected",
+                   "lattice", "random"]
 
     # Extract the base proximity mode from the args.proximity_mode
     base_proximity_mode = args.proximity_mode.split("_with_false_edges=")[0]
@@ -342,6 +343,39 @@ def compute_proximity_graph(args, positions):
         k = args.intended_av_degree
         distances, indices = knn_bipartite(positions, k=k)
         # average_degree = sum(len(element) for element in indices) / len(indices)
+
+    elif base_proximity_mode == "random":
+        num_points = args.num_points
+        intended_av_degree = args.intended_av_degree
+
+        # Calculate the number of edges needed to achieve the intended average degree
+        total_edges = int(num_points * intended_av_degree / 2)
+
+        # Initialize lists to store the indices of the nodes each node is connected to
+        indices = [[] for _ in range(num_points)]
+
+        # Create a set to keep track of already connected node pairs to avoid duplicates
+        existing_edges = set()
+
+        while len(existing_edges) < total_edges:
+            # Randomly select two different nodes
+            node1, node2 = random.sample(range(num_points), 2)
+
+            # Check if the pair is already connected or if it's a self-loop
+            if (node1, node2) not in existing_edges and (node2, node1) not in existing_edges and node1 != node2:
+                # Add the pair to the set of existing edges
+                existing_edges.add((node1, node2))
+
+                # Update the indices to reflect the connection
+                indices[node1].append(node2)
+                indices[node2].append(node1)
+
+        # Assuming distances are not meaningful in this context, we set them to 1 or any arbitrary constant value
+        distances = [[1 for _ in neighbor] for neighbor in indices]
+
+        # Calculate the actual average degree to verify
+        actual_av_degree = sum(len(neighbor) for neighbor in indices) / num_points
+        print(f"Actual Average Degree: {actual_av_degree}")
     else:
 
         raise ValueError("Please input a valid proximity graph")
@@ -376,7 +410,8 @@ def write_positions(args, np_positions, output_path):
 
 
 def write_proximity_graph(args):
-    if args.proximity_mode == "lattice":
+    base_proximity_mode = args.proximity_mode.split("_with_false_edges=")[0]
+    if base_proximity_mode == "lattice":
         points = generate_square_lattice(args)
         args.num_points = len(points)
         distances, indices = compute_lattice(args, points)

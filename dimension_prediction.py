@@ -6,7 +6,22 @@ from utils import read_position_df
 import scipy.stats as stats
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import shortest_path
+from scipy.stats import pearsonr
+from sklearn.metrics import r2_score
 
+font_size = 24
+plt.style.use(['no-latex', 'nature'])
+
+sns.set_style("white")  # 'white' is a style option in seaborn
+
+# If you want to use a seaborn style with modifications
+sns.set(style="white", rc={
+    'axes.labelsize': font_size,
+    'axes.titlesize': font_size + 6,
+    'xtick.labelsize': font_size,
+    'ytick.labelsize': font_size,
+    'legend.fontsize': font_size - 10
+})
 
 def compute_node_counts_matrix(distance_matrix):
     """
@@ -180,17 +195,17 @@ def run_dimension_prediction(args, distance_matrix, dist_threshold=6, central_no
     print("count based on network", count_by_distance_average)
     print(np.cumsum(count_by_distance_average))
 
-    ### Find the diameter of a certain shell level
-    shell_level = 5
-    nodes_at_shell_level_r = np.where(distance_matrix[max_sum_index] == shell_level)[0]
-
-
-    alledged_diameter = np.max(distance_matrix[np.ix_(nodes_at_shell_level_r, nodes_at_shell_level_r)])
-    print(f"DIAMETER AT SHELL {shell_level} is: {alledged_diameter}")
-    submatrix = distance_matrix[np.ix_(nodes_at_shell_level_r, nodes_at_shell_level_r)]
-    # Get all pairwise distances between nodes at shell level
-    pairwise_distances = submatrix[np.triu_indices(len(nodes_at_shell_level_r), k=1)]
-    plot_barplot(args, distances=pairwise_distances, title="Distances at a Shell Level")
+    # ### Find the diameter of a certain shell level
+    # shell_level = 5
+    # nodes_at_shell_level_r = np.where(distance_matrix[max_sum_index] == shell_level)[0]
+    #
+    #
+    # alledged_diameter = np.max(distance_matrix[np.ix_(nodes_at_shell_level_r, nodes_at_shell_level_r)])
+    # print(f"DIAMETER AT SHELL {shell_level} is: {alledged_diameter}")
+    # submatrix = distance_matrix[np.ix_(nodes_at_shell_level_r, nodes_at_shell_level_r)]
+    # # Get all pairwise distances between nodes at shell level
+    # pairwise_distances = submatrix[np.triu_indices(len(nodes_at_shell_level_r), k=1)]
+    # plot_barplot(args, distances=pairwise_distances, title="Distances at a Shell Level")
 
 
 
@@ -219,7 +234,7 @@ def run_dimension_prediction(args, distance_matrix, dist_threshold=6, central_no
 
 
     plot_folder = args.directory_map['plots_predicted_dimension']
-    save_path = f'{plot_folder}/dimension_prediction_by_node_count_{args.args_title}.pdf'
+    save_path = f'{plot_folder}/dimension_prediction_by_node_count_{args.args_title}.svg'
     plt.figure()
     x = np.arange(1, david_thresh + 1)
     y = cumulative_count
@@ -251,7 +266,7 @@ def run_dimension_prediction(args, distance_matrix, dist_threshold=6, central_no
 
 
     # Apply the logarithm and just do linear regression
-    save_path = f'{plot_folder}/dimension_prediction_by_node_count_LINEAR_{args.args_title}.pdf'
+    save_path = f'{plot_folder}/dimension_prediction_by_node_count_LINEAR_{args.args_title}.svg'
     x = np.log(np.arange(1, david_thresh + 1))
     y = np.log(cumulative_count)
     y_std = np.log(cumulative_std)
@@ -270,6 +285,34 @@ def run_dimension_prediction(args, distance_matrix, dist_threshold=6, central_no
     print(distance_count_matrix)
     print(distance_count_matrix.shape)
     print(count_by_distance_average)
+
+    if curve_fitting_object.fixed_a is not None:
+        indx = 0
+    else:
+        indx = 1
+    predicted_dimension = curve_fitting_object.popt[indx]
+    r_squared = curve_fitting_object.r_squared
+    perr = np.sqrt(np.diag(curve_fitting_object.pcov))
+    uncertainty_predicted_dimension = perr[indx]
+    results_dimension_prediction = {"predicted_dimension": predicted_dimension, "r2": r_squared,
+                                    "std_predicted_dimension": uncertainty_predicted_dimension}
+
+
+    ### Surface prediction
+    save_path = f'{plot_folder}/surface_dimension_prediction_{args.args_title}.svg'
+    x = np.arange(1, david_thresh + 1)
+    y = count_by_distance_average
+    y_std = cumulative_std
+    x = x[:david_thresh]
+    y = y[:david_thresh]
+    y_std = y_std[:david_thresh]
+    curve_fitting_object = CurveFitting(x, y, y_error_std=None)
+    func_fit = curve_fitting_object.power_model
+
+    curve_fitting_object.perform_curve_fitting(model_func=func_fit)
+    curve_fitting_object.plot_fit_with_uncertainty(func_fit, "Distance", "Node Count",
+                                                   "Dimension Prediction", save_path)
+    return results_dimension_prediction
 
 
 def reorder_sp_matrix_so_index_matches_nodeid(igraph_graph, sp_matrix):
@@ -349,13 +392,95 @@ def plot_barplot(args, distances, title):
 
 
 
+def generate_iterative_predictions_data():
+    false_edges_list = [0, 20, 40, 60, 80, 100]  # Example list of false edges to add
+    original_dims = [2, 3]
+    results = []
+
+    for dim in original_dims:
+        # Parameters
+        args = GraphArgs()
+        args.proximity_mode = "knn_bipartite"
+        args.dim = dim
+        args.intended_av_degree = 10
+        args.num_points = 5000
+        create_proximity_graph.write_proximity_graph(args)
+        sparse_graph, _ = load_graph(args, load_mode='sparse')
+
+        max_false_edges = max(false_edges_list)  # Assume false_edge_list is defined
+        all_random_false_edges = select_false_edges_csr(sparse_graph, max_false_edges)
+
+        for num_edges in false_edges_list:
+            modified_graph = add_specific_random_edges_to_csrgraph(sparse_graph.copy(), all_random_false_edges,
+                                                                   num_edges)
+            sp_matrix = np.array(shortest_path(csgraph=modified_graph, directed=False))
+            msp = sp_matrix.mean()
+            dist_threshold = int(msp) - 2  # finite size effects, careful
+            dim_prediction_results = run_dimension_prediction(args, distance_matrix=sp_matrix,
+                                                              dist_threshold=dist_threshold, central_node_index=None)
+            results.append({
+                'original_dim': dim,
+                'false_edges': num_edges,
+                'predicted_dim': dim_prediction_results['predicted_dimension'],
+                'std_predicted_dimension': dim_prediction_results['std_predicted_dimension'],
+                'r2': dim_prediction_results['r2']
+            })
+    return results
+
+def make_dimension_prediction_plot():
+    plt.style.use(['no-latex', 'nature'])
+
+    sns.set_style("white")  # 'white' is a style option in seaborn
+    font_size = 24
+    # If you want to use a seaborn style with modifications
+    sns.set(style="white", rc={
+        'axes.labelsize': font_size,
+        'axes.titlesize': font_size + 6,
+        'xtick.labelsize': font_size,
+        'ytick.labelsize': font_size,
+        'legend.fontsize': font_size - 10
+    })
+
+    args = GraphArgs()
+    args.proximity_mode = "knn"
+    plot_folder = args.directory_map["dimension_prediction_iterations"]
+    data = generate_iterative_predictions_data()
+
+
+    sns.set(style="white")  # Using seaborn for better styling
+    fig, ax = plt.subplots()
+
+    for dim in set(d['original_dim'] for d in data):
+        dim_data = [d for d in data if d['original_dim'] == dim]
+        false_edges = [d['false_edges'] for d in dim_data]
+        predicted_dims = [d['predicted_dim'] for d in dim_data]
+        # Setting colors based on dim
+        if dim == 2:
+            color = '#009ADE'
+        elif dim == 3:
+            color = '#FF1F5B'
+        else:
+            color = 'gray'  # Default color for other dimensions, if any
+        ax.plot(false_edges, predicted_dims, '-o', label=f'Original dim {dim}', color=color)
+    ax.legend()
+        # ax.errorbar(false_edges, predicted_dims, yerr=std_devs, fmt='-o', label=f'Original dim {dim}', c=)
+
+    ax.set_xlabel('Number of False Edges')
+    ax.set_ylabel('Predicted Dimension')
+    ax.set_xticks(false_edges)  # Ensuring all false edge counts are shown
+    ax.legend(loc='best')
+
+
+    plt.savefig(f"{plot_folder}/dimension_prediction_iterations.svg", format='svg')
+
+
 # Parameters
 args = GraphArgs()
 args.directory_map = create_project_structure()  # creates folder and appends the directory map at the args
-args.proximity_mode = "knn"
-args.dim = 2
+args.proximity_mode = "knn_bipartite"
+args.dim = 3
 
-args.intended_av_degree = 15
+args.intended_av_degree = 10
 args.num_points = 5000
 
 
@@ -380,10 +505,11 @@ if simulation_or_experiment == "experiment":
     # weinstein:
     # weinstein_data.csv
 
-    args.edge_list_title = "weinstein_data.csv"
+    args.edge_list_title = "weinstein_data_january_corrected.csv"
+    # args.edge_list_title = "mst_N=1024_dim=2_lattice_k=15.csv"  # Seems to have dimension 1.5
 
     weighted = True
-    weight_threshold = 3
+    weight_threshold = 4
 
     if os.path.splitext(args.edge_list_title)[1] == ".pickle":
         write_nx_graph_to_edge_list_df(args)  # activate if format is .pickle file
@@ -404,28 +530,38 @@ elif simulation_or_experiment == "simulation":
     original_positions = read_position_df(args=args)
     # plot_original_or_reconstructed_image(args, image_type="original", edges_df=edge_list)
     original_dist_matrix = compute_distance_matrix(original_positions)
+else:
+    raise ValueError("Please input a valid simulation or experiment mode")
 
 
 
 
 
 # ### Add random edges? See efect in the dimensionality here
-# sparse_graph = add_random_edges_to_csrgraph(sparse_graph, num_edges_to_add=100)
+# sparse_graph = add_random_edges_to_csrgraph(sparse_graph, num_edges_to_add=5)
 
 # Compute shortest path matrix
 sp_matrix = np.array(shortest_path(csgraph=sparse_graph, directed=False))
 
-node_of_interest = 0
-# Find nodes at distance 3 and 4
-nodes_at_distance_3 = find_nodes_at_distance(sp_matrix, node_of_interest, 3)
-nodes_at_distance_4 = find_nodes_at_distance(sp_matrix, node_of_interest, 4)
-distances = calculate_distances_between_nodes(sp_matrix, nodes_at_distance_3, nodes_at_distance_4)
-plot_barplot(args, distances, "distances_3_4")
+# node_of_interest = 0
+# # Find nodes at distance 3 and 4
+# nodes_at_distance_3 = find_nodes_at_distance(sp_matrix, node_of_interest, 3)
+# nodes_at_distance_4 = find_nodes_at_distance(sp_matrix, node_of_interest, 4)
+# distances = calculate_distances_between_nodes(sp_matrix, nodes_at_distance_3, nodes_at_distance_4)
+# plot_barplot(args, distances, "distances_3_4")
 
 
 msp = sp_matrix.mean()
 print("AVERAGE SHORTEST PATH", msp)
-
+print("RANDOM NETWORK AV SP", np.log(args.num_points)/np.log(args.average_degree))
+print("ESTIMATED LATTICE SP", (args.num_points/args.average_degree)**(1/args.dim))
+print("ESTIMATED LATTICE SP", (args.num_points**(1/args.dim) /args.average_degree))
+print("ESTIMATED LATTICE SP CURATED 2D", 1.2*(args.num_points/args.average_degree)**(1/args.dim))
+print("ESTIMATED LATTICE SP CURATED 3D", (1.2*0.75)*(args.num_points/args.average_degree)**(1/args.dim))
+print("ESTIMATED LATTICE SP CURATED 3D inverse", (1.2*(4/3))*(args.num_points/args.average_degree)**(1/args.dim))
+print("ESTIMATED LATTICE SP CURATED 2D BIPARTITE", 1.2*(args.num_points/(args.average_degree*2))**(1/args.dim))
+print("ESTIMATED LATTICE SP CURATED 3D BIPARTITE", (1.2*(4/3))*(args.num_points/(args.average_degree*2))**(1/args.dim))
+print("ESTIMATED LATTICE SP CURATED 3D 1.1", (1.2*(1.1))*(args.num_points/args.average_degree)**(1/args.dim))
 # np.set_printoptions(threshold=np.inf)
 # sp_matrix = np.array(sparse_graph.distances())
 # reordered_sp_matrix = reorder_sp_matrix_so_index_matches_nodeid(sparse_graph, sp_matrix)
@@ -442,7 +578,7 @@ print("AVERAGE SHORTEST PATH", msp)
 # central_node_index = run_dimension_prediction_continuous(args, distance_matrix=original_dist_matrix, num_bins=50)
 
 ## Network dimension prediction
-dist_threshold = int(msp) - 2  #finite size effects, careful
+dist_threshold = int(msp) - 1  #finite size effects, careful
 run_dimension_prediction(args, distance_matrix=sp_matrix, dist_threshold=dist_threshold, central_node_index=None)
 
 

@@ -5,10 +5,22 @@ import re
 from curve_fitting import CurveFitting
 import seaborn as sns
 import matplotlib.cm as cm
-import scienceplots
 import matplotlib.colors as mcolors
 
+from map_image_to_colors import map_points_to_colors
+
+import scienceplots
 plt.style.use(['science', 'nature'])
+# plt.rcParams.update({'font.size': 16, 'font.family': 'serif'})
+font_size = 24
+plt.rcParams.update({'font.size': font_size})
+plt.rcParams['axes.labelsize'] = font_size
+plt.rcParams['axes.titlesize'] = font_size + 6
+plt.rcParams['xtick.labelsize'] = font_size
+plt.rcParams['ytick.labelsize'] = font_size
+plt.rcParams['legend.fontsize'] = font_size - 10
+
+plt.style.use(['science','no-latex', 'nature'])
 
 
 def plot_spatial_constant(args, df):
@@ -277,7 +289,8 @@ def classify_row(row):
         return '3D Bipartite'
 
 def plot_spatial_constant_variation(args, spatial_constant_variation_results_df):
-
+    # quantity_of_interest = "S_general" # spatial constant
+    quantity_of_interest = "relative_msp_prediction_error"
     ### Predictions
     constant_scaler = np.sqrt(4.5)
     bipartite_correction = 1 / 1.2  # 1/np.sqrt(2)   #TODO: i don't know exactly how the correction should look like!
@@ -295,7 +308,10 @@ def plot_spatial_constant_variation(args, spatial_constant_variation_results_df)
 
     # Step 2: Create the Violin Plot
     plt.figure(figsize=(10, 6))
-    sns.violinplot(x='classification', y='S_general', data=spatial_constant_variation_results_df)
+
+    # sns.violinplot(x='classification', y='S_general', data=spatial_constant_variation_results_df)
+    # Changed it to mean shortest path
+    sns.violinplot(x='classification', y=quantity_of_interest, data=spatial_constant_variation_results_df)
     plt.title('Violin Plot Spatial Constant')
     plt.ylabel('Spatial Constant')  # Replace with the name of your variable
 
@@ -316,7 +332,7 @@ def plot_spatial_constant_variation(args, spatial_constant_variation_results_df)
     )
 
     # Plot the main violin plot
-    fig = px.violin(spatial_constant_variation_results_df, x='classification', y='S_general', color='color_group',
+    fig = px.violin(spatial_constant_variation_results_df, x='classification', y=quantity_of_interest, color='color_group',
                     box=False, points='all', hover_data=spatial_constant_variation_results_df.columns)
 
     # Add predicted medians as scatter points
@@ -327,7 +343,7 @@ def plot_spatial_constant_variation(args, spatial_constant_variation_results_df)
     fig.update_layout(
         title='Interactive Violin Plot of S_general for Different Groups',
         xaxis_title='Group',
-        yaxis_title='S_general'
+        yaxis_title=quantity_of_interest
     )
 
     # Show the plot
@@ -344,10 +360,15 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
             ax = fig.add_subplot(111)
         return ax
 
-    def plot_positions(ax, positions_df, args, color_df=None):
+    def plot_positions(ax, positions_df, args, color_df=None, simulated_colors=False):
         # Merge positions_df with color_df on 'node_ID' if color_df is provided
+
         if color_df is not None:
-            merged_df = positions_df.merge(color_df, on='node_ID')
+            # merged_df = positions_df.merge(color_df, on='node_ID')
+            # TODO: this is because shuai colors are incomplete (beacons are missing)
+            merged_df = positions_df.merge(color_df, on='node_ID', how='left')
+            merged_df['color'] = merged_df['color'].fillna("gray")
+
             colors = merged_df['color']
             print(colors)
             print("number of nodes", len(positions_df))
@@ -358,11 +379,25 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
                 ax.scatter(merged_df['x'], merged_df['y'], color=colors)
 
         else:
-            if args.dim == 3:
-                ax.scatter(positions_df['x'], positions_df['y'], positions_df['z'], facecolors='none',
-                           edgecolors='b')
-            elif args.dim == 2:
-                ax.scatter(positions_df['x'], positions_df['y'], facecolors='none', edgecolors='b')
+            if simulated_colors:
+                id_to_color = args.id_to_color_simulation
+                colors = [id_to_color.get(node_id, 'b')  # Default to 'b' if node_id is not in the dictionary
+                          for node_id in positions_df['node_ID']]
+
+                if args.dim == 3:
+                    ax.scatter(positions_df['x'], positions_df['y'], positions_df['z'],
+                               facecolors=colors)
+                elif args.dim == 2:
+                    ax.scatter(positions_df['x'], positions_df['y'],
+                               facecolors=colors)
+
+            else:
+
+                if args.dim == 3:
+                    ax.scatter(positions_df['x'], positions_df['y'], positions_df['z'], facecolors='none',
+                               edgecolors='b')
+                elif args.dim == 2:
+                    ax.scatter(positions_df['x'], positions_df['y'], facecolors='none', edgecolors='b')
 
 
     # image_type: original, mst, reconstructed
@@ -374,8 +409,10 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
 
     # Get the positions
     if image_type == "original" or image_type == "mst":
+
         original_position_folder = args.directory_map["original_positions"]
         positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.original_title}.csv")
+        args.id_to_color_simulation = map_points_to_colors(positions_df)
     elif image_type == "reconstructed":
         edge_list_folder = args.directory_map["edge_lists"]
         edges_df = pd.read_csv(f"{edge_list_folder}/edge_list_{args.args_title}.csv")
@@ -391,7 +428,7 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
     ax = setup_plot(args)
 
     # Plot data
-    if args.colorfile is not None:
+    if (args.colorfile is not None) and args.proximity_mode == "experimental":
         color_folder = args.directory_map["colorfolder"]
         color_df = pd.read_csv(f"{color_folder}/{args.colorfile}")
         color_df['color'] = color_df['color'].map(args.colorcode)
@@ -404,7 +441,10 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
         # Additional processing for color_df if required
         plot_positions(ax, positions_df, args, color_df)
     else:
-        plot_positions(ax, positions_df, args)
+        if args.id_to_color_simulation is not None:
+            plot_positions(ax, positions_df, args, simulated_colors=True)
+        else:
+            plot_positions(ax, positions_df, args)
 
     # # Create a plot
     # fig = plt.figure(figsize=(10, 8))
@@ -424,14 +464,17 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
         row['target'], row['source']) in args.false_edge_ids else 'k'
 
         edge_alpha = 1 if (row['source'], row['target']) in args.false_edge_ids or (
+        row['target'], row['source']) in args.false_edge_ids else 0.2
+
+        edge_linewidth = 10 if (row['source'], row['target']) in args.false_edge_ids or (
         row['target'], row['source']) in args.false_edge_ids else 0.5
 
         if args.dim == 3:
             ax.plot([source['x'], target['x']], [source['y'], target['y']], [source['z'], target['z']],
-                    edge_color, linewidth=0.5, alpha=edge_alpha)
+                    edge_color, linewidth=edge_linewidth, alpha=edge_alpha)
         else:
             ax.plot([source['x'], target['x']], [source['y'], target['y']],
-                    edge_color, linewidth=0.5, alpha=edge_alpha)
+                    edge_color, linewidth=edge_linewidth, alpha=edge_alpha)
 
     if image_type == "original":
         plot_folder = args.directory_map["plots_original_image"]
@@ -534,6 +577,14 @@ def plot_spatial_constant_against_subgraph_size(args, dataframe):
 
 
 def plot_spatial_constant_against_subgraph_size_with_false_edges(args, dataframes, false_edge_list, mst_case_df=None):
+    font_size = 24
+    plt.rcParams.update({'font.size': font_size})
+    plt.rcParams['axes.labelsize'] = font_size
+    plt.rcParams['axes.titlesize'] = font_size + 6
+    plt.rcParams['xtick.labelsize'] = font_size
+    plt.rcParams['ytick.labelsize'] = font_size
+    plt.rcParams['legend.fontsize'] = font_size - 10
+    # Main plot spatial constant
     plt.figure(figsize=(10, 6))
 
     for dataframe, false_edge_count in zip(dataframes, false_edge_list):
@@ -575,7 +626,7 @@ def plot_spatial_constant_against_subgraph_size_with_false_edges(args, dataframe
     plt.legend()
 
     plot_folder = args.directory_map['plots_spatial_constant_subgraph_sampling']
-    plt.savefig(f"{plot_folder}/mean_s_general_vs_intended_size_{args.args_title}_false_edge_version.png")
+    plt.savefig(f"{plot_folder}/mean_s_general_vs_intended_size_{args.args_title}_false_edge_version.svg")
 
 
 

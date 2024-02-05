@@ -374,6 +374,24 @@ class ImageReconstruction:
         self.manifold_learning_neighbors = manifold_learning_neighbors
         self.node_embedding_mode = node_embedding_mode  # node2vec, ggvec, landmark_isomap, PyMDE
         self.manifold_learning_mode = manifold_learning_mode
+        # Detect if the graph is weighted and adjust embedding mode if necessary
+        self.detect_and_adjust_for_weighted_graph()
+    def detect_and_adjust_for_weighted_graph(self):
+        """
+        Detects if the graph is weighted. If it is, adjusts the node_embedding_mode to 'PyMDE_weighted'.
+        """
+        if self.graph is not None:
+            # Assuming the graph is in a format that allows checking for weights
+            sparse_matrix_coo = self.graph.tocoo() if not sp.isspmatrix_coo(self.graph) else self.graph
+            weights = sparse_matrix_coo.data
+
+            # Graph is considered weighted if any weight is different from 1
+            is_weighted = not np.all(weights == 1)
+
+            if is_weighted and self.node_embedding_mode != "PyMDE":
+                self.node_embedding_mode = "PyMDE_weighted"
+                print("Detected a weighted graph. Switching node_embedding_mode to 'PyMDE_weighted'.")
+
 
     def compute_embeddings(self, args=None):
         """
@@ -393,7 +411,6 @@ class ImageReconstruction:
             # node_embeddings = node2vec_model.fit_transform(self.graph)
 
             ### pecanpy
-
             edge_list_folder = args.directory_map['edge_lists']
             edge_list_path = f'{edge_list_folder}/{args.edge_list_title}'
 
@@ -455,6 +472,34 @@ class ImageReconstruction:
 
             node_embeddings = mde.embed()
 
+        elif self.node_embedding_mode == "PyMDE_weighted":
+            retain_fraction = 1
+
+            # Load graph in pymde format
+            sparse_matrix_coo = self.graph.tocoo() if not sp.isspmatrix_coo(self.graph) else self.graph
+            rows = sparse_matrix_coo.row
+            cols = sparse_matrix_coo.col
+            weights = sparse_matrix_coo.data  # Extract weights from the sparse matrix
+            weights = np.exp((-weights + np.mean(weights))/(np.max(weights) - np.min(weights)))  # TODO: here I apply the weight-to-distance transformation (in this case log)
+            print(weights)
+            edges_np = np.vstack([rows, cols]).T
+            edges = torch.tensor(edges_np, dtype=torch.int64)
+            weights = torch.tensor(weights, dtype=torch.float32)  # Make sure weights are in the correct format
+            graph = pymde.Graph.from_edges(edges, weights=weights)
+
+            # Reconstructions work best in the "dense" form, that is, computing the shortest path distances
+            shortest_paths_graph = pymde.preprocess.graph.shortest_paths(graph,
+                                                                         retain_fraction=retain_fraction)
+            full_edges = shortest_paths_graph.edges.to("cpu")
+            deviations = shortest_paths_graph.distances.to("cpu")
+
+            # Create the MDE problem, dense edges, deviations
+            mde = pymde.MDE(args.num_points, self.node_embedding_components, full_edges,
+                            pymde.losses.Quadratic(deviations=deviations),  # Use deviations for dissimilarities
+                            pymde.constraints.Standardized()
+                            )
+
+            node_embeddings = mde.embed()
 
         else:
             raise ValueError('Please input a valid node embedding mode')
@@ -651,6 +696,22 @@ def select_false_edges(graph, max_false_edges):
     possible_edges = [(i, j) for i in range(graph.vcount()) for j in range(i + 1, graph.vcount())]
     possible_edges = [edge for edge in possible_edges if not graph.are_connected(edge[0], edge[1])]
     random_false_edges = random.sample(possible_edges, min(len(possible_edges), max_false_edges))
+    return random_false_edges
+
+def select_false_edges_csr(graph, max_false_edges):
+    """
+    Selects false edge candidates for a CSR graph (scipy.sparse.csr_matrix)
+    """
+    num_nodes = graph.shape[0]
+    possible_edges = [(i, j) for i in range(num_nodes) for j in range(i + 1, num_nodes)]
+
+    # Filter out existing edges
+    existing_edges = set(zip(*graph.nonzero()))
+    possible_false_edges = [edge for edge in possible_edges if edge not in existing_edges]
+
+    # Randomly select false edges up to the specified limit
+    random_false_edges = random.sample(possible_false_edges, min(len(possible_false_edges), max_false_edges))
+
     return random_false_edges
 
 def add_specific_random_edges_igraph(graph, false_edges_ids, num_edges_to_add):

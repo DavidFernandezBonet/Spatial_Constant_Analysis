@@ -19,6 +19,7 @@ def create_project_structure():
         'plots_original_image': f'{project_root}/results/plots/original_image',
         'plots_reconstructed_image': f'{project_root}/results/plots/reconstructed_image',
         'plots_mst_image': f'{project_root}/results/plots/mst_image',
+        'plots_euclidean_sp': f'{project_root}/results/plots/correlation_euclidean_sp',
 
 
         'plots_spatial_constant': f'{project_root}/results/plots/spatial_constant',
@@ -33,6 +34,7 @@ def create_project_structure():
         # 'plots_spatial_constant_variation_degree': f'{project_root}/results/plots/spatial_constant/variation_analysis/degree',
 
         'plots_predicted_dimension': f'{project_root}/results/plots/predicted_dimension',
+        'dimension_prediction_iterations': f'{project_root}/results/plots/predicted_dimension/several_predictions',
 
         'plots_clustering_coefficient': f'{project_root}/results/plots/clustering_coefficient',
         'plots_degree_distribution': f'{project_root}/results/plots/degree_distribution',
@@ -93,7 +95,8 @@ class GraphArgs:
 
         self.node_ids_map_old_to_new = None
         self.colorfile = None  # filename where the color ids are stored. It is a dataframe with Node_ID, color in columns
-        self.colorcode = {0: "black", 1: "green", 2: "red"}  # what colors to plot
+        self.colorcode = {0: "gray", 1: "green", 2: "red"}  # what colors to plot
+        self.id_to_color_simulation = None  # for colored simulations
 
 
 
