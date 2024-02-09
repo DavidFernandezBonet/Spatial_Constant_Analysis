@@ -187,6 +187,8 @@ def run_dimension_prediction(args, distance_matrix, dist_threshold=6, central_no
     count_by_distance_average = np.mean(distance_count_matrix, axis=0)
     count_by_distance_std = np.std(distance_count_matrix, axis=0)
 
+
+    ### Select Central node
     if central_node_index:
         count_by_distance_average = distance_count_matrix[central_node_index]
         print("count based on euclidean", count_by_distance_average)
@@ -194,6 +196,10 @@ def run_dimension_prediction(args, distance_matrix, dist_threshold=6, central_no
     count_by_distance_average = distance_count_matrix[max_sum_index]
     print("count based on network", count_by_distance_average)
     print(np.cumsum(count_by_distance_average))
+
+
+    ## Central sp distance plot with prediction. #TODO: check if central node is more predictive than just mean count (mean count seems better?)
+    compute_centered_average_sp_distance(args, count_by_distance_average= count_by_distance_average, shell_threshold=david_thresh+5)
 
     # ### Find the diameter of a certain shell level
     # shell_level = 5
@@ -224,8 +230,14 @@ def run_dimension_prediction(args, distance_matrix, dist_threshold=6, central_no
     count_by_distance_average = count_by_distance_average[:david_thresh]
     cumulative_count = cumulative_count[:david_thresh]
 
+    msp_approx = np.sum(count_by_distance_average * np.arange(len(count_by_distance_average))) / np.sum(count_by_distance_average)
+    print("MEAN SHORTEST PATH APPROXIMATION BY CENTRAL NODE", msp_approx)
 
-    # Fast distance approximation
+    print("MAXIMUM SHELL RANGE USED", len(count_by_distance_average))
+    print("PREDICTION OF SP APPROXIMATION", predict_sp(args.dim, n=len(count_by_distance_average)))
+
+
+    # Fast dimension approximation
     predicted_dimensions = (count_by_distance_average / cumulative_count) * np.arange(1, david_thresh + 1)
     print("PREDICTED DIMENSIONS", predicted_dimensions)
 
@@ -473,15 +485,85 @@ def make_dimension_prediction_plot():
 
     plt.savefig(f"{plot_folder}/dimension_prediction_iterations.svg", format='svg')
 
+def predict_sp(dim=2, n=20):
+
+    # shortest path prediction based on the shortest path with central nodes as origin
+    # n is the number of shortest path levels that we take into account
+
+    sum_i = (n*(n+1))/2   # sum(i)
+    sum_i2 = (n * (n + 1) * (2 * n + 1)) / 6  # sum(i^2)
+    sum_i3 = sum_i**2
+    if dim == 2:
+        prediction_sp = sum_i2/sum_i
+    elif dim == 3:
+        prediction_sp = sum_i3/sum_i2
+    return prediction_sp
+
+def predict_average_distance_ball(dim=2, distance=1):
+    if dim == 2:
+        return 2/3 * distance
+    elif dim == 3:
+        return 3/4 * distance
+    else:
+        raise ValueError("Wrong dimension")
+
+def compute_centered_average_sp_distance(args, count_by_distance_average, shell_threshold):
+    # Calculating msp_approx for each N shell
+    n_shell_range = np.arange(1, len(count_by_distance_average) + 1)
+    msp_approx_series = [
+        np.sum(count_by_distance_average[:n] * np.arange(1, n + 1)) / np.sum(count_by_distance_average[:n]) for n in
+        n_shell_range]
+
+    # Assuming a dimension for the predict_sp and your_new_function
+    dim = args.dim  # Example dimension, replace with your actual dimension
+
+    # Generating data for y1 and y2 series
+    y1_series = [predict_sp(dim, n) for n in n_shell_range]
+    y2_series = [predict_average_distance_ball(dim, n) for n in n_shell_range]
+
+    # Calculate the difference between msp_approx_series and y1_series
+    difference_series = np.array(msp_approx_series) - np.array(y1_series)
+
+    # Plotting
+    fig, axs = plt.subplots(2, 1, figsize=(10, 12))  # Creating 2 subplots vertically
+
+    ## thresholding
+    y1_series = y1_series[:shell_threshold]
+    y2_series = y2_series[:shell_threshold]
+    msp_approx_series = msp_approx_series[:shell_threshold]
+    difference_series = difference_series[:shell_threshold]
+    n_shell_range = n_shell_range[:shell_threshold]
+
+    # First subplot for original data
+    axs[0].plot(n_shell_range, y1_series, label='MSP Prediction', marker='o')
+    axs[0].plot(n_shell_range, y2_series, label='MSP Euclidean Equivalent', marker='o')
+    axs[0].plot(n_shell_range, msp_approx_series, label='MSP Actual', linestyle='--', marker='o')
+    axs[0].set_xlabel('N shell')
+    axs[0].set_ylabel('MSP')
+    axs[0].legend()
+    axs[0].set_title('MSP Predictions vs Actual')
+
+    # Second subplot for difference
+    axs[1].plot(n_shell_range, difference_series, label='Difference (Actual - Prediction)', marker='o', color='red')
+    axs[1].set_xlabel('N shell')
+    axs[1].set_ylabel('Difference')
+    axs[1].legend()
+    axs[1].set_title('Difference between MSP Actual and Prediction')
+
+    plt.tight_layout()  # Adjust layout to not overlap
+    plot_folder = args.directory_map['centered_msp']
+    plt.savefig(f"{plot_folder}/centered_msp_difference_{args.args_title}.svg")
 
 # Parameters
 args = GraphArgs()
 args.directory_map = create_project_structure()  # creates folder and appends the directory map at the args
 args.proximity_mode = "knn_bipartite"
-args.dim = 3
+args.dim = 2
 
 args.intended_av_degree = 10
 args.num_points = 5000
+### Add random edges? See efect in the dimensionality here
+num_edges_to_add = 0
 
 
 simulation_or_experiment = "simulation"
@@ -503,13 +585,13 @@ if simulation_or_experiment == "experiment":
     # shuai_protein_edgelist_unstimulated_RCVCMP0000133_neigbours_s_proteinlist.csv  (shuai protein list)
     # pixelgen_processed_edgelist_shuai_RCVCMP0000073_cd3_cell_1_RCVCMP0000073.csv (shuai error correction)
     # weinstein:
-    # weinstein_data.csv
+    # weinstein_data_january_corrected.csv
 
     args.edge_list_title = "weinstein_data_january_corrected.csv"
     # args.edge_list_title = "mst_N=1024_dim=2_lattice_k=15.csv"  # Seems to have dimension 1.5
 
     weighted = True
-    weight_threshold = 4
+    weight_threshold = 10
 
     if os.path.splitext(args.edge_list_title)[1] == ".pickle":
         write_nx_graph_to_edge_list_df(args)  # activate if format is .pickle file
@@ -524,9 +606,7 @@ elif simulation_or_experiment == "simulation":
     # # # 1 Simulation
     create_proximity_graph.write_proximity_graph(args)
     sparse_graph, _ = load_graph(args, load_mode='sparse')
-
-    ## Original data
-    edge_list = read_edge_list(args)
+    ## Original data    edge_list = read_edge_list(args)
     original_positions = read_position_df(args=args)
     # plot_original_or_reconstructed_image(args, image_type="original", edges_df=edge_list)
     original_dist_matrix = compute_distance_matrix(original_positions)
@@ -537,8 +617,10 @@ else:
 
 
 
-# ### Add random edges? See efect in the dimensionality here
-# sparse_graph = add_random_edges_to_csrgraph(sparse_graph, num_edges_to_add=5)
+
+sparse_graph = add_random_edges_to_csrgraph(sparse_graph, num_edges_to_add=num_edges_to_add)
+if num_edges_to_add:
+    args.args_title = args.args_title + f'_false_edges={num_edges_to_add}'
 
 # Compute shortest path matrix
 sp_matrix = np.array(shortest_path(csgraph=sparse_graph, directed=False))

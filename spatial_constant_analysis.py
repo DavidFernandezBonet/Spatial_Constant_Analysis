@@ -50,6 +50,17 @@ def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild
     reconstruction = ImageReconstruction(graph=sparse_graph, dim=args.dim, node_embedding_mode=node_embedding_mode,
                                          manifold_learning_mode=manifild_learning_mode)
     reconstructed_points = reconstruction.reconstruct(do_write_positions=True, args=args)
+
+    # # Assessing Weinstein reconstruction algo # TODO: it is not working well I think
+    # position_filename = 'reconstructed_positions_weinstein_febraury_corrected.csv'
+    # original_position_folder = args.directory_map["original_positions"]
+    # positions_df = pd.read_csv(f"{original_position_folder}/{position_filename}")
+    # positions_df['node_ID'] = positions_df['node_ID'].map(args.node_ids_map_old_to_new)
+    # positions_df = positions_df.dropna()
+    # positions_df['node_ID'] = positions_df['node_ID'].astype(int)
+    # reconstructed_points = positions_df[['x', 'y']].to_numpy()
+
+
     plot_original_or_reconstructed_image(args, image_type='reconstructed')
     edge_list = read_edge_list(args)
 
@@ -70,7 +81,7 @@ def main():
     # TODO: args_title is not instantiated if you don't call the parameters (maybe just make a config file with the parameters and call them all)
     args = GraphArgs()
 
-    args.proximity_mode = "knn"
+    args.proximity_mode = "knn_bipartite"
     args.dim = 2
 
     # print("Proximity_mode after setting to 'knn':", args.proximity_mode)
@@ -80,9 +91,10 @@ def main():
     print(args.proximity_mode)
     args.intended_av_degree = 10
     args.num_points = 1000
-    # args.colorfile = "weinstein_color_corrected.csv"
+    args.colorfile = "weinstein_colorcode_february_corrected.csv"  # colorful_spiral.jpeg, weinstein_color_corrected.csv, weinstein_colorcode_february_corrected.csv, None
 
-    simulation_or_experiment = "simulation"
+    simulation_or_experiment = "experiment"
+    reconstruct = True
 
 
     if simulation_or_experiment == "experiment":
@@ -101,10 +113,14 @@ def main():
         # pixelgen_processed_edgelist_shuai_RCVCMP0000073_cd3_cell_1_RCVCMP0000073.csv (shuai error correction)
         # weinstein:
         # weinstein_data.csv
+        # weinstein_data_corrected_january.csv
+        # weinstein_data_corrected_february.csv (new indices shuai)
+        # slidetag_processed_edgelist_10X_bc_to_cell_bc_SRR07.csv, edge_list_abundant_beads_cut_beadsum_thresholds_8_256_SRR11.csv SRR11
+        # slidetag_processed_edgelist_edge_list_filtered_by_bed_n_connections_thresholds_2-16.csv
         args.proximity_mode = "experimental"  # define proximity mode before name!
-        args.edge_list_title = "weinstein_data_january_corrected.csv"
+        args.edge_list_title = "weinstein_data_corrected_february.csv"
         weighted = True
-        weight_threshold = 10
+        weight_threshold = 5
 
         if os.path.splitext(args.edge_list_title)[1] == ".pickle":
             write_nx_graph_to_edge_list_df(args)    # activate if format is .pickle file
@@ -115,6 +131,20 @@ def main():
         else:
             igraph_graph_original = load_graph(args, load_mode='igraph', weight_threshold=weight_threshold)
 
+        # Plot original weinstein
+        plot_original_or_reconstructed_image(args, image_type='original',
+                                             position_filename='reconstructed_positions_weinstein_febraury_corrected.csv',
+                                             plot_weights_against_distance=True)
+
+
+        if reconstruct:
+            args.edge_list_title = "weinstein_data_corrected_february.csv"
+            # # Reconstruct with weights
+            # igraph_graph_original, _ = load_graph(args, load_mode='sparse_weighted', weight_threshold=7)
+            # # Reconstruct unweighted
+            igraph_graph_original, _ = load_graph(args, load_mode='sparse', weight_threshold=weight_threshold)
+            run_reconstruction(args, sparse_graph=igraph_graph_original, ground_truth_available=False,
+                               node_embedding_mode="landmark_isomap")
 
         # plot_graph_properties(args, igraph_graph_original)  # plots clustering coefficient, degree dist, also stores individual spatial constant...
 
@@ -125,7 +155,7 @@ def main():
         create_proximity_graph.write_proximity_graph(args)
         igraph_graph_original = load_graph(args, load_mode='igraph')
         # igraph_graph_original = get_minimum_spanning_tree_igraph(igraph_graph_original)  # careful with activating this
-        # plot_graph_properties(args, igraph_graph_original)
+
         plot_original_or_reconstructed_image(args, image_type='original')
     else:
         raise ValueError("Input simulation or experiment")
@@ -154,24 +184,25 @@ def main():
     # igraph_graph_original = ig.Graph.Watts_Strogatz(args.dim, args.num_points, 1, p)
     # print("graph_created!")
 
-    ## ------------------------------------------------------------------
-    ##### Run subgraph sampling (main spatial constant function)
-    # Linear spaced
-    false_edge_list = np.arange(0, 101, step=20)
+    # ## ------------------------------------------------------------------
+    # ##### Run subgraph sampling (main spatial constant function)
+    # # Linear spaced
+    # false_edge_list = np.arange(0, 101, step=20)
+    #
+    #
+    # # # Log spaced
+    # # false_edge_list = np.logspace(start=0, stop=3, num=20, base=10, dtype=int)
+    # # false_edge_list = np.insert(false_edge_list, 0, 0)
+    #
+    # # ## Artificially add random edges
+    # # igraph_graph_original = add_random_edges_igraph(igraph_graph_original, num_edges_to_add=10)
+    #
+    #
+    # #### Run subgraph sampling simulation  #TODO: main function for the spatial constant plots
+    # run_simulation_subgraph_sampling(args, size_interval=1000, n_subgraphs=10, graph=igraph_graph_original,
+    #                                  add_false_edges=True, add_mst=False, false_edge_list=false_edge_list)
+    # ## ------------------------------------------------------------------
 
-
-    # # Log spaced
-    # false_edge_list = np.logspace(start=0, stop=3, num=20, base=10, dtype=int)
-    # false_edge_list = np.insert(false_edge_list, 0, 0)
-
-    # ## Artificially add random edges
-    # igraph_graph_original = add_random_edges_igraph(igraph_graph_original, num_edges_to_add=10)
-
-
-    #### Run subgraph sampling simulation  #TODO: main function for the spatial constant plots
-    run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=20, graph=igraph_graph_original,
-                                     add_false_edges=True, add_mst=False, false_edge_list=false_edge_list)
-    ##------------------------------------------------------------------
 
     ### Run dimension prediction ##TODO: I think this is still in development phase, not working too well?
     # get_dimension_estimation(args, graph=igraph_graph_original, n_samples=20, size_interval=100, start_size=100)  # TODO: start_size matters a lot if not uncertainty
@@ -195,15 +226,6 @@ def main():
 
 
 
-    ### Reconstruction pipeline
-
-
-    # # Reconstruct with weights
-    # igraph_graph_original, _ = load_graph(args, load_mode='sparse_weighted', weight_threshold=10)
-
-    # # Reconstruct unweighted
-    igraph_graph_original, _ = load_graph(args, load_mode='sparse', weight_threshold=10)
-    run_reconstruction(args, sparse_graph=igraph_graph_original, ground_truth_available=False, node_embedding_mode="landmark_isomap")
 
 
 

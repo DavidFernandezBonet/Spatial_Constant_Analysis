@@ -32,17 +32,18 @@ def get_largest_component_sparse(args, sparse_graph, original_node_ids):
         edges = list(zip(rows, cols))
         edge_df = pd.DataFrame(edges, columns=['source', 'target'])
         edge_list_folder = args.directory_map["edge_lists"]
-        edge_df.to_csv(f"{edge_list_folder}/edge_list_{args.args_title}.csv", index=False)
+        args.edge_list_title = f"edge_list_{args.args_title}.csv"
+        edge_df.to_csv(f"{edge_list_folder}/{args.edge_list_title}", index=False)
 
         if args.colorcode:  # We are only interested in keeping the indices if we want to plot colors in principle
-            # Componenent ids to dictionary
+            # Component ids to dictionary
             node_id_mapping = {old_id: new_index for new_index, old_id in enumerate(component_node_ids)}
             args.node_ids_map_old_to_new = node_id_mapping
 
         return largest_component, component_node_ids
     return sparse_graph, original_node_ids
 
-def get_largest_component_igraph(args, igraph_graph):
+def get_largest_component_igraph(args, igraph_graph, weighted=False):
     components = igraph_graph.clusters()
     if len(components) > 1:
         print("Disconnected Graph!")
@@ -51,9 +52,21 @@ def get_largest_component_igraph(args, igraph_graph):
         args.num_points = largest.vcount()
         # Write the new edge list with largest component
         edges = largest.get_edgelist()
+        weights = largest.es['weight']  # Access the weights of the edges
+
         edge_df = pd.DataFrame(edges, columns=['source', 'target'])
+        edge_df['weight'] = weights
+
         edge_list_folder = args.directory_map["edge_lists"]
-        edge_df.to_csv(f"{edge_list_folder}/edge_list_{args.args_title}.csv", index=False)
+        args.edge_list_title = f"edge_list_{args.args_title}.csv"
+        edge_df.to_csv(f"{edge_list_folder}/{args.edge_list_title}", index=False)
+
+        # TODO: make sure that this works
+        component_node_ids = [node['name'] for node in largest.vs]
+        if args.colorcode:  # We are only interested in keeping the indices if we want to plot colors in principle
+            # Component ids to dictionary
+            node_id_mapping = {old_id: new_index for new_index, old_id in enumerate(component_node_ids)}
+            args.node_ids_map_old_to_new = node_id_mapping
 
         return largest
     return igraph_graph
@@ -66,7 +79,7 @@ def get_largest_component_networkx(networkx_graph):
     return networkx_graph
 
 def read_edge_list(args):
-    file_path = f"{args.directory_map['edge_lists']}/edge_list_{args.args_title}.csv"
+    file_path = f"{args.directory_map['edge_lists']}/{args.edge_list_title}"
     edge_list_df = pd.read_csv(file_path)
 
     return edge_list_df
@@ -272,6 +285,7 @@ def load_graph(args, load_mode='igraph', weight_threshold=0):
         args.average_degree = average_degree
         args.num_points = largest_component.shape[0]
         args.component_node_ids = component_node_ids
+
         return largest_component, component_node_ids
 
     elif load_mode == "sparse_weighted":
@@ -280,10 +294,17 @@ def load_graph(args, load_mode='igraph', weight_threshold=0):
         return largest_component, component_node_ids
 
     elif load_mode == 'igraph':
-        tuples = [tuple(x) for x in df.values]
-        igraph_graph = ig.Graph.TupleList(tuples, directed=False)
+        if "weight" in df.columns:
+            weighted = True
+            tuples = [tuple(x) for x in df[['source', 'target']].values]
+            igraph_graph = ig.Graph.TupleList(tuples, directed=False, edge_attrs=None)
+            igraph_graph.es['weight'] = df['weight'].tolist()
+        else:
+            weighted = False
+            tuples = [tuple(x) for x in df.values]
+            igraph_graph = ig.Graph.TupleList(tuples, directed=False)
 
-        largest_component = get_largest_component_igraph(args, igraph_graph)
+        largest_component = get_largest_component_igraph(args, igraph_graph, weighted=weighted)
         degrees = largest_component.degree()
         average_degree = np.mean(degrees)
         args.average_degree = average_degree

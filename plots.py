@@ -10,6 +10,9 @@ import matplotlib.colors as mcolors
 from map_image_to_colors import map_points_to_colors
 
 import scienceplots
+import os
+
+
 plt.style.use(['science', 'nature'])
 # plt.rcParams.update({'font.size': 16, 'font.family': 'serif'})
 font_size = 24
@@ -351,7 +354,8 @@ def plot_spatial_constant_variation(args, spatial_constant_variation_results_df)
     fig.show()
 
 
-def plot_original_or_reconstructed_image(args, image_type="original", edges_df=None):
+def plot_original_or_reconstructed_image(args, image_type="original", edges_df=None, position_filename=None,
+                                         plot_weights_against_distance=False):
     def setup_plot(args, figsize=(10, 8)):
         fig = plt.figure(figsize=figsize)
         if args.dim == 3:
@@ -366,17 +370,30 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
         if color_df is not None:
             # merged_df = positions_df.merge(color_df, on='node_ID')
             # TODO: this is because shuai colors are incomplete (beacons are missing)
-            merged_df = positions_df.merge(color_df, on='node_ID', how='left')
-            merged_df['color'] = merged_df['color'].fillna("gray")
 
-            colors = merged_df['color']
-            print(colors)
-            print("number of nodes", len(positions_df))
-            print("number of colors mapped to nodes", len(colors))
+            merged_df = positions_df.merge(color_df, on='node_ID', how='left')
+            # merged_df['color'] = merged_df['color'].fillna("gray")
+
+            colors = merged_df['color'].tolist()
+
+            color_priorities = {
+                'red': 2,  # Highest priority
+                'green': 1,
+                'gray': 0,
+            }
+            priority_list = merged_df['color'].map(color_priorities).tolist()  # Use .fillna(0) to handle any undefined colors with the lowest priority
+
+
             if args.dim == 3:
-                ax.scatter(merged_df['x'], merged_df['y'], merged_df['z'], color=colors)
+                ax.scatter(merged_df['x'], merged_df['y'], merged_df['z'], color=colors, zorder=priority_list)
             elif args.dim == 2:
                 ax.scatter(merged_df['x'], merged_df['y'], color=colors)
+
+
+
+
+
+
 
         else:
             if simulated_colors:
@@ -405,19 +422,34 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
     # TODO: this should not be working when we reconstruct with sparse matrices right? The order of the edge list is different (so positions and graph are different)
     if edges_df is None:
         edge_list_folder = args.directory_map["edge_lists"]
-        edges_df = pd.read_csv(f"{edge_list_folder}/edge_list_{args.original_title}.csv")
+        edges_df = pd.read_csv(f"{edge_list_folder}/{args.edge_list_title}")
+        print(f"retrieving edges from {args.edge_list_title}")
 
     # Get the positions
     if image_type == "original" or image_type == "mst":
 
         original_position_folder = args.directory_map["original_positions"]
-        positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.original_title}.csv")
-        args.id_to_color_simulation = map_points_to_colors(positions_df)
+        if position_filename is None:
+            positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.original_title}.csv")
+            # positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.args_title}.csv")
+        else:
+            positions_df = pd.read_csv(f"{original_position_folder}/{position_filename}")
+
+        # Check if the colorfile is an image
+        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.svg']
+        colorfile_extension = os.path.splitext(args.colorfile)[1].lower()
+        if colorfile_extension in image_extensions:
+            args.id_to_color_simulation = map_points_to_colors(positions_df, args.colorfile)
+
     elif image_type == "reconstructed":
         edge_list_folder = args.directory_map["edge_lists"]
-        edges_df = pd.read_csv(f"{edge_list_folder}/edge_list_{args.args_title}.csv")
+        edges_df = pd.read_csv(f"{edge_list_folder}/{args.edge_list_title}")
         reconstructed_position_folder = args.directory_map["reconstructed_positions"]
-        positions_df = pd.read_csv(f"{reconstructed_position_folder}/positions_{args.args_title}.csv")
+        if position_filename is None:
+            positions_df = pd.read_csv(f"{reconstructed_position_folder}/positions_{args.args_title}.csv")
+        else:
+            positions_df = pd.read_csv(f"{reconstructed_position_folder}/{position_filename}")
+
         is_valid, reason = validate_edge_list_numbers(edges_df, np.array(positions_df))
         if not is_valid:
             print("Reason edge list is not valid:", reason)
@@ -429,34 +461,42 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
 
     # Plot data
     if (args.colorfile is not None) and args.proximity_mode == "experimental":
+
+        # Change the position ID for weinstein case also
+        if args.colorfile[:4] == "wein" and image_type == 'original':  # mapping should only be applied when we have original image
+            positions_df['node_ID'] = positions_df['node_ID'].map(args.node_ids_map_old_to_new)
+            positions_df = positions_df.dropna()
+            positions_df['node_ID'] = positions_df['node_ID'].astype(int)
+
+        ### Plot from color ID file
         color_folder = args.directory_map["colorfolder"]
         color_df = pd.read_csv(f"{color_folder}/{args.colorfile}")
+
+
         color_df['color'] = color_df['color'].map(args.colorcode)
         # If we selected a largest component then we need to map the node ids to the proper color
         if args.node_ids_map_old_to_new is not None:
-            print(color_df['node_ID'])
-            print(args.node_ids_map_old_to_new)
             color_df['node_ID'] = color_df['node_ID'].map(args.node_ids_map_old_to_new)
+            color_df = color_df.dropna()
+
 
         # Additional processing for color_df if required
         plot_positions(ax, positions_df, args, color_df)
+
     else:
         if args.id_to_color_simulation is not None:
             plot_positions(ax, positions_df, args, simulated_colors=True)
         else:
             plot_positions(ax, positions_df, args)
 
-    # # Create a plot
-    # fig = plt.figure(figsize=(10, 8))
-    # if args.dim == 3:
-    #     ax = fig.add_subplot(111, projection='3d')
-    #     ax.scatter(positions_df['x'], positions_df['y'], positions_df['z'], facecolors='none', edgecolors='b')
-    # elif args.dim == 2:
-    #     ax = fig.add_subplot(111)
-    #     ax.scatter(positions_df['x'], positions_df['y'], facecolors='none', edgecolors='b')
+    if plot_weights_against_distance:
+        distances = []
+        weights = []
+
 
     # Draw edges
     for _, row in edges_df.iterrows():
+
         source = positions_df[positions_df['node_ID'] == row['source']].iloc[0]     # TODO: is this the most efficient?
         target = positions_df[positions_df['node_ID'] == row['target']].iloc[0]
 
@@ -476,8 +516,15 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
             ax.plot([source['x'], target['x']], [source['y'], target['y']],
                     edge_color, linewidth=edge_linewidth, alpha=edge_alpha)
 
+        if plot_weights_against_distance:
+            distance = np.sqrt((source['x'] - target['x']) ** 2 + (source['y'] - target['y']) ** 2)
+            distances.append(distance)
+            weights.append(row['weight'])
+
+
     if image_type == "original":
         plot_folder = args.directory_map["plots_original_image"]
+        print(args.args_title)
         plt.savefig(f"{plot_folder}/original_image_{args.args_title}")
     elif image_type == "mst":
         plot_folder = args.directory_map["plots_mst_image"]
@@ -485,6 +532,19 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
     else:
         plot_folder = args.directory_map["plots_reconstructed_image"]
         plt.savefig(f"{plot_folder}/reconstructed_image_{args.args_title}")
+
+
+    if plot_weights_against_distance:
+        plt.figure(figsize=(10, 6))
+        plt.scatter(distances, weights, color='blue', edgecolor='k')
+        plt.title('Euclidean Distance vs. Weight')
+        plt.xlabel('Euclidean Distance')
+        plt.ylabel('Weight')
+        plt.savefig(f"{plot_folder}/weight_distance_{args.args_title}_linear")
+        plt.yscale('log')
+        plt.xscale('log')
+        plt.savefig(f"{plot_folder}/weight_distance_{args.args_title}_log")
+
 
 
 def calculate_predicted_s(args):

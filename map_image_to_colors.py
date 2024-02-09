@@ -7,11 +7,11 @@ def load_image(image_path):
     return Image.open(image_path)
 
 
-def map_points_to_colors(original_positions_df):
+def map_points_to_colors(original_positions_df, filename):
     # Load the image
     args = GraphArgs()
     image_folder = args.directory_map["colorfolder"]
-    image_path = f'{image_folder}/color_spiral.jpg'  # Update this to the path of your .jpg image
+    image_path = f'{image_folder}/{filename}'  # Update this to the path of your .jpg image
 
     image = load_image(image_path)
     image = image.convert("RGB")  # Ensure image is in RGB format

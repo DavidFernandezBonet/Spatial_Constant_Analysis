@@ -443,7 +443,7 @@ class ImageReconstruction:
         elif self.node_embedding_mode == "landmark_isomap":
             node_embeddings = self.landmark_isomap()
 
-        elif self.node_embedding_mode == "PyMDE":  # TODO: adapt for weighted case! Needs to accept more than sparse matrices
+        elif self.node_embedding_mode == "PyMDE":
             retain_fraction = 1
 
             # Load graph in pymde format
@@ -480,26 +480,44 @@ class ImageReconstruction:
             rows = sparse_matrix_coo.row
             cols = sparse_matrix_coo.col
             weights = sparse_matrix_coo.data  # Extract weights from the sparse matrix
-            weights = np.exp((-weights + np.mean(weights))/(np.max(weights) - np.min(weights)))  # TODO: here I apply the weight-to-distance transformation (in this case log)
-            print(weights)
+
+            # inferred_distances = np.exp((-weights + np.mean(weights))/(np.max(weights) - np.min(weights)))  # TODO: here I apply the weight-to-distance transformation (in this case log)
+
+            # TODO: for now just inverse power mapping, but an exponential with the right parameters might make more sense
+            inferred_distances = np.power(weights.astype(float), -1)
+            print("inferred distances from weights", inferred_distances)
             edges_np = np.vstack([rows, cols]).T
+
+            # ### Using GPU  (not working)
+            # device = torch.device("hip:0")  # For AMD GPUs using ROCm
+            # edges = torch.tensor(edges_np, dtype=torch.int64).to(device)
+            # inferred_distances = torch.tensor(inferred_distances, dtype=torch.float32).to(device)
+
+            ## Using CPU
             edges = torch.tensor(edges_np, dtype=torch.int64)
-            weights = torch.tensor(weights, dtype=torch.float32)  # Make sure weights are in the correct format
-            graph = pymde.Graph.from_edges(edges, weights=weights)
+            inferred_distances = torch.tensor(inferred_distances, dtype=torch.float32)  # Make sure weights are in the correct format
+
+
+            graph = pymde.Graph.from_edges(edges, weights=inferred_distances)
 
             # Reconstructions work best in the "dense" form, that is, computing the shortest path distances
+
             shortest_paths_graph = pymde.preprocess.graph.shortest_paths(graph,
                                                                          retain_fraction=retain_fraction)
+
+
             full_edges = shortest_paths_graph.edges.to("cpu")
             deviations = shortest_paths_graph.distances.to("cpu")
-
             # Create the MDE problem, dense edges, deviations
             mde = pymde.MDE(args.num_points, self.node_embedding_components, full_edges,
                             pymde.losses.Quadratic(deviations=deviations),  # Use deviations for dissimilarities
                             pymde.constraints.Standardized()
                             )
 
+            print("proceeding to PyMDE embedding")
+
             node_embeddings = mde.embed()
+            print("finished PyMDE embedding")
 
         else:
             raise ValueError('Please input a valid node embedding mode')

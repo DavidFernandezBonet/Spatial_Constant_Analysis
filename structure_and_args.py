@@ -12,6 +12,7 @@ def create_project_structure():
         'original_positions': f'{project_root}/data/original_positions',
         'reconstructed_positions': f'{project_root}/data/reconstructed_positions',
         'pixelgen_data': f'{project_root}/data/pixelgen_data',
+        'slidetag_data': f'{project_root}/data/slidetag_data',
         'colorfolder': f'{project_root}/data/colorcode',
 
         's_constant_results': f'{project_root}/results/individual_spatial_constant_results',
@@ -35,6 +36,8 @@ def create_project_structure():
 
         'plots_predicted_dimension': f'{project_root}/results/plots/predicted_dimension',
         'dimension_prediction_iterations': f'{project_root}/results/plots/predicted_dimension/several_predictions',
+        'centered_msp': f'{project_root}/results/plots/predicted_dimension/centered_msp',
+        'mds_dim': f'{project_root}/results/plots/predicted_dimension/MDS_dimension',
 
         'plots_clustering_coefficient': f'{project_root}/results/plots/clustering_coefficient',
         'plots_degree_distribution': f'{project_root}/results/plots/degree_distribution',
@@ -93,9 +96,10 @@ class GraphArgs:
         # auxiliary title (original, when graph is well connected and we don't have to grab largest component)
         self.original_title = None
 
+
         self.node_ids_map_old_to_new = None
         self.colorfile = None  # filename where the color ids are stored. It is a dataframe with Node_ID, color in columns
-        self.colorcode = {0: "gray", 1: "green", 2: "red"}  # what colors to plot
+        self.colorcode = {-1: "gray", 0: "gray", 1: "green", 2: "red"}  # what colors to plot
         self.id_to_color_simulation = None  # for colored simulations
 
 
