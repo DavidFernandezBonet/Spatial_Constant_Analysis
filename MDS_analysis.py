@@ -56,25 +56,28 @@ def classical_mds(distance_matrix, dimensions=2):
 
 def compute_gram_matrix_eigenvalues(distance_matrix):
     """Perform Classical MDS on a given distance matrix, without predefining the dimensions."""
-    # Number of points
-    n = distance_matrix.shape[0]
-
-    # Centering matrix
-    H = np.eye(n) - np.ones((n, n)) / n
-
-    # Double centered distance matrix
-    B = -H.dot(distance_matrix ** 2).dot(H) / 2
-
-    # Eigenvalue decomposition
-    eigenvalues, eigenvectors = eigh(B)
-
-    # Sort eigenvalues and eigenvectors in descending order of eigenvalues
-    idx = eigenvalues.argsort()[::-1]
-    eigenvalues = eigenvalues[idx]
-    eigenvectors = eigenvectors[:, idx]
-
+    # TODO: increase efficiency for large matrices
+    B = distance_matrix_to_gram(distance_matrix)
+    eigenvalues = compute_matrix_eigenvalues(B)
     return eigenvalues
 
+def compute_matrix_eigenvalues(matrix):
+    eigenvalues, eigenvectors = eigh(matrix)
+    idx = eigenvalues.argsort()[::-1]
+    return eigenvalues[idx]
+
+def distance_matrix_to_gram(distance_matrix):
+    n = distance_matrix.shape[0]
+    H = np.eye(n) - np.ones((n, n)) / n
+    B = -H.dot(distance_matrix ** 2).dot(H) / 2
+    return B
+
+def gram_to_distance_matrix(G):
+    "Gram matrix to distance matrix transformation"
+    norms = np.diag(G)
+    distance_matrix_squared = norms[:, np.newaxis] - 2 * G + norms[np.newaxis, :]
+    distance_matrix = np.sqrt(np.maximum(distance_matrix_squared, 0))  # Ensure non-negativity
+    return distance_matrix
 
 def test_statistic_singular_values(distance_matrix, dim):
 
@@ -616,14 +619,15 @@ def plot_cumulative_variance(args, results_list, categories_to_compare, single_m
             variance_data = [result['cumulative_variance_d'] for result in selected_results if
                              result['category'] == category]
             # Assuming variance_data contains lists of cumulative variances, calculate the mean of each list
+            print("VARIANCE DATA SHOULD BE ONLY 1 VALUE", variance_data, category)
             mean_variance = [np.mean(variance) for variance in variance_data]
             mean_variances.append(np.mean(mean_variance))
 
         ax.bar(bar_positions, mean_variances, color=colors, width=0.6)
         ax.set_xticks(bar_positions)
         ax.set_xticklabels(categories_to_compare)
-        ax.set_xlabel('Category')
-        ax.set_ylabel('Mean Cumulative Variance')
+
+        ax.set_ylabel('D-Eigenvalues Contribution')
         ax.set_ylim(0, 1)  # Set y-axis limit from 0 to 1
     else:
         # For multiple data series per category, use boxplots as before
@@ -632,9 +636,9 @@ def plot_cumulative_variance(args, results_list, categories_to_compare, single_m
                              result['category'] == category]
             ax.boxplot(variance_data, positions=[i], widths=0.6, patch_artist=True,
                        boxprops=dict(facecolor=colors[i]))
-        ax.set_title('Cumulative Variance by Category')
-        ax.set_xlabel('Category')
-        ax.set_ylabel('Cumulative Variance')
+        ax.set_title('Cumulative First-D Eigenvalue Contribution')
+
+        ax.set_ylabel('D-Eigenvalues Contribution')
         ax.set_xticklabels(categories_to_compare)
         ax.set_ylim(0, 1)  # Set y-axis limit from 0 to 1
 
@@ -717,18 +721,21 @@ def iteration_analysis_experimental(edge_list_and_weights_dict):
     }
     case_nicknames = generate_case_nicknames(file_nicknames, weight_specifications)
 
+    # # Normal SP iteration
+    result = perform_simulation(num_points=1000, proximity_mode="knn", intended_av_degree=8, dim=2, false_edges=0)
+    results_list.append(result)
+
     for edge_list_name, weight_list in edge_list_and_weights_dict.items():
         args1 = GraphArgs()  # caution, this is just to get plot folders but specific graph values are default
         args1.directory_map = create_project_structure()  # creates folder and appends the directory map at the args
         args1.edge_list_title = edge_list_name
         args1.proximity_mode = "experimental"
 
-        # # Normal SP iteration
-        result = perform_simulation(num_points=1000, proximity_mode="knn", intended_av_degree=8, dim=2, false_edges=0)
-        results_list.append(result)
+
 
         if weight_list:
             for weight_threshold in weight_list:
+                print("WEIGHT THRESHOLD", weight_threshold)
                 args1.edge_list_title = edge_list_name
                 sparse_graph, _ = load_graph(args1, load_mode='sparse', weight_threshold=weight_threshold)
                 sp_matrix = np.array(shortest_path(csgraph=sparse_graph, directed=False))
@@ -798,17 +805,65 @@ def perform_simulation(num_points, proximity_mode, intended_av_degree, dim, fals
     return result
 
 
+def calculate_eigenvalue_entropy(eigenvalues):
+    probabilities = eigenvalues / np.sum(eigenvalues)
+    # probabilities = probabilities[probabilities > 0]  # TODO: careful with this step, as we have negative eigenvalues
+    probabilities = np.abs(probabilities)
+    entropy = -np.sum(probabilities * np.log2(probabilities))
+    return entropy
+
+
+def eigval_th(D, r):
+    """
+    Threshold eigenvalues of D, setting all but the largest 'r' to 0.
+    """
+    # Calculate eigenvalues and eigenvectors
+    values, vectors = eigh(D)
+    # Set all but the largest 'r' eigenvalues to 0
+    values[:-r] = 0
+    # Reconstruct the matrix
+    D_th = vectors @ np.diag(values) @ vectors.T
+    return D_th, {'values': values, 'vectors': vectors}
+
+
+def rankcomplete_distmat(D, dim, iters=100, tol=1e-6, verbose=True):
+    """
+    Complete and denoise a Euclidean Distance Matrix (EDM) using OptSpace method.
+    """
+    assert np.all(np.diag(D) == 0), "The diagonal of D should always be 0"
+
+    n = D.shape[0]
+    D2 = D.copy()
+    Dold = D.copy()
+
+    for iter in range(1, iters + 1):
+        D2, E = eigval_th(D2, dim + 2)
+        # Since your matrices are complete, we skip the missing entries part
+        np.fill_diagonal(D2, 0)
+        D2 = np.maximum(D2, 0)
+
+        # Calculate the change/error
+        err = np.sqrt(np.sum((Dold - D2) ** 2)) / np.linalg.norm(D2)
+        if verbose:
+            print(f"Iter {iter} Change: {err}")
+        if err < tol:
+            break
+        Dold = D2.copy()
+
+    return D2, E
+
+
 # Parameters
 args = GraphArgs()
 args.directory_map = create_project_structure()  # creates folder and appends the directory map at the args
 args.proximity_mode = "knn"
-args.dim = 3
+args.dim = 2
 
 args.intended_av_degree = 6
 args.num_points = 1000
 
 ### Add random edges? See efect in the dimensionality here
-num_edges_to_add = 0
+num_edges_to_add = 10
 
 
 simulation_or_experiment = "simulation"
@@ -860,9 +915,9 @@ else:
 
 
 # Simple simulation to test stuff
-num_points_list = [500, 1000, 1500]
-proximity_mode_list = ["delaunay_corrected"]
-intended_av_degree_list = [6]
+num_points_list = [500, 1000, 1500, 2000]
+proximity_mode_list = ["knn", "knn_bipartite", "delaunay_corrected"]
+intended_av_degree_list = [6, 10, 15]
 false_edges_list = [0, 2, 5, 10, 50]
 dim_list = [3]
 
@@ -870,29 +925,35 @@ dim_list = [3]
 # iteration_analysis(num_points_list, proximity_mode_list, intended_av_degree_list, dim_list, false_edges_list)
 
 
-edge_names_and_weights_dict = {"weinstein_data_corrected_february.csv": [10, 15],
-                               "pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv": None,
-                               "subgraph_8_nodes_160_edges_179_degree_2.24.pickle": None,
-                               "subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle": None}
-iteration_analysis_experimental(edge_list_and_weights_dict=edge_names_and_weights_dict)
+# # # Experimental data iteration
+# edge_names_and_weights_dict = {"weinstein_data_corrected_february.csv": [5,10,15],
+#                                "pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv": None,
+#                                "subgraph_8_nodes_160_edges_179_degree_2.24.pickle": None,
+#                                "subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle": None}
+# iteration_analysis_experimental(edge_list_and_weights_dict=edge_names_and_weights_dict)
 
 
-### Only 1 iteration
+## Only 1 iteration
 
-# sparse_graph = add_random_edges_to_csrgraph(sparse_graph, num_edges_to_add=num_edges_to_add)
-# if num_edges_to_add:
-#     args.args_title = args.args_title + f'_false_edges={num_edges_to_add}'
-#
-# # Compute shortest path matrix
-# sp_matrix = np.array(shortest_path(csgraph=sparse_graph, directed=False))
-#
-# eigenvalues_sp_matrix = compute_gram_matrix_eigenvalues(distance_matrix=sp_matrix)
-# eigenvalues_euclidean = compute_gram_matrix_eigenvalues(distance_matrix=original_dist_matrix)
-#
-# plot_cumulative_eigenvalue_contribution(args, eigenvalues=eigenvalues_sp_matrix, original=False)
-# plot_cumulative_eigenvalue_contribution(args, eigenvalues=eigenvalues_euclidean, original=True)
+sparse_graph = add_random_edges_to_csrgraph(sparse_graph, num_edges_to_add=num_edges_to_add)
+if num_edges_to_add:
+    args.args_title = args.args_title + f'_false_edges={num_edges_to_add}'
 
-### ----------------------------------------------
+# Compute shortest path matrix
+sp_matrix = np.array(shortest_path(csgraph=sparse_graph, directed=False))
+
+eigenvalues_sp_matrix = compute_gram_matrix_eigenvalues(distance_matrix=sp_matrix)
+eigenvalues_euclidean = compute_gram_matrix_eigenvalues(distance_matrix=original_dist_matrix)
+
+plot_cumulative_eigenvalue_contribution(args, eigenvalues=eigenvalues_sp_matrix, original=False)
+plot_cumulative_eigenvalue_contribution(args, eigenvalues=eigenvalues_euclidean, original=True)
+
+entropy_simulation = calculate_eigenvalue_entropy(eigenvalues_sp_matrix)
+entropy_euclidean = calculate_eigenvalue_entropy(eigenvalues_euclidean)
+
+print("entropy euclidean", entropy_euclidean)
+print("entropy simulation", entropy_simulation)
+## ----------------------------------------------
 
 
 # edm_test_statistic(args=args, matrix=original_dist_matrix, d=args.dim, original=True)
@@ -914,12 +975,13 @@ iteration_analysis_experimental(edge_list_and_weights_dict=edge_names_and_weight
 
 
 
+L, S, LS, RMSE = godec(sp_matrix, rank=args.dim+2, card=None)
 
-# L, S, LS, RMSE = godec(sp_matrix, rank=args.dim, card=None)
-# print("shape L", L.shape)
-# print("correlation noise", compute_correlation_between_distance_matrices(original_dist_matrix, sp_matrix))
-# print("correlation denoised GoDec full", compute_correlation_between_distance_matrices(original_dist_matrix, LS))
-# print("correlation denoised lowrank", compute_correlation_between_distance_matrices(original_dist_matrix, L))
+
+print("shape L", L.shape)
+print("correlation noise", compute_correlation_between_distance_matrices(original_dist_matrix, sp_matrix))
+print("correlation denoised GoDec full", compute_correlation_between_distance_matrices(original_dist_matrix, LS))
+print("correlation denoised lowrank", compute_correlation_between_distance_matrices(original_dist_matrix, L))
 #
 #
 #
@@ -932,7 +994,7 @@ iteration_analysis_experimental(edge_list_and_weights_dict=edge_names_and_weight
 # X_approx = np.dot(W, H)
 # print("correlation denoised NMF", compute_correlation_between_distance_matrices(original_dist_matrix, X_approx))
 #
-# # EDM paper algorithms from julia github
+# # EDM paper algorithms from julia github  #TODO: this is the best denoiser, actually having a positive result
 # denoised_mat = denoise_distmat(sp_matrix, dim=args.dim, p=1)
 # print("correlation denoised EDM", compute_correlation_between_distance_matrices(original_dist_matrix, denoised_mat))
 #
@@ -944,3 +1006,16 @@ iteration_analysis_experimental(edge_list_and_weights_dict=edge_names_and_weight
 # print("Rank sp_matrix", matrix_rank(sp_matrix))
 # print("Rank denoised MAT", matrix_rank(denoised_mat))
 # print("Rank original MAT", matrix_rank(original_dist_matrix))
+
+
+# denoised_mat, values = rankcomplete_distmat(sp_matrix, dim=args.dim, iters=10)  ## This uses SpaceOpt in theory
+# print("correlation SP mat", compute_correlation_between_distance_matrices(original_dist_matrix, sp_matrix))
+# print("correlation denoised EDM", compute_correlation_between_distance_matrices(original_dist_matrix, denoised_mat))
+
+# eigenvalues_sp_matrix = compute_gram_matrix_eigenvalues(distance_matrix=L)
+# plot_cumulative_eigenvalue_contribution(args, eigenvalues=eigenvalues_sp_matrix, original=False)
+
+## Eigenvalues of the Gram matrix
+eigenvalues_matrix = compute_matrix_eigenvalues(matrix=L)
+plot_cumulative_eigenvalue_contribution(args, eigenvalues=eigenvalues_matrix, original=False)
+
