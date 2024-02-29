@@ -29,7 +29,7 @@ plt.rcParams['xtick.labelsize'] = font_size
 plt.rcParams['ytick.labelsize'] = font_size
 plt.rcParams['legend.fontsize'] = font_size - 10
 
-plt.style.use(['science','no-latex', 'nature'])
+# plt.style.use(['science','no-latex', 'nature'])
 
 def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild_learning_mode='UMAP',
                        ground_truth_available=False):
@@ -46,7 +46,9 @@ def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild
              metrics (ground truth and gta) --> dictionary of "metrics" object
 
     """
+    sparse_graph = convert_graph_type(graph=sparse_graph, args=args, desired_type='sparse')
     metrics = {}
+    args.args_title = args.args_title + '_' + node_embedding_mode
     reconstruction = ImageReconstruction(graph=sparse_graph, dim=args.dim, node_embedding_mode=node_embedding_mode,
                                          manifold_learning_mode=manifild_learning_mode)
     reconstructed_points = reconstruction.reconstruct(do_write_positions=True, args=args)
@@ -81,7 +83,7 @@ def main():
     # TODO: args_title is not instantiated if you don't call the parameters (maybe just make a config file with the parameters and call them all)
     args = GraphArgs()
 
-    args.proximity_mode = "knn_bipartite"
+    args.proximity_mode = "lattice"
     args.dim = 2
 
     # print("Proximity_mode after setting to 'knn':", args.proximity_mode)
@@ -91,16 +93,23 @@ def main():
     print(args.proximity_mode)
     args.intended_av_degree = 10
     args.num_points = 1000
-    args.colorfile = "weinstein_colorcode_february_corrected.csv"  # colorful_spiral.jpeg, weinstein_color_corrected.csv, weinstein_colorcode_february_corrected.csv, None
+    args.colorfile = "weinstein_colorcode_february_corrected.csv"  # colorful_spiral.jpeg, weinstein_colorcode_february_corrected.csv, None
 
-    simulation_or_experiment = "experiment"
-    reconstruct = True
+    simulation_or_experiment = "simulation"
+    reconstruct = False
 
 
     if simulation_or_experiment == "experiment":
         # # # #Experimental
         # our group:
         # subgraph_2_nodes_44_edges_56_degree_2.55.pickle  # subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle  # subgraph_8_nodes_160_edges_179_degree_2.24.pickle
+
+        # slidetag:
+        # edge_list_nbead_7_filtering_simon.csv, edge_list_distance_150_filtering_simon_connected.csv (this one is good, uses a little ground truth) # new simon data from slidetag
+        # edge_list_distance_300_filtering_simon.csv
+        # now with good indexing:
+        # nbead_7_goodindex_simon.csv, edge_list_distance_150_filtering_goodindex_simon.csv
+
         # unfiltered pixelgen:
         # pixelgen_cell_2_RCVCMP0000594.csv, pixelgen_cell_1_RCVCMP0000208.csv, pixelgen_cell_3_RCVCMP0000085.csv
         # pixelgen_edgelist_CD3_cell_2_RCVCMP0000009.csv, pixelgen_edgelist_CD3_cell_1_RCVCMP0000610.csv, pixelgen_edgelist_CD3_cell_3_RCVCMP0000096.csv
@@ -111,6 +120,7 @@ def main():
         # pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv (treated cell)
         # shuai_protein_edgelist_unstimulated_RCVCMP0000133_neigbours_s_proteinlist.csv  (shuai protein list)
         # pixelgen_processed_edgelist_shuai_RCVCMP0000073_cd3_cell_1_RCVCMP0000073.csv (shuai error correction)
+
         # weinstein:
         # weinstein_data.csv
         # weinstein_data_corrected_january.csv
@@ -118,23 +128,23 @@ def main():
         # slidetag_processed_edgelist_10X_bc_to_cell_bc_SRR07.csv, edge_list_abundant_beads_cut_beadsum_thresholds_8_256_SRR11.csv SRR11
         # slidetag_processed_edgelist_edge_list_filtered_by_bed_n_connections_thresholds_2-16.csv
         args.proximity_mode = "experimental"  # define proximity mode before name!
-        args.edge_list_title = "weinstein_data_corrected_february.csv"
-        weighted = True
+        args.edge_list_title = "edge_list_distance_150_filtering_goodindex_simon.csv"
+        weighted = False
         weight_threshold = 5
 
         if os.path.splitext(args.edge_list_title)[1] == ".pickle":
             write_nx_graph_to_edge_list_df(args)    # activate if format is .pickle file
 
-        # TODO: uncomment this
-        if not weighted:
-            igraph_graph_original = load_graph(args, load_mode='igraph')
-        else:
-            igraph_graph_original = load_graph(args, load_mode='igraph', weight_threshold=weight_threshold)
+        # # TODO: uncomment this
+        # if not weighted:
+        #     igraph_graph_original = load_graph(args, load_mode='igraph')
+        # else:
+        #     igraph_graph_original = load_graph(args, load_mode='igraph', weight_threshold=weight_threshold)
 
-        # Plot original weinstein
-        plot_original_or_reconstructed_image(args, image_type='original',
-                                             position_filename='reconstructed_positions_weinstein_febraury_corrected.csv',
-                                             plot_weights_against_distance=True)
+        # # Plot original weinstein. Activate if you want to plot
+        # plot_original_or_reconstructed_image(args, image_type='original',
+        #                                      position_filename='reconstructed_positions_weinstein_febraury_corrected.csv',
+        #                                      plot_weights_against_distance=True)
 
 
         if reconstruct:
@@ -144,7 +154,7 @@ def main():
             # # Reconstruct unweighted
             igraph_graph_original, _ = load_graph(args, load_mode='sparse', weight_threshold=weight_threshold)
             run_reconstruction(args, sparse_graph=igraph_graph_original, ground_truth_available=False,
-                               node_embedding_mode="landmark_isomap")
+                               node_embedding_mode="ggvec")
 
         # plot_graph_properties(args, igraph_graph_original)  # plots clustering coefficient, degree dist, also stores individual spatial constant...
 
@@ -153,10 +163,12 @@ def main():
     elif simulation_or_experiment == "simulation":
         # # # 1 Simulation
         create_proximity_graph.write_proximity_graph(args)
-        igraph_graph_original = load_graph(args, load_mode='igraph')
-        # igraph_graph_original = get_minimum_spanning_tree_igraph(igraph_graph_original)  # careful with activating this
 
-        plot_original_or_reconstructed_image(args, image_type='original')
+        ## Plot the original graph
+        # igraph_graph_original = load_graph(args, load_mode='igraph')
+        # # igraph_graph_original = get_minimum_spanning_tree_igraph(igraph_graph_original)  # careful with activating this
+        #
+        # plot_original_or_reconstructed_image(args, image_type='original')
     else:
         raise ValueError("Input simulation or experiment")
 
@@ -176,32 +188,24 @@ def main():
     # print("local efficiency", local_efficiency(igraph_graph_original))
 
 
-    # # # # Watts-Storgatz
-    # # Parameters for the Watts-Strogatz graph
-    # p = 0   # Rewiring probability
-    # # Create the Watts-Strogatz small-world graph
-    # args.dim=1
-    # igraph_graph_original = ig.Graph.Watts_Strogatz(args.dim, args.num_points, 1, p)
-    # print("graph_created!")
+    ## ------------------------------------------------------------------
+    ##### Run subgraph sampling (main spatial constant function)
+    # Linear spaced
+    false_edge_list = np.arange(0, 101, step=20)
 
-    # ## ------------------------------------------------------------------
-    # ##### Run subgraph sampling (main spatial constant function)
-    # # Linear spaced
-    # false_edge_list = np.arange(0, 101, step=20)
-    #
-    #
-    # # # Log spaced
-    # # false_edge_list = np.logspace(start=0, stop=3, num=20, base=10, dtype=int)
-    # # false_edge_list = np.insert(false_edge_list, 0, 0)
-    #
-    # # ## Artificially add random edges
-    # # igraph_graph_original = add_random_edges_igraph(igraph_graph_original, num_edges_to_add=10)
-    #
-    #
-    # #### Run subgraph sampling simulation  #TODO: main function for the spatial constant plots
-    # run_simulation_subgraph_sampling(args, size_interval=1000, n_subgraphs=10, graph=igraph_graph_original,
-    #                                  add_false_edges=True, add_mst=False, false_edge_list=false_edge_list)
-    # ## ------------------------------------------------------------------
+
+    # # Log spaced
+    # false_edge_list = np.logspace(start=0, stop=3, num=20, base=10, dtype=int)
+    # false_edge_list = np.insert(false_edge_list, 0, 0)
+
+    # ## Artificially add random edges
+    # igraph_graph_original = add_random_edges_igraph(igraph_graph_original, num_edges_to_add=10)
+
+
+    #### Run subgraph sampling simulation  #TODO: main function for the spatial constant plots
+    run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=10, graph=igraph_graph_original,
+                                     add_false_edges=True, add_mst=False, false_edge_list=false_edge_list)
+    ## ------------------------------------------------------------------
 
 
     ### Run dimension prediction ##TODO: I think this is still in development phase, not working too well?
@@ -223,23 +227,34 @@ def main():
     # spatial_constant_and_weight_threshold_analysis(args, weight_thresholds, edge_list_title=args.edge_list_title)
 
 
+    # ## Reconstruction (load graph as sparse!)  #TODO: main recons function
+    # sparse_graph_original, _ = load_graph(args, load_mode='sparse')
+    # run_reconstruction(args, sparse_graph=sparse_graph_original, ground_truth_available=False,
+    #                    node_embedding_mode="node2vec")
+
+    # ### Plot cool SP images with heatmaps
+    sparse_graph_original, _ = load_graph(args, load_mode='sparse')
+    ## Individual
+
+    # shortest_path_matrix = compute_shortest_path_matrix_sparse_graph(sparse_graph_original)
+    # plot_shortest_path_heatmap(args, shortest_path_matrix=shortest_path_matrix)
+
+    ## Multiple
+    false_edge_list = [0, 10, 50, 100]
+    sp_matrix_list = compute_several_sp_matrices(args, sparse_graph_original, false_edges_list=false_edge_list)
+    plot_multiple_shortest_path_heatmaps(args, sp_matrix_list, false_edge_list=false_edge_list)
 
 
-
-
-
-
-
-
-    # num_random_edges = 0
-    # model_func = "spatial_constant_dim=2"  # small_world
-    # # model_func = "small_world"
+    ### Old stuff?
+    # # num_random_edges = 0
+    # # model_func = "spatial_constant_dim=2"  # small_world
+    # # # model_func = "small_world"
     #
     #
     # # run_simulation_false_edges(args, max_edges_to_add=100)
     # # run_simulation_graph_growth(args, n_graphs=50, num_random_edges=num_random_edges, model_func=model_func)
     # run_simulation_comparison_large_and_small_world(args, start_n_nodes=500, end_n_nodes=5000, n_graphs=10, num_random_edges_ratio=0.015)
-
+    #
     # run_simulation_graph_growth(args, n_graphs=50, num_random_edges=0, model_func="spatial_constant_dim=2_linearterm")
 
 

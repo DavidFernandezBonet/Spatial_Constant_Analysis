@@ -2,6 +2,8 @@ import pandas as pd
 from scipy.sparse.csgraph import connected_components
 from scipy.sparse import coo_matrix
 from scipy.sparse import find
+from scipy.sparse import csr_matrix, isspmatrix
+
 import scipy.stats
 import igraph as ig
 import networkx as nx
@@ -17,8 +19,11 @@ from plots import plot_weight_distribution
 
 def get_largest_component_sparse(args, sparse_graph, original_node_ids):
     n_components, labels = connected_components(csgraph=sparse_graph, directed=False, return_labels=True)
+    print("original graph size")
     if n_components > 1:  # If not connected
-        print("Disconnected graph! Finding largest component...")
+        print("Disconnected (or disordered) graph! Finding largest component...")
+        num_nodes = sparse_graph.shape[0]  # or sparse_graph.shape[1], as it should be a square matrix
+        print("Size of the total graph", num_nodes)
         # Find the largest component
         largest_component_label = np.bincount(labels).argmax()
         component_node_indices = np.where(labels == largest_component_label)[0]
@@ -35,13 +40,32 @@ def get_largest_component_sparse(args, sparse_graph, original_node_ids):
         args.edge_list_title = f"edge_list_{args.args_title}.csv"
         edge_df.to_csv(f"{edge_list_folder}/{args.edge_list_title}", index=False)
 
+
+        # ### Print nodes that are left out
+        # # Step 2: Find indices of nodes not in the largest component
+        # non_largest_component_indices = np.where(labels != largest_component_label)[0]
+        #
+        # # Step 3: Retrieve the original IDs for these nodes
+        # non_largest_component_node_ids = original_node_ids[non_largest_component_indices]
+        #
+        # # Now non_largest_component_node_ids contains the IDs/names of the nodes not in the largest component
+        # print("Nodes not in the largest component:", non_largest_component_node_ids)
+
         if args.colorcode:  # We are only interested in keeping the indices if we want to plot colors in principle
             # Component ids to dictionary
             node_id_mapping = {old_id: new_index for new_index, old_id in enumerate(component_node_ids)}
             args.node_ids_map_old_to_new = node_id_mapping
 
+            # store also the old edge list
+            node_ids_map_new_to_old = {new_index: old_id for new_index, old_id in enumerate(component_node_ids)}
+            old_index_edge_df = pd.DataFrame()
+            old_index_edge_df['source'] = edge_df['source'].map(node_ids_map_new_to_old)
+            old_index_edge_df['target'] = edge_df['target'].map(node_ids_map_new_to_old)
+            old_index_edge_df.to_csv(f"{edge_list_folder}/old_index_{args.edge_list_title}", index=False)
+
         return largest_component, component_node_ids
-    return sparse_graph, original_node_ids
+    else:
+        return sparse_graph, original_node_ids
 
 def get_largest_component_igraph(args, igraph_graph, weighted=False):
     components = igraph_graph.clusters()
@@ -52,10 +76,13 @@ def get_largest_component_igraph(args, igraph_graph, weighted=False):
         args.num_points = largest.vcount()
         # Write the new edge list with largest component
         edges = largest.get_edgelist()
-        weights = largest.es['weight']  # Access the weights of the edges
+
 
         edge_df = pd.DataFrame(edges, columns=['source', 'target'])
-        edge_df['weight'] = weights
+
+        if weighted:
+            weights = largest.es['weight']  # Access the weights of the edges
+            edge_df['weight'] = weights
 
         edge_list_folder = args.directory_map["edge_lists"]
         args.edge_list_title = f"edge_list_{args.args_title}.csv"
@@ -86,7 +113,13 @@ def read_edge_list(args):
 
 
 def read_position_df(args):
-    original_points_path = f"{args.directory_map['original_positions']}/positions_{args.args_title}.csv"
+    if hasattr(args, 'reconstruction_mode') and args.reconstruction_mode in args.args_title:
+        old_args_title = args.args_title.replace(f"_{args.reconstruction_mode}",
+                                                 "")
+    else:
+        old_args_title = args.args_title
+
+    original_points_path = f"{args.directory_map['original_positions']}/positions_{old_args_title}.csv"
     original_points_df = pd.read_csv(original_points_path)
     # Choose columns based on the dimension specified in args.dim
     if args.dim == 2:
@@ -173,7 +206,7 @@ def check_edge_list_columns(edge_list_df):
     if 'weight' in edge_list_df.columns:
         print("Column 'weight' exists. Threshold filtering will be performed with minimum weight...")
     else:
-        print("Column 'weight' does not exist. Continuing with unweighted graph procedure")
+        print("Unweighted graph")
 
     if 'source (seq)' in edge_list_df.columns:
         edge_list_df = edge_list_df.drop('source (seq)', axis=1)
@@ -182,7 +215,7 @@ def check_edge_list_columns(edge_list_df):
 
     print("Edge list columns are valid.")
     return edge_list_df
-def load_graph(args, load_mode='igraph', weight_threshold=0):
+def load_graph(args, load_mode='igraph'):
     """
         Load a graph from an edge list CSV file, compute its average degree, and
         update the provided args object with the average degree and the number of
@@ -223,12 +256,17 @@ def load_graph(args, load_mode='igraph', weight_threshold=0):
         raise ValueError('Please make sure that a) the edgelist in the data/edge_lists folder and b)'
                          'the name of the edgelist is correct.')
 
+    if os.path.splitext(args.edge_list_title)[1] == ".pickle":
+        write_nx_graph_to_edge_list_df(args)  # write a .csv edge list if it is in pickle format
+
     file_path = f"{args.directory_map['edge_lists']}/{args.edge_list_title}"
     df = pd.read_csv(file_path)  # edge list
 
 
     df = check_edge_list_columns(edge_list_df=df)
-    args.original_title = args.args_title
+
+    if args.original_title is None:
+        args.original_title = args.args_title
 
     # TODO: check that source is not contained in target and viceversa
     # Convert columns to sets
@@ -252,16 +290,19 @@ def load_graph(args, load_mode='igraph', weight_threshold=0):
 
     print((source_sequence_check, target_sequence_check, len(intersection), percentage_source, percentage_target))
 
+
     # Handling of weighted graphs, for now just a simple threshold
     if "weight" in df.columns:
-        if weight_threshold == None:
+        if args.weight_threshold == None:
             raise ValueError("Please select a weight threshold when calling the load_graph function. It can be 0"
                              "(same effect as no threshold)")
         else:
-            print(f"Weighted graphs will be treated as unweighted with a minimum weight threshold filtering = {weight_threshold}")
+            print(f"Weighted graphs will be treated as unweighted with a minimum weight threshold filtering = {args.weight_threshold}")
             # Plot weight distribution here
-            plot_weight_distribution(args, edge_list_with_weight_df=df)
-            df = df[df["weight"] > weight_threshold]
+
+            if args.plot_graph_properties:
+                plot_weight_distribution(args, edge_list_with_weight_df=df)
+            df = df[df["weight"] > args.weight_threshold]
 
 
     if load_mode == 'sparse':
@@ -283,15 +324,27 @@ def load_graph(args, load_mode='igraph', weight_threshold=0):
         degrees = largest_component.sum(axis=0).A1  # Sum of non-zero entries in each column (or row)
         average_degree = np.mean(degrees)
         args.average_degree = average_degree
+        print(f"Average Degree sparse: {average_degree}")
         args.num_points = largest_component.shape[0]
         args.component_node_ids = component_node_ids
 
-        return largest_component, component_node_ids
+
+
+        if args.false_edges_count and not args.false_edge_ids:  #TODO: adapt for bipartite case
+            largest_component = add_random_edges_to_csrgraph(args, largest_component, args.false_edges_count)
+            print(args.false_edge_ids)
+
+        # Save the graph in "args"
+        args.sparse_graph = largest_component
+        return largest_component
 
     elif load_mode == "sparse_weighted":
+        # TODO: copy other functions for sparse, such as adding false edges
         largest_component, component_node_ids = load_graph_sparse_weighted(args, df=df)
         args.component_node_ids = component_node_ids
-        return largest_component, component_node_ids
+        # Save the graph in "args"
+        args.sparse_graph = largest_component
+        return largest_component
 
     elif load_mode == 'igraph':
         if "weight" in df.columns:
@@ -304,13 +357,16 @@ def load_graph(args, load_mode='igraph', weight_threshold=0):
             tuples = [tuple(x) for x in df.values]
             igraph_graph = ig.Graph.TupleList(tuples, directed=False)
 
+
         largest_component = get_largest_component_igraph(args, igraph_graph, weighted=weighted)
+
         degrees = largest_component.degree()
         average_degree = np.mean(degrees)
         args.average_degree = average_degree
-        args.num_points = largest_component.vcount()
-        print("average degree", average_degree)
+        args.num_points = largest_component.vcount()    # calling args.num_points changes the edge list title
+        print("average degree igraph", average_degree)
         print("num points", args.num_points)
+
 
         # Check bipartitedness
         is_bipartite, types = largest_component.is_bipartite(return_types=True)
@@ -318,10 +374,12 @@ def load_graph(args, load_mode='igraph', weight_threshold=0):
         if is_bipartite:
             args.bipartite_sets = types
 
-        # # Add false edges if necessary  #TODO: how to guarantee that the false edges are in the largest component? Might be unlucky
-        # if args.false_edges_count:  #TODO: adapt for bipartite case
-        #     print("ha passat")
-        #     largest_component = add_random_edges_igraph(largest_component, args.false_edges_count)
+        # Add false edges if necessary
+        if args.false_edges_count and not args.false_edge_ids:  #TODO: adapt for bipartite
+            largest_component = add_random_edges_igraph(args, largest_component, args.false_edges_count)
+
+        # Save the graph in "args"
+        args.igraph_graph = largest_component
 
         return largest_component
 
@@ -339,7 +397,7 @@ def load_graph(args, load_mode='igraph', weight_threshold=0):
 
 
 
-def add_random_edges_to_csrgraph(csr_graph, num_edges_to_add):
+def add_random_edges_to_csrgraph(args, csr_graph, num_edges_to_add):
     """
     Add a specified number of random edges to a graph in CSR format.
 
@@ -354,9 +412,7 @@ def add_random_edges_to_csrgraph(csr_graph, num_edges_to_add):
     for _ in range(num_edges_to_add):
         # Randomly select two different nodes
         node_a, node_b = np.random.choice(num_nodes, 2, replace=False)
-
-        # Add an edge between these nodes with a random weight
-
+        args.false_edge_ids.append(node_a, node_b)
         lil_graph[node_a, node_b] = 1
         lil_graph[node_b, node_a] = 1
 
@@ -480,3 +536,29 @@ def load_graph_sparse_weighted(args, df):
 
     return largest_component, component_node_ids
 
+
+def convert_graph_type(args, graph, desired_type="igraph"):
+    if desired_type == "igraph":
+        if not isinstance(graph, ig.Graph):
+            print("Graph is not an igraph instance. Converting to igraph...")
+            if args.igraph_graph is None:
+                igraph_graph = load_graph(args, load_mode="igraph")
+            else:
+                igraph_graph = args.igraph_graph
+            return igraph_graph
+        else:
+            return graph
+
+    elif desired_type == "sparse":
+        # Check if the graph is already a sparse matrix (csgraph)
+        if not isspmatrix(graph):
+            print("Graph is not a csrgraph instance. Converting to csrgraph...")
+            if hasattr(args, 'sparse_graph') and args.sparse_graph is not None:
+                return args.sparse_graph
+            else:
+                sparse_graph = load_graph(args, load_mode='sparse')
+                return sparse_graph
+        else:
+            return graph
+    else:
+        raise ValueError("Unsupported desired graph type. Currently, only 'sparse' and 'igraph' type is supported.")

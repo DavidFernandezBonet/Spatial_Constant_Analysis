@@ -14,23 +14,33 @@ from pecanpy import pecanpy as node2vec
 import torch
 import pymde
 import scipy.sparse as sp
+from scipy.sparse.csgraph import shortest_path
+from scipy.sparse.csgraph import connected_components
+from scipy.sparse.csgraph import breadth_first_order
+import networkx as nx
+from sklearn.manifold import MDS
 
 
-def get_mean_shortest_path(igraph_graph, return_all_paths=False):
-    if not isinstance(igraph_graph, ig.Graph):
-        raise ValueError("Graph is not of igraph type")
-    G = igraph_graph
-    # Compute the shortest paths for all pairs of nodes
-    shortest_paths = G.shortest_paths()
-    # Flatten the matrix to get a list of shortest path lengths
-    path_lengths = [path for row in shortest_paths for path in row if path > 0]
-    # Compute metrics
-    mean_shortest_path = np.mean(path_lengths)
 
-    if return_all_paths:
-        return mean_shortest_path, path_lengths
-    else:
+
+
+def get_mean_shortest_path(igraph_graph, return_all_paths=False, args=None):
+    # Check if args is provided and it has the attribute 'mean_shortest_paths'
+    if args is not None and args.mean_shortest_paths is not None and return_all_paths is False:
+        mean_shortest_path = args.mean_shortest_paths
         return mean_shortest_path
+    else:
+        if not isinstance(igraph_graph, ig.Graph):
+            raise ValueError("Graph is not of igraph type")
+        shortest_paths = igraph_graph.shortest_paths()
+        path_lengths = [path for row in shortest_paths for path in row if path > 0]
+        mean_shortest_path = np.mean(path_lengths)
+        if args is not None:
+            args.mean_shortest_paths = mean_shortest_path
+        if return_all_paths:
+            return mean_shortest_path, path_lengths
+        else:
+            return mean_shortest_path
 
 def get_local_clustering_coefficients(igraph_graph):
     if not isinstance(igraph_graph, ig.Graph):
@@ -220,7 +230,7 @@ def get_bipartite_degree_distribution(args, igraph_graph):
 
     return degree_distribution_set1, degree_distribution_set2
 
-def add_random_edges_igraph(graph, num_edges_to_add):
+def add_random_edges_igraph(args, graph, num_edges_to_add):
     possible_edges = [(i, j) for i in range(graph.vcount()) for j in range(i + 1, graph.vcount())]
     possible_edges = [edge for edge in possible_edges if not graph.are_connected(edge[0], edge[1])]
     random_edges = random.sample(possible_edges, num_edges_to_add)
@@ -443,6 +453,24 @@ class ImageReconstruction:
         elif self.node_embedding_mode == "landmark_isomap":
             node_embeddings = self.landmark_isomap()
 
+        elif self.node_embedding_mode == "spring_relaxation":
+            G = nx.from_scipy_sparse_array(self.graph)
+            pos = nx.spring_layout(G)
+            pos_array = np.array([pos[i] for i in range(len(pos))])
+            node_embeddings = pos_array
+
+        elif self.node_embedding_mode == "MDS":
+            if args.shortest_path_matrix is not None:
+                sp_matrix = args.shortest_path_matrix
+            else:
+                sp_matrix = compute_shortest_path_matrix_sparse_graph(self.graph, args=args)
+
+            mds = MDS(n_components=args.dim, dissimilarity='precomputed', random_state=42)
+            positions = mds.fit_transform(sp_matrix)
+            node_embeddings = positions
+
+
+
         elif self.node_embedding_mode == "PyMDE":
             retain_fraction = 1
 
@@ -539,7 +567,7 @@ class ImageReconstruction:
 
         return reduced_embeddings
 
-    def write_positions(self, args, np_positions, output_path):
+    def write_positions(self, args, np_positions, output_path, old_indices=False):
         # Write standard dataframe format:
         if args.dim == 2:
             positions_df = pd.DataFrame(np_positions, columns=['x', 'y'])
@@ -547,21 +575,30 @@ class ImageReconstruction:
             positions_df = pd.DataFrame(np_positions, columns=['x', 'y', 'z'])
         else:
             raise ValueError("Please input a valid dimension")
-        node_ids = range(args.num_points)
+
+        if old_indices and args.node_ids_map_old_to_new:  # Preserve old indicies, this will make it so it doesn't go from 0 to N-1
+            node_ids_map_new_to_old = {new: old for old, new in args.node_ids_map_old_to_new.items()}
+            node_ids = [node_ids_map_new_to_old[new_index] for new_index in sorted(node_ids_map_new_to_old)]
+            positions_df['node_ID'] = node_ids
+            # Define the output file path
+            title = args.args_title
+            output_file_path = f"{output_path}/positions_old_index_{title}.csv"
+            positions_df.to_csv(output_file_path, index=False)
+
+        node_ids = range(args.num_points)   # from 0 to N-1
         positions_df['node_ID'] = node_ids
-        # Define the output file path
         title = args.args_title
         output_file_path = f"{output_path}/positions_{title}.csv"
 
         # Write the DataFrame to a CSV file
-        positions_df.to_csv(output_file_path, index=True)
+        positions_df.to_csv(output_file_path, index=False)
     def reconstruct(self, do_write_positions=False, args=None):
         """
         Perform the entire reconstruction process and return the reconstructed points.
         """
         embeddings = self.compute_embeddings(args)
 
-        if self.node_embedding_mode != 'landmark_isomap':
+        if self.node_embedding_mode != 'landmark_isomap' or self.node_embedding_mode != 'spring_relaxation':
             reconstructed_points = self.reduce_dimensions(embeddings)
         else:  # in landmark isomap the result is already the reconstructed points
             reconstructed_points = embeddings
@@ -570,7 +607,7 @@ class ImageReconstruction:
             if args == None:
                 raise ValueError("Pass args to the function please")
             output_path = args.directory_map["reconstructed_positions"]
-            self.write_positions(args, np_positions=np.array(reconstructed_points), output_path=output_path)
+            self.write_positions(args, np_positions=np.array(reconstructed_points), output_path=output_path, old_indices=True)
         return reconstructed_points
 
 
@@ -716,9 +753,14 @@ def select_false_edges(graph, max_false_edges):
     random_false_edges = random.sample(possible_edges, min(len(possible_edges), max_false_edges))
     return random_false_edges
 
-def select_false_edges_csr(graph, max_false_edges):
+def select_false_edges_csr(graph, max_false_edges, args=None):
     """
-    Selects false edge candidates for a CSR graph (scipy.sparse.csr_matrix)
+    Selects false edge candidates for a CSR graph (scipy.sparse.csr_matrix).
+    Usage:         all_random_false_edges = select_false_edges_csr(sparse_graph, max_false_edges)
+
+        for num_edges in false_edges_list:
+            modified_graph = add_specific_random_edges_to_csrgraph(sparse_graph.copy(), all_random_false_edges,
+                                                                   num_edges)
     """
     num_nodes = graph.shape[0]
     possible_edges = [(i, j) for i in range(num_nodes) for j in range(i + 1, num_nodes)]
@@ -730,6 +772,9 @@ def select_false_edges_csr(graph, max_false_edges):
     # Randomly select false edges up to the specified limit
     random_false_edges = random.sample(possible_false_edges, min(len(possible_false_edges), max_false_edges))
 
+    if args:
+        args.false_edge_ids = random_false_edges
+
     return random_false_edges
 
 def add_specific_random_edges_igraph(graph, false_edges_ids, num_edges_to_add):
@@ -737,3 +782,190 @@ def add_specific_random_edges_igraph(graph, false_edges_ids, num_edges_to_add):
     edges_to_add = false_edges_ids[:num_edges_to_add]
     graph.add_edges(edges_to_add)
     return graph
+
+
+def compute_eigenvalues_laplacian_csgraph(graph):
+    # Convert the adjacency matrix to a sparse graph Laplacian
+    L = sp.csgraph.laplacian(graph, normed=True)
+
+    # Compute the second smallest eigenvalue
+    # We use which='SM' to request the smallest magnitude eigenvalues and k=2 since we need the second smallest
+    eigenvalues, eigenvectors = sp.linalg.eigsh(L, k=2, which='SM', return_eigenvectors=True)
+
+    # The second smallest eigenvalue
+    second_smallest_eigenvalue = eigenvalues[1]
+    return second_smallest_eigenvalue
+
+
+def find_central_node(distance_matrix):
+    """
+    Finds node that is closer to every other node
+    """
+    average_shortest_paths = distance_matrix.mean(axis=1)
+    central_node_index = np.argmin(average_shortest_paths)
+    return central_node_index
+
+
+def find_geometric_central_node(positions_df):
+    """ Find central node fore Euclidean coordinates"""
+    centroid_x = positions_df['x'].mean()
+    centroid_y = positions_df['y'].mean()
+
+    distances_to_centroid = np.sqrt((positions_df['x'] - centroid_x) ** 2 + (positions_df['y'] - centroid_y) ** 2)
+    closest_node_index = distances_to_centroid.idxmin()
+    central_node_ID = positions_df.iloc[closest_node_index]['node_ID']
+    return central_node_ID
+
+
+def compute_shortest_path_mapping_from_central_node(central_node_ID, positions_df, shortest_path_matrix):
+    central_node_index = positions_df.index[positions_df['node_ID'] == central_node_ID].tolist()[0]
+    central_node_distances = shortest_path_matrix[central_node_index]
+    node_ID_to_shortest_path_mapping = dict(zip(positions_df['node_ID'], central_node_distances))
+    return node_ID_to_shortest_path_mapping
+
+def compute_shortest_path_matrix_sparse_graph(sparse_graph, args=None):
+    from utils import convert_graph_type
+    sparse_graph = convert_graph_type(args, graph=sparse_graph, desired_type="sparse")
+    if args is None:
+        sp_matrix = np.array(shortest_path(csgraph=sparse_graph, directed=False))
+        return sp_matrix
+    elif args is not None and args.shortest_path_matrix is not None:
+        return args.shortest_path_matrix
+    else:
+        sp_matrix = np.array(shortest_path(csgraph=sparse_graph, directed=False))
+        args.shortest_path_matrix = sp_matrix
+        args.mean_shortest_path = sp_matrix.mean()
+        return sp_matrix
+
+
+def safely_remove_edges_sparse(csgraph, percentage=10):
+    """
+    Randomly removes a percentage of edges from a sparse graph (csgraph) without disconnecting it.
+    Might be not computationally efficient, as it is checking the connected components every time
+    """
+    if percentage < 0 or percentage > 100:
+        raise ValueError("Percentage must be between 0 and 100.")
+
+    graph = csgraph.tolil()
+    rows, cols = graph.nonzero()
+    edges = list(zip(rows, cols))
+    np.random.shuffle(edges)
+
+    total_edges = len(edges)
+    edges_to_remove = int((percentage / 100) * total_edges)
+    removed_edges = 0
+
+    for edge in edges:
+        if removed_edges >= edges_to_remove:
+            break
+        graph[edge[0], edge[1]] = 0
+        graph[edge[1], edge[0]] = 0
+        # Check if graph is connected
+        num_components, labels = connected_components(csgraph=graph, directed=False)
+        if num_components == 1:
+            removed_edges += 1  # Permanently remove the edge
+        else:
+
+            graph[edge[0], edge[1]] = 1
+            graph[edge[1], edge[0]] = 1
+
+    return graph.tocsr()
+
+
+def custom_bfs_csgraph(csgraph, min_nodes=3000):
+    """
+    Perform a custom BFS on a csgraph starting from a given node until
+    at least min_nodes are visited or the entire graph is traversed.
+
+    Parameters:
+    - csgraph: CSR matrix representing the graph.
+    - start_node: The starting node for BFS.
+    - min_nodes: Minimum number of nodes to visit.
+
+    Returns:
+    - visited_nodes: Indices of the nodes visited during BFS.
+    """
+    start_node = 0  # random start node
+    n_nodes = csgraph.shape[0]
+    visited = np.zeros(n_nodes, dtype=bool)
+    queue = [start_node]
+    visited_nodes = []
+    while queue and len(visited_nodes) < min_nodes:
+        current_node = queue.pop(0)
+
+        if not visited[current_node]:
+            visited[current_node] = True
+            visited_nodes.append(current_node)
+
+            # Get neighbors of the current node
+            neighbors = csgraph.indices[csgraph.indptr[current_node]:csgraph.indptr[current_node + 1]]
+
+            for neighbor in neighbors:
+                if not visited[neighbor]:
+                    queue.append(neighbor)
+
+    return visited_nodes
+
+
+
+
+
+
+
+def sample_csgraph_subgraph(args, csgraph, min_nodes=3000):
+    """
+    Sample a subgraph from a csgraph using a custom BFS to visit at least min_nodes,
+    write the edge list of the sampled subgraph, and maintain a mapping to original indices.
+    """
+    from utils import custom_bfs_csgraph  # Ensure this is implemented and imported correctly
+
+
+    visited_nodes = custom_bfs_csgraph(csgraph, min_nodes=min_nodes)
+    mask = np.zeros(csgraph.shape[0], dtype=bool)
+    mask[visited_nodes] = True
+    subgraph = csgraph[mask, :][:, mask]
+    sorted_visited_nodes = sorted(visited_nodes)
+
+
+
+    args.num_points = len(visited_nodes)
+    rows, cols = subgraph.nonzero()
+
+
+
+    filtered_edges = [(i, j) for i, j in zip(rows, cols) if i < j]
+    edge_df = pd.DataFrame(filtered_edges, columns=['source', 'target'])
+
+    edge_list_folder = args.directory_map["edge_lists"]
+    edge_list_title = f"edge_list_{args.args_title}_subgraph.csv"  # Assuming 'args.title' exists
+    args.edge_list_title = edge_list_title  # update the edge list title
+    edge_df.to_csv(f"{edge_list_folder}/{edge_list_title}", index=False)
+
+
+
+
+    if args.node_ids_map_old_to_new is not None:  # TODO: case where we have originally a disconnected subgraph. Not sure if this works, and it is relevant for experimental data that is disconnected
+        # Reverse the mapping to get from new (csgraph) indices to old (original) indices
+        new_to_old_index_mapping = {new: old for old, new in args.node_ids_map_old_to_new.items()}
+        original_indices = [new_to_old_index_mapping.get(idx, idx) for idx in sorted_visited_nodes]
+    else:
+        original_indices = sorted_visited_nodes
+
+
+        # Extract edges from the subgraph and map indices back to original
+    rows, cols = subgraph.nonzero()
+
+    filtered_edges = [(original_indices[i], original_indices[j]) for i, j in zip(rows, cols) if i < j]
+    edge_list_df = pd.DataFrame(filtered_edges, columns=['source', 'target'])
+
+
+    # Define the file path and write the DataFrame to a CSV file
+    edge_list_folder = args.directory_map["edge_lists"]
+    edge_list_title = f"subgraph_edge_list_with_old_indices_{args.args_title}.csv"
+    edge_list_df.to_csv(f"{edge_list_folder}/{edge_list_title}", index=False)
+
+    # Update args with a new mapping from subgraph BFS indices back to original graph indices
+    # This step might be adjusted based on your needs for using this mapping later
+
+    args.node_ids_map_old_to_new = {original: idx for idx, original in enumerate(original_indices)}
+    return subgraph

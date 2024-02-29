@@ -8,6 +8,7 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import shortest_path
 from scipy.stats import pearsonr
 from sklearn.metrics import r2_score
+from scipy.sparse.csgraph import breadth_first_order
 
 font_size = 24
 plt.style.use(['no-latex', 'nature'])
@@ -308,6 +309,7 @@ def run_dimension_prediction(args, distance_matrix, dist_threshold=6, central_no
     uncertainty_predicted_dimension = perr[indx]
     results_dimension_prediction = {"predicted_dimension": predicted_dimension, "r2": r_squared,
                                     "std_predicted_dimension": uncertainty_predicted_dimension}
+    print("UNCERTAINTY PREDICTED DIMENSION", uncertainty_predicted_dimension)
 
 
     ### Surface prediction
@@ -325,6 +327,64 @@ def run_dimension_prediction(args, distance_matrix, dist_threshold=6, central_no
     curve_fitting_object.plot_fit_with_uncertainty(func_fit, "Distance", "Node Count",
                                                    "Dimension Prediction", save_path)
     return results_dimension_prediction
+
+
+
+def avg_shortest_path_mean_line_segment(args, sparse_graph, distance_matrix, dist_threshold=6, central_node_index=None):
+
+    distance_count_matrix = compute_node_counts_matrix(distance_matrix)
+    david_thresh = dist_threshold
+
+    ## This is to find a central node
+    row_sums = np.sum(distance_count_matrix[:, 0:david_thresh], axis=1)
+    max_sum_index = np.argmax(row_sums)
+    print("MAX SUM NETWORK", np.sum(distance_count_matrix[:, 0:david_thresh][max_sum_index]))
+    print(max_sum_index, central_node_index)
+
+
+    ### Select Central node
+    if central_node_index:
+        count_by_distance_average = distance_count_matrix[central_node_index]
+        print("count based on euclidean", count_by_distance_average)
+        print(np.cumsum(count_by_distance_average))
+    count_by_distance_average = distance_count_matrix[max_sum_index]
+    print("count based on network", count_by_distance_average)
+    print(np.cumsum(count_by_distance_average))
+
+    msp = compute_subgraph_mean_shortest_path(sparse_graph=sparse_graph, distance_matrix=distance_matrix,
+                                        central_node_index=max_sum_index, david_thresh=david_thresh)
+
+    print("shell distance", david_thresh)
+    print("All-pairs mean shortest path", msp)
+    print("Predicted (euclidean) MSP 2D", 0.9*david_thresh)
+    print("Predicted (euclidean) MSP 3D", 1.02*david_thresh)
+
+    max_distance = np.max(distance_matrix[distance_matrix < np.inf])
+
+
+    ### Compute MSP for different thresholds
+    thresholds = range(1, int(max_distance) -5)  # Assuming integer distances
+    msp_values = []
+    for david_thresh in thresholds:
+        print("current distance threshold", david_thresh)
+        msp = compute_subgraph_mean_shortest_path(sparse_graph, distance_matrix, max_sum_index, david_thresh)
+        msp_values.append(msp)
+
+    # Plotting
+    plt.figure(figsize=(10, 6))
+    plt.plot(thresholds, msp_values, label='Computed MSP')
+    plt.plot(thresholds, [0.9 * d for d in thresholds], '--', label='Predicted MSP 2D (0.9 * distance)')
+    plt.plot(thresholds, [1.02 * d for d in thresholds], '--', label='Predicted MSP 3D (1.02 * distance)')
+
+    plt.xlabel('Distance Threshold')
+    plt.ylabel('Mean Shortest Path')
+    plt.title('Mean Shortest Path vs. Distance Threshold')
+    plt.legend()
+
+    plt.show()
+
+    return
+
 
 
 def reorder_sp_matrix_so_index_matches_nodeid(igraph_graph, sp_matrix):
@@ -554,142 +614,195 @@ def compute_centered_average_sp_distance(args, count_by_distance_average, shell_
     plot_folder = args.directory_map['centered_msp']
     plt.savefig(f"{plot_folder}/centered_msp_difference_{args.args_title}.svg")
 
-# Parameters
-args = GraphArgs()
-args.directory_map = create_project_structure()  # creates folder and appends the directory map at the args
-args.proximity_mode = "knn_bipartite"
-args.dim = 2
-
-args.intended_av_degree = 10
-args.num_points = 5000
-### Add random edges? See efect in the dimensionality here
-num_edges_to_add = 0
 
 
-simulation_or_experiment = "simulation"
-load_mode = 'sparse'
+
+def compute_subgraph_mean_shortest_path(sparse_graph, distance_matrix, central_node_index, david_thresh):
+    """
+    Compute the mean shortest path distance of all pairs within a subgraph defined by a BFS from the central node
+    up to a specified distance.
+
+    Parameters:
+    - sparse_graph: A sparse matrix representation of the graph.
+    - distance_matrix: A dense matrix representing the shortest path distances between all pairs of nodes in the graph.
+    - central_node_index: The index of the central node.
+    - david_thresh: The maximum distance from the central node to include nodes in the subgraph.
+
+    Returns:
+    - The mean shortest path distance of all pairs within the subgraph.
+    """
+    n_nodes = sparse_graph.shape[0]
+    visited = np.zeros(n_nodes, dtype=bool)
+    queue = [(central_node_index, 0)]
+    visited[central_node_index] = True
+    nodes_in_subgraph = []
+
+    while queue:
+        current_node, depth = queue.pop(0)
+        if depth <= david_thresh:
+            nodes_in_subgraph.append(current_node)
+
+            neighbors = sparse_graph[current_node].nonzero()[1]
+            for neighbor in neighbors:
+                if not visited[neighbor]:
+                    visited[neighbor] = True
+                    queue.append((neighbor, depth + 1))
+
+    nodes_in_subgraph = np.unique(nodes_in_subgraph)
+    subgraph_distances = distance_matrix[nodes_in_subgraph[:, None], nodes_in_subgraph]
+
+    # Compute the mean shortest path distance, excluding infinity and self-loops
+    valid_distances = subgraph_distances[np.isfinite(subgraph_distances) & (subgraph_distances > 0)]
+    mean_distance = np.mean(valid_distances)
+
+    return mean_distance
 
 
-if simulation_or_experiment == "experiment":
-    # # # #Experimental
-    # our group:
-    # subgraph_2_nodes_44_edges_56_degree_2.55.pickle  # subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle  # subgraph_8_nodes_160_edges_179_degree_2.24.pickle
-    # unfiltered pixelgen:
-    # pixelgen_cell_2_RCVCMP0000594.csv, pixelgen_cell_1_RCVCMP0000208.csv, pixelgen_cell_3_RCVCMP0000085.csv
-    # pixelgen_edgelist_CD3_cell_2_RCVCMP0000009.csv, pixelgen_edgelist_CD3_cell_1_RCVCMP0000610.csv, pixelgen_edgelist_CD3_cell_3_RCVCMP0000096.csv
-    # filtered pixelgen:
-    # pixelgen_processed_edgelist_Sample01_human_pbmcs_unstimulated_cell_3_RCVCMP0000563.csv
-    # pixelgen_processed_edgelist_Sample01_human_pbmcs_unstimulated_cell_2_RCVCMP0000828.csv
-    # pixelgen_processed_edgelist_Sample07_pbmc_CD3_capped_cell_3_RCVCMP0000344.csv (stimulated cell)
-    # pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv (treated cell)
-    # shuai_protein_edgelist_unstimulated_RCVCMP0000133_neigbours_s_proteinlist.csv  (shuai protein list)
-    # pixelgen_processed_edgelist_shuai_RCVCMP0000073_cd3_cell_1_RCVCMP0000073.csv (shuai error correction)
-    # weinstein:
-    # weinstein_data_january_corrected.csv
+def main():
+    # Parameters
+    args = GraphArgs()
+    args.directory_map = create_project_structure()  # creates folder and appends the directory map at the args
+    args.proximity_mode = "knn"
+    args.dim = 2
 
-    args.edge_list_title = "weinstein_data_january_corrected.csv"
-    # args.edge_list_title = "mst_N=1024_dim=2_lattice_k=15.csv"  # Seems to have dimension 1.5
+    args.intended_av_degree = 6
+    args.num_points = 1000
+    ### Add random edges? See efect in the dimensionality here
+    num_edges_to_add = 0
 
-    weighted = True
-    weight_threshold = 10
 
-    if os.path.splitext(args.edge_list_title)[1] == ".pickle":
-        write_nx_graph_to_edge_list_df(args)  # activate if format is .pickle file
+    simulation_or_experiment = "simulation"
+    load_mode = 'sparse'
 
-    if not weighted:
+
+    if simulation_or_experiment == "experiment":
+        # # # #Experimental
+        # our group:
+        # subgraph_2_nodes_44_edges_56_degree_2.55.pickle  # subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle  # subgraph_8_nodes_160_edges_179_degree_2.24.pickle
+        # unfiltered pixelgen:
+        # pixelgen_cell_2_RCVCMP0000594.csv, pixelgen_cell_1_RCVCMP0000208.csv, pixelgen_cell_3_RCVCMP0000085.csv
+        # pixelgen_edgelist_CD3_cell_2_RCVCMP0000009.csv, pixelgen_edgelist_CD3_cell_1_RCVCMP0000610.csv, pixelgen_edgelist_CD3_cell_3_RCVCMP0000096.csv
+        # filtered pixelgen:
+        # pixelgen_processed_edgelist_Sample01_human_pbmcs_unstimulated_cell_3_RCVCMP0000563.csv
+        # pixelgen_processed_edgelist_Sample01_human_pbmcs_unstimulated_cell_2_RCVCMP0000828.csv
+        # pixelgen_processed_edgelist_Sample07_pbmc_CD3_capped_cell_3_RCVCMP0000344.csv (stimulated cell)
+        # pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv (treated cell)
+        # shuai_protein_edgelist_unstimulated_RCVCMP0000133_neigbours_s_proteinlist.csv  (shuai protein list)
+        # pixelgen_processed_edgelist_shuai_RCVCMP0000073_cd3_cell_1_RCVCMP0000073.csv (shuai error correction)
+        # weinstein:
+        # weinstein_data_january_corrected.csv
+
+        args.edge_list_title = "weinstein_data_january_corrected.csv"
+        # args.edge_list_title = "mst_N=1024_dim=2_lattice_k=15.csv"  # Seems to have dimension 1.5
+
+        weighted = True
+        weight_threshold = 10
+
+        if os.path.splitext(args.edge_list_title)[1] == ".pickle":
+            write_nx_graph_to_edge_list_df(args)  # activate if format is .pickle file
+
+        if not weighted:
+            sparse_graph, _ = load_graph(args, load_mode='sparse')
+        else:
+            sparse_graph, _ = load_graph(args, load_mode='sparse', weight_threshold=weight_threshold)
+        # plot_graph_properties(args, igraph_graph_original)  # plots clustering coefficient, degree dist, also stores individual spatial constant...
+
+    elif simulation_or_experiment == "simulation":
+        # # # 1 Simulation
+        create_proximity_graph.write_proximity_graph(args)
         sparse_graph, _ = load_graph(args, load_mode='sparse')
+
+        ## Uncomment if you want original data
+        # ## Original data    edge_list = read_edge_list(args)
+        # original_positions = read_position_df(args=args)
+        # # plot_original_or_reconstructed_image(args, image_type="original", edges_df=edge_list)
+        # original_dist_matrix = compute_distance_matrix(original_positions)
     else:
-        sparse_graph, _ = load_graph(args, load_mode='sparse', weight_threshold=weight_threshold)
-    # plot_graph_properties(args, igraph_graph_original)  # plots clustering coefficient, degree dist, also stores individual spatial constant...
-
-elif simulation_or_experiment == "simulation":
-    # # # 1 Simulation
-    create_proximity_graph.write_proximity_graph(args)
-    sparse_graph, _ = load_graph(args, load_mode='sparse')
-    ## Original data    edge_list = read_edge_list(args)
-    original_positions = read_position_df(args=args)
-    # plot_original_or_reconstructed_image(args, image_type="original", edges_df=edge_list)
-    original_dist_matrix = compute_distance_matrix(original_positions)
-else:
-    raise ValueError("Please input a valid simulation or experiment mode")
+        raise ValueError("Please input a valid simulation or experiment mode")
 
 
 
 
 
 
-sparse_graph = add_random_edges_to_csrgraph(sparse_graph, num_edges_to_add=num_edges_to_add)
-if num_edges_to_add:
-    args.args_title = args.args_title + f'_false_edges={num_edges_to_add}'
+    sparse_graph = add_random_edges_to_csrgraph(sparse_graph, num_edges_to_add=num_edges_to_add)
+    if num_edges_to_add:
+        args.args_title = args.args_title + f'_false_edges={num_edges_to_add}'
 
-# Compute shortest path matrix
-sp_matrix = np.array(shortest_path(csgraph=sparse_graph, directed=False))
+    # Compute shortest path matrix
+    sp_matrix = np.array(shortest_path(csgraph=sparse_graph, directed=False))
 
-# node_of_interest = 0
-# # Find nodes at distance 3 and 4
-# nodes_at_distance_3 = find_nodes_at_distance(sp_matrix, node_of_interest, 3)
-# nodes_at_distance_4 = find_nodes_at_distance(sp_matrix, node_of_interest, 4)
-# distances = calculate_distances_between_nodes(sp_matrix, nodes_at_distance_3, nodes_at_distance_4)
-# plot_barplot(args, distances, "distances_3_4")
-
-
-msp = sp_matrix.mean()
-print("AVERAGE SHORTEST PATH", msp)
-print("RANDOM NETWORK AV SP", np.log(args.num_points)/np.log(args.average_degree))
-print("ESTIMATED LATTICE SP", (args.num_points/args.average_degree)**(1/args.dim))
-print("ESTIMATED LATTICE SP", (args.num_points**(1/args.dim) /args.average_degree))
-print("ESTIMATED LATTICE SP CURATED 2D", 1.2*(args.num_points/args.average_degree)**(1/args.dim))
-print("ESTIMATED LATTICE SP CURATED 3D", (1.2*0.75)*(args.num_points/args.average_degree)**(1/args.dim))
-print("ESTIMATED LATTICE SP CURATED 3D inverse", (1.2*(4/3))*(args.num_points/args.average_degree)**(1/args.dim))
-print("ESTIMATED LATTICE SP CURATED 2D BIPARTITE", 1.2*(args.num_points/(args.average_degree*2))**(1/args.dim))
-print("ESTIMATED LATTICE SP CURATED 3D BIPARTITE", (1.2*(4/3))*(args.num_points/(args.average_degree*2))**(1/args.dim))
-print("ESTIMATED LATTICE SP CURATED 3D 1.1", (1.2*(1.1))*(args.num_points/args.average_degree)**(1/args.dim))
-# np.set_printoptions(threshold=np.inf)
-# sp_matrix = np.array(sparse_graph.distances())
-# reordered_sp_matrix = reorder_sp_matrix_so_index_matches_nodeid(sparse_graph, sp_matrix)
-
-# edge1, edge2 = edge_list.iloc[0][0], edge_list.iloc[0][1]
-# print(edge1, edge2)
-# correlation = compute_correlation_between_distance_matrices(original_dist_matrix, sp_matrix)
-# print("original", original_dist_matrix[edge1][edge2])
-# print("shortest path", sp_matrix[edge1][edge2])
-# print("Correlation:", correlation)
+    # node_of_interest = 0
+    # # Find nodes at distance 3 and 4
+    # nodes_at_distance_3 = find_nodes_at_distance(sp_matrix, node_of_interest, 3)
+    # nodes_at_distance_4 = find_nodes_at_distance(sp_matrix, node_of_interest, 4)
+    # distances = calculate_distances_between_nodes(sp_matrix, nodes_at_distance_3, nodes_at_distance_4)
+    # plot_barplot(args, distances, "distances_3_4")
 
 
-# # Original dimension prediction
-# central_node_index = run_dimension_prediction_continuous(args, distance_matrix=original_dist_matrix, num_bins=50)
+    msp = sp_matrix.mean()
+    print("AVERAGE SHORTEST PATH", msp)
+    print("RANDOM NETWORK AV SP", np.log(args.num_points)/np.log(args.average_degree))
+    print("ESTIMATED LATTICE SP", (args.num_points/args.average_degree)**(1/args.dim))
+    print("ESTIMATED LATTICE SP", (args.num_points**(1/args.dim) /args.average_degree))
+    print("ESTIMATED LATTICE SP CURATED 2D", 1.2*(args.num_points/args.average_degree)**(1/args.dim))
 
-## Network dimension prediction
-dist_threshold = int(msp) - 1  #finite size effects, careful
-run_dimension_prediction(args, distance_matrix=sp_matrix, dist_threshold=dist_threshold, central_node_index=None)
+    print("ESTIMATED LATTICE SP CURATED 3D inverse", (1.2*(4/3))*(args.num_points/args.average_degree)**(1/args.dim))
+    print("ESTIMATED LATTICE SP CURATED 2D BIPARTITE", 1.2*(args.num_points/(args.average_degree*2))**(1/args.dim))
+    print("ESTIMATED LATTICE SP CURATED 3D BIPARTITE", (1.2*(4/3))*(args.num_points/(args.average_degree*2))**(1/args.dim))
+    print("ESTIMATED LATTICE SP CURATED 3D 1.1", (1.2*(1.1))*(args.num_points/args.average_degree)**(1/args.dim))
+    # np.set_printoptions(threshold=np.inf)
+    # sp_matrix = np.array(sparse_graph.distances())
+    # reordered_sp_matrix = reorder_sp_matrix_so_index_matches_nodeid(sparse_graph, sp_matrix)
+
+    # edge1, edge2 = edge_list.iloc[0][0], edge_list.iloc[0][1]
+    # print(edge1, edge2)
+    # correlation = compute_correlation_between_distance_matrices(original_dist_matrix, sp_matrix)
+    # print("original", original_dist_matrix[edge1][edge2])
+    # print("shortest path", sp_matrix[edge1][edge2])
+    # print("Correlation:", correlation)
 
 
+    # # Original dimension prediction
+    # central_node_index = run_dimension_prediction_continuous(args, distance_matrix=original_dist_matrix, num_bins=50)
+
+    ## Network dimension prediction  # TODO: main function!
+    dist_threshold = int(msp) - 1  #finite size effects, careful
+    run_dimension_prediction(args, distance_matrix=sp_matrix, dist_threshold=dist_threshold, central_node_index=None)
 
 
-
-# igraph_graph = load_graph(args, load_mode='igraph')
-#
-# edge_list = read_edge_list(args)
-# original_positions = read_position_df(args=args)
-# original_dist_matrix = compute_distance_matrix(original_positions)
-#
-#
-#
-# # np.set_printoptions(threshold=np.inf)
-# sp_matrix = np.array(igraph_graph.distances())
-# reordered_sp_matrix = reorder_sp_matrix_so_index_matches_nodeid(igraph_graph, sp_matrix)
-#
-# edge1, edge2 = edge_list.iloc[0][0], edge_list.iloc[0][1]
-# print(edge1, edge2)
-# correlation = compute_correlation_between_distance_matrices(original_dist_matrix, reordered_sp_matrix)
-# print("original", original_dist_matrix[edge1][edge2])
-# print("shortest path", sp_matrix[edge1][edge2])
-# print("Correlation:", correlation)
-#
-# # dist_threshold = 6  # Get the 1st six columns (finite size effects)
-# # run_dimension_prediction(args, distance_matrix=sp_matrix, dist_threshold=dist_threshold)
+    # ## All pairs average shortest path from central node prediction
+    # dist_threshold = int(msp) - 1  #finite size effects, careful
+    # avg_shortest_path_mean_line_segment(args, sparse_graph, sp_matrix, dist_threshold=10, central_node_index=None)
 
 
 
 
+
+    # igraph_graph = load_graph(args, load_mode='igraph')
+    #
+    # edge_list = read_edge_list(args)
+    # original_positions = read_position_df(args=args)
+    # original_dist_matrix = compute_distance_matrix(original_positions)
+    #
+    #
+    #
+    # # np.set_printoptions(threshold=np.inf)
+    # sp_matrix = np.array(igraph_graph.distances())
+    # reordered_sp_matrix = reorder_sp_matrix_so_index_matches_nodeid(igraph_graph, sp_matrix)
+    #
+    # edge1, edge2 = edge_list.iloc[0][0], edge_list.iloc[0][1]
+    # print(edge1, edge2)
+    # correlation = compute_correlation_between_distance_matrices(original_dist_matrix, reordered_sp_matrix)
+    # print("original", original_dist_matrix[edge1][edge2])
+    # print("shortest path", sp_matrix[edge1][edge2])
+    # print("Correlation:", correlation)
+    #
+    # # dist_threshold = 6  # Get the 1st six columns (finite size effects)
+    # # run_dimension_prediction(args, distance_matrix=sp_matrix, dist_threshold=dist_threshold)
+
+
+
+if __name__ == "__main__":
+    main()
 

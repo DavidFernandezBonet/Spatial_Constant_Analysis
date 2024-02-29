@@ -4,6 +4,8 @@ from dimension_prediction import make_dimension_prediction_plot
 # # Euclidean and Shortest Path correlation plot
 # make_euclidean_sp_correlation_plot()
 
+# TODO: add shortest path from central node visualization with false edges
+
 # # Several dimension predictions
 make_dimension_prediction_plot()
 

@@ -310,6 +310,7 @@ def compute_proximity_graph(args, positions):
         raise ValueError("Please input a valid proximity graph")
 
 
+
     if base_proximity_mode == "epsilon-ball" or base_proximity_mode == "epsilon_bipartite":
         radius = compute_epsilon_ball_radius(density=args.num_points, intended_degree=args.intended_av_degree,
                                              dim=args.dim, base_proximity_mode=base_proximity_mode)
@@ -317,8 +318,9 @@ def compute_proximity_graph(args, positions):
 
     if base_proximity_mode== "knn":
         k = args.intended_av_degree
-        #k = args.intended_av_degree + 1  # KNN counts itself, so adding +1
+
         distances, indices = compute_knn_graph(positions, k)
+        print("K", k)
     elif base_proximity_mode == "epsilon-ball":
         distances, indices = compute_epsilon_ball_graph(positions, radius)
         average_degree = sum(len(element) for element in indices)/len(indices)

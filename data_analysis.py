@@ -114,7 +114,7 @@ def get_spatial_constant_results(args, mean_shortest_path, average_degree, num_n
     spatial_constant_results = {
         'proximity_mode': proximity_mode,
         'average_degree': average_degree,
-        'intended_av_degree': args.intended_av_degree,
+        # 'intended_av_degree': args.intended_av_degree,  # TODO: commenting out this, intended degree should not be relevant
         'mean_shortest_path': mean_shortest_path,
         'num_nodes': num_nodes,
         'dim': dim,
@@ -144,7 +144,7 @@ def plot_graph_properties(args, igraph_graph):
     Plot clustering coefficient and degree distribution
     Both for unipartite and bipartite grpahs
     """
-
+    igraph_graph = convert_graph_type(args, graph=igraph_graph, desired_type='igraph')
 
     if args.is_bipartite:
         # If the graph is bipartite, compute properties separately for each set
@@ -187,7 +187,7 @@ def plot_graph_properties(args, igraph_graph):
     # Store spatial constant results
     spatial_constant_results = get_spatial_constant_results(args, mean_shortest_path, average_degree=args.average_degree,
                                                             num_nodes=args.num_points)
-    spatial_constant_results_df = df = pd.DataFrame([spatial_constant_results])
+    spatial_constant_results_df = pd.DataFrame([spatial_constant_results])
     df_path = args.directory_map["s_constant_results"]
     spatial_constant_results_df.to_csv(f"{df_path}/s_constant_results_{args.args_title}.csv", index=False)
 
@@ -284,16 +284,20 @@ def run_simulation_graph_growth(args, start_n_nodes=100, n_graphs=10, num_random
     return results_df, fit_S, r_squared_S, fit_dim, r_squared_dim
 
 
-def run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=10, graph=None, add_false_edges=False,
-                                     add_mst=False, parallel=True, false_edge_list=[0,1,2,3,4]):
+def run_simulation_subgraph_sampling(args, graph, size_interval=100, n_subgraphs=10, add_false_edges=False,
+                                     add_mst=False, parallel=True, false_edge_list=[0,1,2,3,4],
+                                     plot_spatial_constant_against_false_edges=False):
     # TODO: introduce option to not parallelize (can run into memory problems)
 
-    # Set parallel = False if you run into memory issues
-    if graph is None:
-        # Load the initial graph
-        igraph_graph = load_graph(args, load_mode='igraph')
-    else:
-        igraph_graph = graph.copy()  # Create a copy if graph is provided
+    # Needs to be an igraph
+    igraph_graph = convert_graph_type(args, graph, desired_type='igraph')
+
+    # # Set parallel = False if you run into memory issues
+    # if graph is None:
+    #     # Load the initial graph
+    #     igraph_graph = load_graph(args, load_mode='igraph')
+    # else:
+    #     igraph_graph = graph.copy()  # Create a copy if graph is provided
 
     if args.num_points < 10000:   # for too large of a graph it is difficult to get the full shortest path, #TODO: implement sampling
         size_subgraph_list = np.arange(50, args.num_points, size_interval)
@@ -368,15 +372,16 @@ def run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=10, gr
             # Spatial constant against subgraph size
             plot_spatial_constant_against_subgraph_size_with_false_edges(args, all_results, false_edge_list)
 
-            # Spatial constant against false edge count
-            processed_false_edge_series = aggregate_spatial_constant_by_size(all_results, false_edge_list)
-            plot_false_edges_against_spatial_constant(args, processed_false_edge_series)
+            if plot_spatial_constant_against_false_edges:
+                # Spatial constant against false edge count
+                processed_false_edge_series = aggregate_spatial_constant_by_size(all_results, false_edge_list)
+                plot_false_edges_against_spatial_constant(args, processed_false_edge_series)
 
         csv_filename = f"spatial_constant_subgraph_sampling_{args.args_title}_with_false_edges.csv"
         combined_df = pd.concat(all_results, ignore_index=True)
         combined_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}", index=False)
 
-    else:
+    else:   # If we don't add false edges
         #     # Generate subgraphs with BFS
         print("running normal bfs")
         igraph_graph_copy = igraph_graph.copy()
@@ -396,6 +401,11 @@ def run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=10, gr
         plot_sample_spatial_constant(args, results_df)
         plot_spatial_constant_against_subgraph_size(args, results_df)
         combined_df = results_df
+
+    if 'experimental' in args.proximity_mode:
+        args.false_edges_count = 0
+        args.proximity_mode = 'experimental'
+
 
     return combined_df
 
@@ -625,3 +635,16 @@ def aggregate_spatial_constant_by_size(dataframes, false_edge_list):
         }
 
     return aggregated_data
+
+
+def compute_several_sp_matrices(args, sparse_graph, false_edges_list):
+    sp_matrices = []
+    max_false_edges = max(false_edges_list)  # Assume false_edge_list is defined
+    all_random_false_edges = select_false_edges_csr(sparse_graph, max_false_edges, args=args)
+
+    for num_edges in false_edges_list:
+        modified_graph = add_specific_random_edges_to_csrgraph(sparse_graph.copy(), all_random_false_edges, num_edges)
+        shortest_path_matrix = compute_shortest_path_matrix_sparse_graph(modified_graph)
+        sp_matrices.append(shortest_path_matrix)
+    return sp_matrices
+

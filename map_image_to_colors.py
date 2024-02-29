@@ -7,9 +7,9 @@ def load_image(image_path):
     return Image.open(image_path)
 
 
-def map_points_to_colors(original_positions_df, filename):
+def map_points_to_colors(original_positions_df, filename, args):
     # Load the image
-    args = GraphArgs()
+
     image_folder = args.directory_map["colorfolder"]
     image_path = f'{image_folder}/{filename}'  # Update this to the path of your .jpg image
 

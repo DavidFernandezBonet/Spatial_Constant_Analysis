@@ -7,10 +7,14 @@ import seaborn as sns
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 
-from map_image_to_colors import map_points_to_colors
+
 
 import scienceplots
 import os
+from scipy.interpolate import griddata
+
+from algorithms import find_geometric_central_node, compute_shortest_path_mapping_from_central_node
+from map_image_to_colors import map_points_to_colors
 
 
 plt.style.use(['science', 'nature'])
@@ -215,9 +219,8 @@ def plot_clustering_coefficient_distribution(args, clustering_coefficients, titl
         plt.ylabel('Frequency')
         plt.legend([f"Mean Clustering Coefficient: {mean_clustering_coefficient:.2f}"])
 
-    print("hello", args.args_title)
     plot_folder = args.directory_map['plots_clustering_coefficient']
-    plt.savefig(f"{plot_folder}/clust_coef_{args.args_title}.png")
+    plt.savefig(f"{plot_folder}/clust_coef_{args.args_title}", format="png")
 
 
 
@@ -255,7 +258,8 @@ def plot_degree_distribution(args, degree_distribution, title="Degree Distributi
         plt.legend([f"Average Degree: {average_degree:.2f}"])
 
     plot_folder = args.directory_map['plots_degree_distribution']
-    plt.savefig(f"{plot_folder}/degree_dist_{args.args_title}")
+    print(args.args_title)
+    plt.savefig(f"{plot_folder}/degree_dist_{args.args_title}", format="png")
     plt.close()
 
 def plot_shortest_path_distribution(args, shortest_path_dist, mean_shortest_path, title="Shortest Path Distribution"):
@@ -273,7 +277,7 @@ def plot_shortest_path_distribution(args, shortest_path_dist, mean_shortest_path
     plt.legend()
 
     plot_folder = args.directory_map['plots_shortest_path_distribution']
-    plt.savefig(f"{plot_folder}/plots_shortest_path_distribution_{args.args_title}")
+    plt.savefig(f"{plot_folder}/plots_shortest_path_distribution_{args.args_title}", format="png")
 
 
 
@@ -397,7 +401,16 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
 
         else:
             if simulated_colors:
-                id_to_color = args.id_to_color_simulation
+
+                if image_type == "reconstructed" and args.node_ids_map_old_to_new is not None:
+                    id_to_color = {}
+                    for old_index, new_index in args.node_ids_map_old_to_new.items():
+                        id_to_color[new_index] = args.id_to_color_simulation[old_index]
+
+                else:
+                    id_to_color = args.id_to_color_simulation
+
+
                 colors = [id_to_color.get(node_id, 'b')  # Default to 'b' if node_id is not in the dictionary
                           for node_id in positions_df['node_ID']]
 
@@ -435,11 +448,12 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
         else:
             positions_df = pd.read_csv(f"{original_position_folder}/{position_filename}")
 
-        # Check if the colorfile is an image
-        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.svg']
-        colorfile_extension = os.path.splitext(args.colorfile)[1].lower()
-        if colorfile_extension in image_extensions:
-            args.id_to_color_simulation = map_points_to_colors(positions_df, args.colorfile)
+        if args.colorfile is not None:
+            # Check if the colorfile is an image
+            image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.svg']
+            colorfile_extension = os.path.splitext(args.colorfile)[1].lower()
+            if colorfile_extension in image_extensions:
+                args.id_to_color_simulation = map_points_to_colors(positions_df, args.colorfile, args=args)
 
     elif image_type == "reconstructed":
         edge_list_folder = args.directory_map["edge_lists"]
@@ -489,6 +503,13 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
         else:
             plot_positions(ax, positions_df, args)
 
+        # TODO: check that this makes sense for every case where we have old and new indices
+        ## This applies the new mapping so the (new) edges get the right positions
+        if args.node_ids_map_old_to_new is not None and image_type == 'original':
+            positions_df['node_ID'] = positions_df['node_ID'].map(args.node_ids_map_old_to_new)
+            positions_df = positions_df.dropna()
+            positions_df['node_ID'] = positions_df['node_ID'].astype(int)
+
     if plot_weights_against_distance:
         distances = []
         weights = []
@@ -506,7 +527,7 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
         edge_alpha = 1 if (row['source'], row['target']) in args.false_edge_ids or (
         row['target'], row['source']) in args.false_edge_ids else 0.2
 
-        edge_linewidth = 10 if (row['source'], row['target']) in args.false_edge_ids or (
+        edge_linewidth = 1 if (row['source'], row['target']) in args.false_edge_ids or (  #TODO: adjust linewidth
         row['target'], row['source']) in args.false_edge_ids else 0.5
 
         if args.dim == 3:
@@ -525,13 +546,16 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
     if image_type == "original":
         plot_folder = args.directory_map["plots_original_image"]
         print(args.args_title)
-        plt.savefig(f"{plot_folder}/original_image_{args.args_title}")
+        plt.savefig(f"{plot_folder}/original_image_{args.args_title}", format='png')
+        # plt.savefig(f"{plot_folder}/original_image_{args.args_title}", format='svg')
     elif image_type == "mst":
         plot_folder = args.directory_map["plots_mst_image"]
-        plt.savefig(f"{plot_folder}/mst_image_{args.args_title}")
+        plt.savefig(f"{plot_folder}/mst_image_{args.args_title}", format='png')
+        # plt.savefig(f"{plot_folder}/mst_image_{args.args_title}", format='svg')
     else:
         plot_folder = args.directory_map["plots_reconstructed_image"]
-        plt.savefig(f"{plot_folder}/reconstructed_image_{args.args_title}")
+        plt.savefig(f"{plot_folder}/reconstructed_image_{args.args_title}", format='png')
+        # plt.savefig(f"{plot_folder}/reconstructed_image_{args.args_title}", format='svg')
 
 
     if plot_weights_against_distance:
@@ -544,6 +568,118 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
         plt.yscale('log')
         plt.xscale('log')
         plt.savefig(f"{plot_folder}/weight_distance_{args.args_title}_log")
+
+
+
+def plot_shortest_path_heatmap(args, shortest_path_matrix, ax, vmin, vmax, positions_df=None,
+                               edges_df=None, n_false_edges=0):
+    original_position_folder = args.directory_map["original_positions"]
+    if positions_df is None:
+        positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.original_title}.csv")
+
+    if edges_df is None:
+        edge_list_folder = args.directory_map["edge_lists"]
+        edges_df = pd.read_csv(f"{edge_list_folder}/{args.edge_list_title}")
+        print(f"retrieving edges from {args.edge_list_title}")
+
+    central_node_ID = find_geometric_central_node(positions_df=positions_df)
+    node_ID_to_shortest_path_mapping = (
+        compute_shortest_path_mapping_from_central_node(central_node_ID=central_node_ID, positions_df=positions_df,
+                                                    shortest_path_matrix=shortest_path_matrix))
+
+    distances_df = pd.DataFrame(list(node_ID_to_shortest_path_mapping.items()), columns=['node_ID', 'distance'])
+    merged_df = pd.merge(positions_df, distances_df, on='node_ID')
+    partition_int = np.ceil(np.sqrt(args.num_points))
+    grid_x, grid_y = np.mgrid[min(merged_df.x):max(merged_df.x):complex(0, partition_int),
+                     min(merged_df.y):max(merged_df.y):complex(0, partition_int)]
+    grid_z = griddata((merged_df.x, merged_df.y), merged_df.distance, (grid_x, grid_y), method='cubic')
+
+
+    # Use ax (the subplot axes) for plotting instead of plt directly
+    image = ax.imshow(grid_z.T, extent=(min(merged_df.x), max(merged_df.x), min(merged_df.y), max(merged_df.y)),
+                      origin='lower', aspect='auto', cmap='viridis', vmin=vmin, vmax=vmax)
+
+    positions_indexed = positions_df.set_index('node_ID')
+    if args.false_edge_ids and edges_df is not None:
+        for edge in args.false_edge_ids[:n_false_edges]:
+            # Extract source and target from the tuple, handling both directions
+            source, target = edge
+            # Ensure the edge exists in the DataFrame
+            if (source in positions_indexed.index) and (target in positions_indexed.index):
+                source_pos = positions_indexed.loc[source]
+                target_pos = positions_indexed.loc[target]
+                ax.plot([source_pos.x, target_pos.x], [source_pos.y, target_pos.y], color='red', linewidth=0.5, alpha=0.3)
+
+    # Optionally set titles, labels, etc., using the ax object
+    ax.set_title(f'False Edges {n_false_edges}')
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+
+    # Return the image object for potential use with colorbars, etc.
+    return image
+
+    # # Plotting
+    # plt.figure(figsize=(10, 8))
+    # plt.imshow(grid_z.T, extent=(min(merged_df.x), max(merged_df.x), min(merged_df.y), max(merged_df.y)),
+    #            origin='lower')
+    # plt.colorbar(label='Shortest path distance to central node')
+    #
+    # plt.xlabel('X ')
+    # plt.ylabel('Y ')
+    # plt.grid(False)
+    #
+    # plot_folder = args.directory_map['plots_shortest_path_heatmap']
+    # plt.savefig(f'{plot_folder}_heatmap_sp_{args.args_title}')
+    # plt.show()
+
+def compute_grid_z(args, shortest_path_matrix, positions_df=None):
+    if positions_df is None:
+        original_position_folder = args.directory_map["original_positions"]
+        positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.original_title}.csv")
+
+    central_node_ID = find_geometric_central_node(positions_df=positions_df)
+    node_ID_to_shortest_path_mapping = compute_shortest_path_mapping_from_central_node(
+        central_node_ID=central_node_ID, positions_df=positions_df, shortest_path_matrix=shortest_path_matrix
+    )
+
+    distances_df = pd.DataFrame(list(node_ID_to_shortest_path_mapping.items()), columns=['node_ID', 'distance'])
+    merged_df = pd.merge(positions_df, distances_df, on='node_ID')
+    partition_int = np.ceil(np.sqrt(args.num_points))  # Adjust partition based on number of points
+    grid_x, grid_y = np.mgrid[min(merged_df.x):max(merged_df.x):complex(0, partition_int),
+                              min(merged_df.y):max(merged_df.y):complex(0, partition_int)]
+    grid_z = griddata((merged_df.x, merged_df.y), merged_df.distance, (grid_x, grid_y), method='cubic')
+
+    return grid_z
+
+def plot_multiple_shortest_path_heatmaps(args, sp_matrices, false_edge_list):
+    # Create a figure for the subplots
+    num_plots = len(sp_matrices)
+    fig, axs = plt.subplots(1, num_plots, figsize=(20, 5), constrained_layout=True)
+
+    # vmin = np.min(sp_matrices[0])
+    # vmax = np.max(sp_matrices[0])
+    # for matrix in sp_matrices:
+    #     vmin = min(vmin, np.min(matrix))
+    #     vmax = max(vmax, np.max(matrix))
+
+    all_grid_z = [compute_grid_z(args, sp_matrix) for sp_matrix in sp_matrices]
+
+    vmin = np.min([np.nanmin(grid) for grid in all_grid_z])
+    vmax = np.max([np.nanmax(grid) for grid in all_grid_z])
+
+
+    # Now plot each with consistent color scale
+    for i, sp_matrix in enumerate(sp_matrices):
+        # Assuming plot_shortest_path_heatmap can accept subplot axes and color limits
+        n_false_edges = false_edge_list[i]
+        plot_shortest_path_heatmap(args, shortest_path_matrix=sp_matrix, ax=axs[i], vmin=vmin, vmax=vmax, n_false_edges=n_false_edges)
+
+    # Create a single colorbar for the whole figure
+    fig.colorbar(plt.cm.ScalarMappable(norm=plt.Normalize(vmin=vmin, vmax=vmax), cmap="viridis"), ax=axs,
+                 orientation='horizontal', fraction=0.02, pad=0.04, label="Shortest Path Distance")
+    plot_folder = args.directory_map['plots_shortest_path_heatmap']
+    plt.savefig(f'{plot_folder}/heatmap_several_sp_matrix{args.args_title}.png')
+    plt.savefig(f'{plot_folder}/heatmap_several_sp_matrix{args.args_title}.svg')
 
 
 
