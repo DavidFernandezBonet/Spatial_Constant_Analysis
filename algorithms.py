@@ -370,6 +370,31 @@ def compute_mean_std_per_group(dataframe, group_column, value_column):
     return np.array(groups), np.array(means), np.array(std_devs)
 
 class ImageReconstruction:
+    """
+    A class for reconstructing the spatial structure of graphs using various node embedding and
+    manifold learning techniques. It supports converting graphs into a format suitable for
+    embeddings, applying dimensionality reduction, and optionally adjusting the embedding method
+    for weighted graphs.
+
+    Attributes:
+        graph (sparse matrix): The graph to be reconstructed, expected to be in a sparse matrix format.
+        dim (int): The target dimension for the reconstruction (typically 2 or 3).
+        node_embedding_mode (str): The method used for generating node embeddings. Supported modes include
+                                   'ggvec', 'node2vec', 'landmark_isomap', 'PyMDE', and others.
+        manifold_learning_mode (str): The manifold learning technique applied for dimensionality reduction,
+                                      such as 'UMAP'.
+        node_embedding_components (int): The number of components (dimensions) to use for node embeddings.
+        manifold_learning_neighbors (int): The number of neighbors to consider in manifold learning techniques.
+
+    Methods:
+        detect_and_adjust_for_weighted_graph(): Adjusts the node embedding mode if the graph is detected to be weighted.
+        compute_embeddings(args=None): Computes node embeddings based on the specified `node_embedding_mode`.
+        reduce_dimensions(embeddings): Applies dimensionality reduction to the computed embeddings to achieve the target dimension.
+        write_positions(args, np_positions, output_path, old_indices=False): Saves the reconstructed positions to a CSV file.
+        reconstruct(do_write_positions=False, args=None): Performs the complete reconstruction process, including embedding computation and dimensionality reduction.
+        landmark_isomap(): A specific embedding technique that uses Isomap based on landmarks for dimensionality reduction.
+    """
+
     def __init__(self, graph, dim=2, node_embedding_mode="ggvec", manifold_learning_mode="UMAP",
                  node_embedding_components=64, manifold_learning_neighbors=15):
         """
@@ -594,7 +619,15 @@ class ImageReconstruction:
         positions_df.to_csv(output_file_path, index=False)
     def reconstruct(self, do_write_positions=False, args=None):
         """
-        Perform the entire reconstruction process and return the reconstructed points.
+        Performs the complete graph reconstruction process, including computing embeddings, applying dimensionality
+        reduction, and optionally writing the reconstructed positions to a CSV file.
+
+        Args:
+            do_write_positions (bool): Whether to save the reconstructed positions to a CSV file. Defaults to False.
+            args (Optional[object]): Additional arguments required for certain operations, such as writing positions.
+
+        Returns:
+            numpy.ndarray: The reconstructed positions of the nodes.
         """
         embeddings = self.compute_embeddings(args)
 
@@ -824,6 +857,35 @@ def compute_shortest_path_mapping_from_central_node(central_node_ID, positions_d
     return node_ID_to_shortest_path_mapping
 
 def compute_shortest_path_matrix_sparse_graph(sparse_graph, args=None):
+    """
+    Computes the shortest path matrix for a given sparse graph. If `args` is provided and contains a precomputed
+    shortest path matrix, that matrix is returned instead of recomputing it. Otherwise, the shortest path matrix
+    is computed from the sparse graph, and if `args` is provided, the computed matrix and its mean are stored
+    in `args`.
+
+    The function supports both the computation of shortest paths in the absence of the `args` object and the
+    utilization of precomputed values within `args` to avoid redundant computations.
+
+    Args:
+        sparse_graph: A sparse graph representation for which the shortest path matrix will be computed. The graph
+                      should be compatible with the `shortest_path` function requirements from scipy's csgraph module.
+        args (Optional[object]): An optional object that may contain the precomputed shortest path matrix and can
+                                 store the computed shortest path matrix and its mean. This object should have
+                                 `shortest_path_matrix` and `mean_shortest_path` attributes if utilized.
+
+    Returns:
+        numpy.ndarray: A numpy array representing the shortest path matrix of the given sparse graph.
+
+    Side Effects:
+        If `args` is provided and does not contain a precomputed shortest path matrix, the computed shortest path
+        matrix and its mean are stored in `args.shortest_path_matrix` and `args.mean_shortest_path`, respectively.
+
+    Note:
+        - The function relies on `convert_graph_type` from a utils module to ensure the sparse graph is in the
+          desired format for computation.
+        - The shortest path computation is performed using the `shortest_path` function from scipy's csgraph module,
+          assuming an undirected graph.
+    """
     from utils import convert_graph_type
     sparse_graph = convert_graph_type(args, graph=sparse_graph, desired_type="sparse")
     if args is None:
@@ -968,4 +1030,5 @@ def sample_csgraph_subgraph(args, csgraph, min_nodes=3000):
     # This step might be adjusted based on your needs for using this mapping later
 
     args.node_ids_map_old_to_new = {original: idx for idx, original in enumerate(original_indices)}
+
     return subgraph

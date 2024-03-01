@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Tutorial &#8212; Network Spatial Coherence  documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=12dfc556" />
+    <script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Spatial Coherence Pipeline" href="main.html" />
+    <link rel="prev" title="Welcome to Network Spatial Coherence’s documentation!" href="index.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="tutorial">
+<h1>Tutorial<a class="headerlink" href="#tutorial" title="Link to this heading">¶</a></h1>
+<section id="introduction">
+<h2>Introduction<a class="headerlink" href="#introduction" title="Link to this heading">¶</a></h2>
+<p>This tutorial guides you through the process of loading, processing, analyzing, and reconstructing graphs. You’ll learn how to configure the analysis, visualize graph properties, perform spatial coherence validation, and reconstruct the graph based on your settings.</p>
+</section>
+<section id="configuration">
+<h2>Configuration<a class="headerlink" href="#configuration" title="Link to this heading">¶</a></h2>
+<p>Start by setting up your configuration in a Python file or dictionary. This includes specifying the proximity mode, dimensionality, reconstruction mode, and other parameters relevant to your analysis. For the complete parameter documentation, please see <a class="reference internal" href="structure_and_args.html#args"><span class="std std-ref">Arguments</span></a>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Base settings common to all scenarios</span>
+<span class="n">base</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;proximity_mode&quot;</span><span class="p">:</span> <span class="s2">&quot;delaunay_corrected&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;dim&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+    <span class="s2">&quot;false_edges_count&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="s2">&quot;colorfile&quot;</span><span class="p">:</span> <span class="s1">&#39;colored_squares.png&#39;</span><span class="p">,</span>
+    <span class="s2">&quot;plot_graph_properties&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="s2">&quot;large_graph_subsampling&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="s2">&quot;max_subgraph_size&quot;</span><span class="p">:</span> <span class="mi">3000</span><span class="p">,</span>
+    <span class="s2">&quot;reconstruct&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="s2">&quot;reconstruction_mode&quot;</span><span class="p">:</span> <span class="s2">&quot;landmark_isomap&quot;</span>
+<span class="p">}</span>
+
+<span class="c1"># Additional settings for simulation</span>
+<span class="n">simulation</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;num_points&quot;</span><span class="p">:</span> <span class="mi">1000</span><span class="p">,</span>
+    <span class="s2">&quot;intended_av_degree&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+    <span class="s1">&#39;plot_original_image&#39;</span><span class="p">:</span> <span class="kc">True</span>
+<span class="p">}</span>
+
+<span class="c1"># Settings for experimental scenarios</span>
+<span class="n">experiment</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;edge_list_title&quot;</span><span class="p">:</span> <span class="s2">&quot;subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;weighted&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="s2">&quot;weight_threshold&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Ensure to adjust these settings according to your analysis needs.</p>
+</section>
+<section id="loading-and-processing-the-graph">
+<h2>Loading and Processing the Graph<a class="headerlink" href="#loading-and-processing-the-graph" title="Link to this heading">¶</a></h2>
+<p>The script starts by creating the necessary project structure, loading the graph based on the specified settings, and subsampling the graph if necessary to manage large datasets efficiently.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">create_project_structure</span><span class="p">()</span>
+<span class="n">graph</span><span class="p">,</span> <span class="n">args</span> <span class="o">=</span> <span class="n">load_and_initialize_graph</span><span class="p">()</span>
+<span class="n">graph</span> <span class="o">=</span> <span class="n">subsample_graph_if_necessary</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="graph-analysis-and-visualization">
+<h2>Graph Analysis and Visualization<a class="headerlink" href="#graph-analysis-and-visualization" title="Link to this heading">¶</a></h2>
+<p>An optional step is to plot the graph’s properties and the positions of the original image (if in a simulated setting where ground truth is known):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">plot_and_analyze_graph</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Original Graph Visualization</strong>: Here’s how the original graph looks like. We plot the edges according to the graph structure and color the nodes according to a sample image.</p>
+<img alt="Original Graph" src="_images/original_image_N%3D10000_dim%3D2_delaunay_corrected_k%3D15" />
+<p><strong>Graph Property Analysis</strong>: After analyzing the graph properties, you can visualize aspects like degree distribution and clustering coefficient.</p>
+<img alt="Graph Properties" src="path/to/graph_properties_image.png" />
+<div style="display: flex; justify-content: space-between;">
+    <img src="_static/images/degree_dist_N=10000_dim=2_delaunay_corrected_k=15" alt="Degree Distribution" style="width: 48%;" />
+    <img src="_static/images/plots_shortest_path_distribution_N=10000_dim=2_delaunay_corrected_k=15" alt="Shortest Path Distribution" style="width: 48%;" />
+</div></section>
+<section id="spatial-coherence-validation-and-reconstruction">
+<h2>Spatial Coherence Validation and Reconstruction<a class="headerlink" href="#spatial-coherence-validation-and-reconstruction" title="Link to this heading">¶</a></h2>
+<p>The script further validates the network spatial coherence. This is done in 3 steps: spatial constant, correlation dimension and analyzing the rank of the gram matrix (from the shortest path matrix).</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">compute_shortest_paths</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+<span class="n">spatial_constant_analysis</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+<span class="n">network_correlation_dimension</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+<span class="n">rank_matrix_analysis</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Spatial Analysis Plot</strong>: The Spatial Constant remains constant as the graph grows. This when there are no false edges, i.e., edges that connect distant regions in the original image. If we artificially inject false edges, we can see how the Spatial Constant is affected by them. The more edges, the bigger the drop.</p>
+<img alt="Spatial Analysis" src="_images/mean_s_general_vs_intended_size_N%3D3000_dim%3D2_delaunay_corrected_k%3D15_false_edge_version.svg" /><p><strong>Network Correlation Dimension</strong>: The correlation dimension is obtained by performing BFS from a central node and observing the relationship between the shortest path distance and the number of discovered nodes. In an Euclidean point cloud, this relationship is a power-law with the Euclidean dimension as the power. We expect a similar behavior from networks.</p>
+<img alt="Network Correlation Dimension" src="_images/dimension_prediction_by_node_count_LINEAR_N%3D10000_dim%3D2_delaunay_corrected_k%3D15.svg" /><p><strong>Rank Matrix Analysis</strong>: We expect the shortest path distance matrix to be a low-rank matrix, or at least a good approximation of a low-rank matrix. This is because such distances come originally from Euclidean space, and Euclidean Distance Matrices (EDMs) have rank at most d+2, where d is the dimension. In fact, the Gram “dot product” matrix obtained from EDMs have rank at most d. Therefore, we can inspect the Gram matrix obtained from our shortest path distance matrix and see if the “d” largest eigenvalues account for most of the eigenvalue contribution.</p>
+<img alt="Rank Matrix Analysis" src="_images/mds_cumulative_singular_values_N%3D10000_dim%3D2_delaunay_corrected_k%3D15_sp_matrix.svg" /><p><strong>Graph Reconstruction</strong>: Finally, we can reconstruct the original image using, for example, the STRND algorithm.</p>
+<img alt="Graph Reconstruction" src="_images/reconstructed_image_N%3D10000_dim%3D2_delaunay_corrected_k%3D15_node2vec" />
+</section>
+<section id="note-large-graphs">
+<h2>Note: Large Graphs<a class="headerlink" href="#note-large-graphs" title="Link to this heading">¶</a></h2>
+<p>For large graphs, computations take too long or run out of memory. This can be solved by subsampling the graph, under the (strong) assumption that the behavior in the subgraph will be the same as in the whole graph. Just set the configuration parameters “large_graph_subsampling =True” and “max_subgraph_size” according to your needs.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Base settings common to all scenarios</span>
+<span class="n">base</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;proximity_mode&quot;</span><span class="p">:</span> <span class="s2">&quot;delaunay_corrected&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;dim&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+    <span class="s2">&quot;false_edges_count&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="s2">&quot;colorfile&quot;</span><span class="p">:</span> <span class="s1">&#39;colored_squares.png&#39;</span><span class="p">,</span>
+    <span class="s2">&quot;plot_graph_properties&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="s2">&quot;large_graph_subsampling&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="s2">&quot;max_subgraph_size&quot;</span><span class="p">:</span> <span class="mi">3000</span><span class="p">,</span>
+    <span class="s2">&quot;reconstruct&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="s2">&quot;reconstruction_mode&quot;</span><span class="p">:</span> <span class="s2">&quot;landmark_isomap&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Network Spatial Coherence</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Tutorial</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#configuration">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#loading-and-processing-the-graph">Loading and Processing the Graph</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#graph-analysis-and-visualization">Graph Analysis and Visualization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#spatial-coherence-validation-and-reconstruction">Spatial Coherence Validation and Reconstruction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#note-large-graphs">Note: Large Graphs</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="main.html">Spatial Coherence Pipeline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="structure_and_args.html">Arguments</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">Welcome to Network Spatial Coherence’s documentation!</a></li>
+      <li>Next: <a href="main.html" title="next chapter">Spatial Coherence Pipeline</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024, David Fernandez Bonet.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.2.6</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="_sources/tutorial.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

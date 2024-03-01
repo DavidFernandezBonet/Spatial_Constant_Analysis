@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Spatial Coherence Pipeline &#8212; Network Spatial Coherence  documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=12dfc556" />
+    <script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Arguments" href="structure_and_args.html" />
+    <link rel="prev" title="Tutorial" href="tutorial.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="spatial-coherence-pipeline">
+<h1>Spatial Coherence Pipeline<a class="headerlink" href="#spatial-coherence-pipeline" title="Link to this heading">¶</a></h1>
+<dl class="py function" id="module-main">
+<dt class="sig sig-object py" id="main.compute_shortest_paths">
+<span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">compute_shortest_paths</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">graph</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#main.compute_shortest_paths" title="Link to this definition">¶</a></dt>
+<dd><p>Step 1.5: Compute shortest paths and store it in args. This is done only once.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.load_and_initialize_graph">
+<span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">load_and_initialize_graph</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#main.load_and_initialize_graph" title="Link to this definition">¶</a></dt>
+<dd><p>Step 1: Load the graph with provided arguments and perform initial checks.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.main">
+<span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#main.main" title="Link to this definition">¶</a></dt>
+<dd><p>Main function: graph loading, processing, and analysis.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.network_correlation_dimension">
+<span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">network_correlation_dimension</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#main.network_correlation_dimension" title="Link to this definition">¶</a></dt>
+<dd><p>Steps 3: Predict the dimension of the graph</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.plot_and_analyze_graph">
+<span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">plot_and_analyze_graph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">graph</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#main.plot_and_analyze_graph" title="Link to this definition">¶</a></dt>
+<dd><p>Plots the original graph and analyzes its properties.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.rank_matrix_analysis">
+<span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">rank_matrix_analysis</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#main.rank_matrix_analysis" title="Link to this definition">¶</a></dt>
+<dd><p>Step 4. Analyze the rank matrix</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.reconstruct_graph">
+<span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">reconstruct_graph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">graph</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#main.reconstruct_graph" title="Link to this definition">¶</a></dt>
+<dd><p>Reconstructs the graph if required based on the specifications in the <cite>args</cite> object.
+This involves running a graph reconstruction process, which may include converting the graph
+to a specific format, and potentially considering ground truth availability based on the
+reconstruction mode specified in <cite>args</cite>.</p>
+<p>The reconstruction process is conditionally executed based on the <cite>reconstruct</cite> flag within
+the <cite>args</cite> object. If reconstruction is performed, the function also handles the determination
+of ground truth availability and executes the reconstruction process accordingly.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>graph</strong> – The graph to potentially reconstruct. This graph should be compatible with the
+reconstruction process and might be converted to a different format as part of
+the reconstruction.</p></li>
+<li><p><strong>args</strong> – <p>An object containing various configuration options and flags for the graph analysis
+and reconstruction process. This includes:
+- <cite>reconstruct</cite> (bool): Whether the graph should be reconstructed.
+- <cite>reconstruction_mode</cite> (str): The mode of reconstruction to be applied.
+- <cite>proximity_mode</cite> (str): The mode of proximity used for the graph, affecting ground</p>
+<blockquote>
+<div><p>truth availability.</p>
+</div></blockquote>
+<ul>
+<li><p><cite>large_graph_subsampling</cite> (bool): A flag indicating whether subsampling for large
+graphs is enabled, also affecting ground truth availability.</p></li>
+</ul>
+</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The function directly prints updates regarding the reconstruction process, including the
+mode of reconstruction and whether ground truth is considered available.</p>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.spatial_constant_analysis">
+<span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">spatial_constant_analysis</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">graph</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">false_edge_list</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#main.spatial_constant_analysis" title="Link to this definition">¶</a></dt>
+<dd><p>Step 2: Analyze spatial constant</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.subsample_graph_if_necessary">
+<span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">subsample_graph_if_necessary</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">graph</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#main.subsample_graph_if_necessary" title="Link to this definition">¶</a></dt>
+<dd><p>Subsamples the graph if it is too large for efficient processing.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="data_analysis.plot_graph_properties">
+<span class="sig-prename descclassname"><span class="pre">data_analysis.</span></span><span class="sig-name descname"><span class="pre">plot_graph_properties</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">igraph_graph</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#data_analysis.plot_graph_properties" title="Link to this definition">¶</a></dt>
+<dd><p>Plots various graph properties including clustering coefficients, degree distributions,
+and shortest path distributions. It supports both unipartite and bipartite graphs.
+For bipartite graphs, properties are computed and plotted separately for each set.</p>
+<p>This function also computes and stores spatial constant results based on the mean shortest path
+and average degree of the graph.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>args</strong> – An object containing configuration parameters and options for the graph analysis. This object
+should include fields for bipartite graph checks (<cite>is_bipartite</cite>), directory mappings
+(<cite>directory_map</cite>), graph titles (<cite>args_title</cite>), and placeholders for results
+(<cite>mean_clustering_coefficient</cite>, <cite>average_degree</cite>, etc.).</p></li>
+<li><p><strong>igraph_graph</strong> – An igraph graph object. If the graph is not of the desired igraph type, it will be
+converted within the function.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Outputs:</dt><dd><ul class="simple">
+<li><p>Plots of clustering coefficient distributions and degree distributions saved to specified directories.</p></li>
+<li><p>A CSV file containing spatial constant results saved in the specified directory.</p></li>
+</ul>
+</dd>
+<dt>Side Effects:</dt><dd><ul class="simple">
+<li><p>Modifies the <cite>args</cite> object by setting various properties such as <cite>mean_clustering_coefficient</cite>,
+<cite>average_degree</cite>, and others depending on whether the graph is bipartite or not.</p></li>
+<li><p>Generates and saves plots to the filesystem.</p></li>
+<li><p>Saves spatial constant results as a CSV file to the filesystem.</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>The function relies on several helper functions (<cite>convert_graph_type</cite>,
+<cite>bipartite_clustering_coefficient_optimized</cite>, <cite>get_bipartite_degree_distribution</cite>,
+<cite>plot_clustering_coefficient_distribution</cite>, <cite>plot_degree_distribution</cite>, <cite>get_local_clustering_coefficients</cite>,
+<cite>get_degree_distribution</cite>, <cite>get_mean_shortest_path</cite>, <cite>plot_shortest_path_distribution</cite>,
+<cite>get_spatial_constant_results</cite>) to perform its tasks.</p></li>
+<li><p>Ensure that all necessary fields are present in the <cite>args</cite> object before calling this function.</p></li>
+</ul>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="plots.plot_original_or_reconstructed_image">
+<span class="sig-prename descclassname"><span class="pre">plots.</span></span><span class="sig-name descname"><span class="pre">plot_original_or_reconstructed_image</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">image_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'original'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edges_df</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">position_filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_weights_against_distance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#plots.plot_original_or_reconstructed_image" title="Link to this definition">¶</a></dt>
+<dd><p>Plots the original or reconstructed image based on the provided arguments.</p>
+<p>This function handles the plotting of either the original or reconstructed graph images,
+with options to include weights against distance. It sets up the plot based on the dimensionality
+specified in <cite>args</cite>, retrieves edge data, and plots node positions with optional coloring.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>args</strong> – An object containing configuration and graph arguments, including directory paths,
+dimensionality (<cite>dim</cite>), color mapping, and more.</p></li>
+<li><p><strong>image_type</strong> (<em>str</em>) – The type of image to plot, options are “original”, “mst”, or “reconstructed”.
+Defaults to “original”.</p></li>
+<li><p><strong>edges_df</strong> (<em>pandas.DataFrame</em><em>, </em><em>optional</em>) – DataFrame containing edge data. If None, the edge data
+is loaded from a file specified in <cite>args</cite>. Defaults to None.</p></li>
+<li><p><strong>position_filename</strong> (<em>str</em><em>, </em><em>optional</em>) – Filename of the position data CSV file. If None, the position
+data is loaded based on <cite>image_type</cite> and configurations in <cite>args</cite>.
+Defaults to None.</p></li>
+<li><p><strong>plot_weights_against_distance</strong> (<em>bool</em>) – Flag to enable plotting of weights against distance for edges.
+Defaults to False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>ValueError</strong> – If <cite>image_type</cite> is not one of the expected options (“original”, “reconstructed”, “mst”).</p></li>
+<li><p><strong>ValueError</strong> – If the edge list numbering is not valid, indicating a mismatch between edge data and node positions.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="algorithms.compute_shortest_path_matrix_sparse_graph">
+<span class="sig-prename descclassname"><span class="pre">algorithms.</span></span><span class="sig-name descname"><span class="pre">compute_shortest_path_matrix_sparse_graph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sparse_graph</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">args</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#algorithms.compute_shortest_path_matrix_sparse_graph" title="Link to this definition">¶</a></dt>
+<dd><p>Computes the shortest path matrix for a given sparse graph. If <cite>args</cite> is provided and contains a precomputed
+shortest path matrix, that matrix is returned instead of recomputing it. Otherwise, the shortest path matrix
+is computed from the sparse graph, and if <cite>args</cite> is provided, the computed matrix and its mean are stored
+in <cite>args</cite>.</p>
+<p>The function supports both the computation of shortest paths in the absence of the <cite>args</cite> object and the
+utilization of precomputed values within <cite>args</cite> to avoid redundant computations.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sparse_graph</strong> – A sparse graph representation for which the shortest path matrix will be computed. The graph
+should be compatible with the <cite>shortest_path</cite> function requirements from scipy’s csgraph module.</p></li>
+<li><p><strong>args</strong> (<em>Optional</em><em>[</em><em>object</em><em>]</em>) – An optional object that may contain the precomputed shortest path matrix and can
+store the computed shortest path matrix and its mean. This object should have
+<cite>shortest_path_matrix</cite> and <cite>mean_shortest_path</cite> attributes if utilized.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A numpy array representing the shortest path matrix of the given sparse graph.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>numpy.ndarray</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Side Effects:</dt><dd><p>If <cite>args</cite> is provided and does not contain a precomputed shortest path matrix, the computed shortest path
+matrix and its mean are stored in <cite>args.shortest_path_matrix</cite> and <cite>args.mean_shortest_path</cite>, respectively.</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>The function relies on <cite>convert_graph_type</cite> from a utils module to ensure the sparse graph is in the
+desired format for computation.</p></li>
+<li><p>The shortest path computation is performed using the <cite>shortest_path</cite> function from scipy’s csgraph module,
+assuming an undirected graph.</p></li>
+</ul>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="data_analysis.run_simulation_subgraph_sampling">
+<span class="sig-prename descclassname"><span class="pre">data_analysis.</span></span><span class="sig-name descname"><span class="pre">run_simulation_subgraph_sampling</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">graph</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size_interval</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_subgraphs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_false_edges</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_mst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parallel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">false_edge_list</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[0,</span> <span class="pre">1,</span> <span class="pre">2,</span> <span class="pre">3,</span> <span class="pre">4]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_spatial_constant_against_false_edges</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#data_analysis.run_simulation_subgraph_sampling" title="Link to this definition">¶</a></dt>
+<dd><p>Runs a simulation that samples subgraphs from a given graph (using BFS) to analyze various properties,
+optionally adding minimum spanning trees (MST) and/or false edges to the graph before sampling.
+The function supports parallel processing to speed up computations.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>args</strong> – An object containing configuration parameters and options for the graph analysis,
+including directory mappings and proximity mode settings.</p></li>
+<li><p><strong>graph</strong> – An igraph graph object to be analyzed. The graph is converted to the igraph format
+if not already in that format.</p></li>
+<li><p><strong>size_interval</strong> (<em>int</em>) – The interval size for subgraph sampling, determining the range of subgraph
+sizes to analyze. Defaults to 100.</p></li>
+<li><p><strong>n_subgraphs</strong> (<em>int</em>) – The number of subgraphs to sample at each size interval. Defaults to 10.</p></li>
+<li><p><strong>add_false_edges</strong> (<em>bool</em>) – Whether to add false edges to the graph before sampling. Defaults to False.</p></li>
+<li><p><strong>add_mst</strong> (<em>bool</em>) – Whether to compute and analyze the minimum spanning tree of the graph. Defaults to False.</p></li>
+<li><p><strong>false_edge_list</strong> (<em>list</em><em> of </em><em>int</em>) – A list specifying the numbers of false edges to add for each simulation run.
+Only relevant if <cite>add_false_edges</cite> is True. Defaults to [0,1,2,3,4].</p></li>
+<li><p><strong>plot_spatial_constant_against_false_edges</strong> (<em>bool</em>) – Whether to plot the spatial constant against the number
+of false edges added. Only relevant if <cite>add_false_edges</cite>
+is True. Defaults to False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>A DataFrame containing the aggregated results of the subgraph sampling simulation,</dt><dd><p>including spatial constant calculations for various subgraph sizes and configurations.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>pandas.DataFrame</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>ValueError</strong> – If <cite>args</cite> does not contain the necessary configuration for the simulation.</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This function modifies the <cite>args</cite> object by updating it with results from the simulation, such as
+mean shortest path and clustering coefficients. Ensure that <cite>args</cite> is properly configured before
+calling this function. It plots the spatial constant plot.</p>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="spatial_constant_analysis.run_reconstruction">
+<span class="sig-prename descclassname"><span class="pre">spatial_constant_analysis.</span></span><span class="sig-name descname"><span class="pre">run_reconstruction</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sparse_graph</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">node_embedding_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ggvec'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">manifild_learning_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'UMAP'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ground_truth_available</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#spatial_constant_analysis.run_reconstruction" title="Link to this definition">¶</a></dt>
+<dd><p>Performs reconstruction of a graph from a sparse matrix representation, employing node embedding
+and manifold learning techniques. The process includes inferring node positions, plotting the
+reconstructed graph, and computing quality metrics related to the reconstruction accuracy.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>args</strong> – An object containing configuration parameters and options for the analysis, including
+the dimensionality (<cite>dim</cite>), directory mappings (<cite>directory_map</cite>), and graph analysis
+settings.</p></li>
+<li><p><strong>sparse_graph</strong> – A sparse matrix representation of the graph to be reconstructed.</p></li>
+<li><p><strong>node_embedding_mode</strong> (<em>str</em>) – The mode of node embedding to use for initial node position inference.
+Defaults to ‘ggvec’. Other options include ‘landmark_isomap’.</p></li>
+<li><p><strong>manifild_learning_mode</strong> (<em>str</em>) – The manifold learning technique to apply for dimensionality
+reduction. Defaults to ‘UMAP’.</p></li>
+<li><p><strong>ground_truth_available</strong> (<em>bool</em>) – Indicates whether ground truth data is available for evaluating
+the reconstruction quality. Defaults to False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>A tuple containing:</dt><dd><ul class="simple">
+<li><p>reconstructed_points (numpy array): The inferred positions of nodes in the target
+dimensionality.</p></li>
+<li><p>metrics (dict): A dictionary of quality metrics assessing the reconstruction, with
+keys for ground truth-based metrics (“ground_truth”) and metrics in the absence of
+ground truth (“gta”).</p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The function modifies the <cite>args</cite> object by appending the <cite>node_embedding_mode</cite> to <cite>args_title</cite>
+for identification.</p>
+</div>
+</dd></dl>
+
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Network Spatial Coherence</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Spatial Coherence Pipeline</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#main.compute_shortest_paths"><code class="docutils literal notranslate"><span class="pre">compute_shortest_paths()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#main.load_and_initialize_graph"><code class="docutils literal notranslate"><span class="pre">load_and_initialize_graph()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#main.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#main.network_correlation_dimension"><code class="docutils literal notranslate"><span class="pre">network_correlation_dimension()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#main.plot_and_analyze_graph"><code class="docutils literal notranslate"><span class="pre">plot_and_analyze_graph()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#main.rank_matrix_analysis"><code class="docutils literal notranslate"><span class="pre">rank_matrix_analysis()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#main.reconstruct_graph"><code class="docutils literal notranslate"><span class="pre">reconstruct_graph()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#main.spatial_constant_analysis"><code class="docutils literal notranslate"><span class="pre">spatial_constant_analysis()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#main.subsample_graph_if_necessary"><code class="docutils literal notranslate"><span class="pre">subsample_graph_if_necessary()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#data_analysis.plot_graph_properties"><code class="docutils literal notranslate"><span class="pre">plot_graph_properties()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#plots.plot_original_or_reconstructed_image"><code class="docutils literal notranslate"><span class="pre">plot_original_or_reconstructed_image()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#algorithms.compute_shortest_path_matrix_sparse_graph"><code class="docutils literal notranslate"><span class="pre">compute_shortest_path_matrix_sparse_graph()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#data_analysis.run_simulation_subgraph_sampling"><code class="docutils literal notranslate"><span class="pre">run_simulation_subgraph_sampling()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#spatial_constant_analysis.run_reconstruction"><code class="docutils literal notranslate"><span class="pre">run_reconstruction()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="structure_and_args.html">Arguments</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="tutorial.html" title="previous chapter">Tutorial</a></li>
+      <li>Next: <a href="structure_and_args.html" title="next chapter">Arguments</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024, David Fernandez Bonet.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.2.6</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="_sources/main.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

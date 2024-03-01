@@ -1,7 +1,9 @@
 import os
-
+import importlib
 def create_project_structure():
-
+    """
+    Create the project directory structure and return a dictionary mapping directory names to their corresponding paths.
+    """
 
     current_script_dir = os.path.dirname(os.path.realpath(__file__))
     project_root = os.path.dirname(current_script_dir)
@@ -67,15 +69,67 @@ def create_project_structure():
     return directory_map
 
 class GraphArgs:
-    # def __init__(self, code_folder=os.getcwd(), num_points=300, L=1, intended_av_degree=6,
-    #              dim=2, proximity_mode="knn", directory_map=None, average_degree=-1,
-    #              edge_list_title=None, false_edges_count=0, plot_original=False, title_experimental=None):
-    def __init__(self, config=None):
+    """
+    A class to manage graph arguments and configurations.
+    It is automatically initialized based on the configuration file, which has the default name: "single_graph_configuration.py"
 
-        print(config)
-        # Default values if config is None or does not provide some settings
+    Attributes:
+
+        # Directories
+        directory_map (type): Simple reference for directory mapping, created by `create_project_structure`.
+
+        # Base Attributes
+        proximity_mode (str): The mode of determining proximity among nodes, defaults to "knn" (k-nearest neighbors) for simulations. Can be set to 'experimental', which requires an edge list to be provided.
+        edge_list_title (str): The title or name for the edge list, None by default, to be updated with graph parameters.
+        dim (int): The dimensionality of the Euclidean point cloud.
+        plot_graph_properties (bool): A flag indicating whether to plot graph properties, defaults to False. Properties: degree, clustering and shortest path distribution.
+        reconstruct (bool): Indicates whether graph reconstruction is to be performed, defaults to False.
+        reconstruction_mode (str): The mode of graph reconstruction, only relevant if `reconstruct` is True.
+        large_graph_subsampling (bool): Indicates whether subsampling of large graphs is enabled, defaults to False.
+        max_subgraph_size (int): The maximum size for subgraphs, defaults to 3000, relevant if subsampling is enabled.
+        weighted (bool): Indicates if the graph is weighted, defaults to False.
+        weighted_threshold (float): The threshold for weights in a weighted graph, relevant if `weighted` is True.
+        false_edges_count (int): The count of false edges to simulate, if any, defaults to 0.
+        false_edge_ids (list): Stores ids of false edges, if needed.
+
+        # Image Coloring
+        colorfile (str): Path to a file defining colors for nodes or edges, if applicable.
+        node_ids_map_old_to_new (type): Maps old node IDs to new ones, None by default.
+        colorcode (dict): Maps node states to colors, with default mappings provided.
+
+
+        # Simulation Attributes
+        _num_points (int): The number of points (or nodes) in the graph, defaults to 300.
+        L (int): Length of the square/cube.
+        plot_original_image (bool): Flag to plot the original image, relevant for simulations, defaults to False.
+        _intended_av_degree (int): The intended average degree of nodes in the graph, defaults to 6.
+        id_to_color_simulation (type): Maps node IDs to colors for simulation purposes, None by default.
+
+
+        # Graph Attributes
+        sparse_graph (type): The sparse representation of the graph, None by default.
+        igraph_graph (type): The graph represented using the igraph library, None by default.
+        shortest_path_matrix (numpy.ndarray): A matrix storing the shortest paths between nodes, None by default.
+        mean_shortest_path (type): The mean shortest path length in the graph, None by default.
+        is_bipartite (bool): Indicates if the graph is bipartite, defaults to False.
+        bipartite_sets (type): The sets of nodes in a bipartite graph, None by default.
+        average_degree (int): The average degree of nodes in the graph, initialized to -1.
+        mean_clustering_coefficient (type): The mean clustering coefficient of the graph, None by default.
+
+    Methods:
+        update_proximity_mode(): Updates the proximity mode based on the configuration.
+        update_args_title(): Updates the generic file title to define each individual graph based on graph attributes
+        create_project_structure(): Creates and returns a mapping of directory structures, for file organization.
+    """
+
+    def __init__(self, config_filename='single_graph_configuration.py'):
+
+        # Loading Args from configuration file
         self.code_folder = os.getcwd()
-        #self.edge_list_title = config.get('edge_list_title', None)
+        self.unsorted_config = self.load_config(config_filename, code_folder=self.code_folder)
+        config = self.get_config(config_module=self.unsorted_config)
+
+
         self.edge_list_title = None
         self.original_edge_list_title = None
         self._num_points = config.get('num_points', 300)
@@ -178,6 +232,53 @@ class GraphArgs:
         # self.colorcode = {-1: "gray", 0: "gray", 1: "green", 2: "red"}  # what colors to plot. This is based on weinstein ploting
         # self.id_to_color_simulation = None  # for colored simulations
 
+    def load_config(self, config_filename, code_folder):
+        """
+        Loads configuration from a Python file specified by combining the folder path and file name.
+
+        Parameters:
+            config_filename (str): The name of the configuration file.
+            code_folder (str): The folder where the configuration file is located.
+
+        Returns:
+            module: A module object containing the configurations.
+        """
+        # Combine the folder and filename to create the full path to the config file
+        config_path = os.path.join(code_folder, config_filename)
+
+        # Dynamically load the configuration module from the constructed path
+        spec = importlib.util.spec_from_file_location(config_filename, config_path)
+        config = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(config)
+        # Convert the module to a dictionary
+        config_dict = {key: getattr(config, key) for key in dir(config) if not key.startswith('__')}
+        return config_dict
+
+
+
+    def get_config(self, config_module):
+        """
+        Determines the scenario based on the 'proximity_mode' in the configuration and merges configurations accordingly.
+
+        Parameters:
+            config_module (module): The configuration module containing the 'base', 'experiment', and 'simulation' configurations.
+
+        Returns:
+            dict: A dictionary of merged settings.
+        """
+        # Use getattr to safely get configurations from the module, defaulting to {} if not found
+        base = config_module.get('base', {})
+        experiment = config_module.get('experiment', {})
+        simulation = config_module.get('simulation', {})
+
+        # Determine which configuration to use based on the 'proximity_mode' in base
+        if base.get("proximity_mode") == "experimental":
+            # Merge base with experiment settings
+            return {**base, **experiment}
+        else:
+            # Merge base with simulation settings
+            return {**base, **simulation}
+
     def set_edge_list_title(self, title):
         if self.original_edge_list_title is None:  # Only set the original title once or when explicitly needed
             self.original_edge_list_title = title
@@ -207,6 +308,7 @@ class GraphArgs:
 
             ## For now just update the edge list every time
             self.edge_list_title = f"edge_list_{self.args_title}.csv"
+
 
 
 

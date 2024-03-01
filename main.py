@@ -1,4 +1,4 @@
-from single_graph_configuration import *
+
 from create_proximity_graph import write_proximity_graph
 from structure_and_args import GraphArgs
 from data_analysis import plot_graph_properties, run_simulation_subgraph_sampling
@@ -8,29 +8,16 @@ from utils import *
 from spatial_constant_analysis import run_reconstruction
 from dimension_prediction import run_dimension_prediction
 from gram_matrix_analysis import plot_gram_matrix_eigenvalues
+from structure_and_args import create_project_structure
 
 
-def get_config():
-    """
-    Determines the scenario based on the 'proximity_mode' in base settings and merges configurations accordingly.
-
-    Returns:
-    - A dictionary of merged settings.
-    """
-    if base["proximity_mode"] == "experimental":
-        # If proximity_mode is "experimental", merge base with experiment settings
-        return {**base, **experiment}
-    else:
-        # Otherwise, assume it's a simulation scenario and merge base with simulation settings
-        return {**base, **simulation}
 
 
 def load_and_initialize_graph():
     """
     Step 1: Load the graph with provided arguments and perform initial checks.
     """
-    config = get_config()
-    args = GraphArgs(config=config)
+    args = GraphArgs()
     print(args.proximity_mode)
 
     if args.proximity_mode != "experimental":
@@ -74,7 +61,9 @@ def spatial_constant_analysis(graph, args, false_edge_list=None):
     """
     if false_edge_list is None:
         false_edge_list = np.arange(0, 101, step=20)
-    run_simulation_subgraph_sampling(args, size_interval=100, n_subgraphs=10, graph=graph,
+    size_interval = int(args.num_points / 10)  # collect 10 data points
+    print(size_interval)
+    run_simulation_subgraph_sampling(args, size_interval=size_interval, n_subgraphs=10, graph=graph,
                                      add_false_edges=True, add_mst=False, false_edge_list=false_edge_list)
 
 def network_correlation_dimension(args):
@@ -93,9 +82,33 @@ def rank_matrix_analysis(args):
     first_d_values_contribution = plot_gram_matrix_eigenvalues(args=args, shortest_path_matrix=args.shortest_path_matrix)
     print("First d values contribution", first_d_values_contribution)
 
-def reconstruct_graph_if_needed(graph, args):
+def reconstruct_graph(graph, args):
     """
-    Step 5: Reconstruct the graph if required.
+    Reconstructs the graph if required based on the specifications in the `args` object.
+    This involves running a graph reconstruction process, which may include converting the graph
+    to a specific format, and potentially considering ground truth availability based on the
+    reconstruction mode specified in `args`.
+
+    The reconstruction process is conditionally executed based on the `reconstruct` flag within
+    the `args` object. If reconstruction is performed, the function also handles the determination
+    of ground truth availability and executes the reconstruction process accordingly.
+
+    Args:
+        graph: The graph to potentially reconstruct. This graph should be compatible with the
+               reconstruction process and might be converted to a different format as part of
+               the reconstruction.
+        args: An object containing various configuration options and flags for the graph analysis
+              and reconstruction process. This includes:
+              - `reconstruct` (bool): Whether the graph should be reconstructed.
+              - `reconstruction_mode` (str): The mode of reconstruction to be applied.
+              - `proximity_mode` (str): The mode of proximity used for the graph, affecting ground
+                truth availability.
+              - `large_graph_subsampling` (bool): A flag indicating whether subsampling for large
+                graphs is enabled, also affecting ground truth availability.
+
+    Note:
+        The function directly prints updates regarding the reconstruction process, including the
+        mode of reconstruction and whether ground truth is considered available.
     """
     if args.reconstruct:
         print("running reconstruction...")
@@ -111,20 +124,20 @@ def main():
     """
     Main function: graph loading, processing, and analysis.
     """
+    create_project_structure()  # Create structure if not done before
     # Load and process the graph
     graph, args = load_and_initialize_graph()
     graph = subsample_graph_if_necessary(graph, args)
     plot_and_analyze_graph(graph, args)
     compute_shortest_paths(graph, args)
 
-    # Spatial Coherence Validation
+    # # Spatial Coherence Validation
     spatial_constant_analysis(graph, args)
     network_correlation_dimension(args)
     rank_matrix_analysis(args)
 
-    # Reconstruction
-    reconstruct_graph_if_needed(graph, args)
-
+    # # Reconstruction
+    reconstruct_graph(graph, args)
 
 if __name__ == "__main__":
     main()

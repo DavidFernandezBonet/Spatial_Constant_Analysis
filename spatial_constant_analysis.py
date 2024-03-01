@@ -34,17 +34,33 @@ plt.rcParams['legend.fontsize'] = font_size - 10
 def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild_learning_mode='UMAP',
                        ground_truth_available=False):
     """
-    Given a sparse matrix representing a graph:
-    1 - Infer the reconstructed positions
-    2 - Plot the resulting image with the original graph edges (stored in results/plots/reconstructed_image)
-    3 - Return GTA quality metrics (measures the goodness of the reconstruction in Ground Truth Absence)
-    Note: If the graph is not simulated, set "ground_truth_available" to False
+    Performs reconstruction of a graph from a sparse matrix representation, employing node embedding
+    and manifold learning techniques. The process includes inferring node positions, plotting the
+    reconstructed graph, and computing quality metrics related to the reconstruction accuracy.
 
-    node_embedding_mode : 'landmark_isomap' (fast), 'ggvec' (more robust)
+    Args:
+        args: An object containing configuration parameters and options for the analysis, including
+              the dimensionality (`dim`), directory mappings (`directory_map`), and graph analysis
+              settings.
+        sparse_graph: A sparse matrix representation of the graph to be reconstructed.
+        node_embedding_mode (str): The mode of node embedding to use for initial node position inference.
+                                   Defaults to 'ggvec'. Other options include 'landmark_isomap'.
+        manifild_learning_mode (str): The manifold learning technique to apply for dimensionality
+                                      reduction. Defaults to 'UMAP'.
+        ground_truth_available (bool): Indicates whether ground truth data is available for evaluating
+                                       the reconstruction quality. Defaults to False.
 
-    Returns: reconstructed points (numpy array)
-             metrics (ground truth and gta) --> dictionary of "metrics" object
+    Returns:
+        tuple: A tuple containing:
+               - reconstructed_points (numpy array): The inferred positions of nodes in the target
+                 dimensionality.
+               - metrics (dict): A dictionary of quality metrics assessing the reconstruction, with
+                 keys for ground truth-based metrics ("ground_truth") and metrics in the absence of
+                 ground truth ("gta").
 
+    Note:
+        The function modifies the `args` object by appending the `node_embedding_mode` to `args_title`
+        for identification.
     """
     sparse_graph = convert_graph_type(graph=sparse_graph, args=args, desired_type='sparse')
     metrics = {}
@@ -239,7 +255,7 @@ def main():
     # shortest_path_matrix = compute_shortest_path_matrix_sparse_graph(sparse_graph_original)
     # plot_shortest_path_heatmap(args, shortest_path_matrix=shortest_path_matrix)
 
-    ## Multiple
+    ## Multiple   #TODO: add pipeline that deals with making several graphs and plotting them in comparison
     false_edge_list = [0, 10, 50, 100]
     sp_matrix_list = compute_several_sp_matrices(args, sparse_graph_original, false_edges_list=false_edge_list)
     plot_multiple_shortest_path_heatmaps(args, sp_matrix_list, false_edge_list=false_edge_list)

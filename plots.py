@@ -360,6 +360,29 @@ def plot_spatial_constant_variation(args, spatial_constant_variation_results_df)
 
 def plot_original_or_reconstructed_image(args, image_type="original", edges_df=None, position_filename=None,
                                          plot_weights_against_distance=False):
+    """Plots the original or reconstructed image based on the provided arguments.
+
+    This function handles the plotting of either the original or reconstructed graph images,
+    with options to include weights against distance. It sets up the plot based on the dimensionality
+    specified in `args`, retrieves edge data, and plots node positions with optional coloring.
+
+    Args:
+        args: An object containing configuration and graph arguments, including directory paths,
+              dimensionality (`dim`), color mapping, and more.
+        image_type (str): The type of image to plot, options are "original", "mst", or "reconstructed".
+                          Defaults to "original".
+        edges_df (pandas.DataFrame, optional): DataFrame containing edge data. If None, the edge data
+                                               is loaded from a file specified in `args`. Defaults to None.
+        position_filename (str, optional): Filename of the position data CSV file. If None, the position
+                                           data is loaded based on `image_type` and configurations in `args`.
+                                           Defaults to None.
+        plot_weights_against_distance (bool): Flag to enable plotting of weights against distance for edges.
+                                              Defaults to False.
+
+    Raises:
+        ValueError: If `image_type` is not one of the expected options ("original", "reconstructed", "mst").
+        ValueError: If the edge list numbering is not valid, indicating a mismatch between edge data and node positions.
+    """
     def setup_plot(args, figsize=(10, 8)):
         fig = plt.figure(figsize=figsize)
         if args.dim == 3:

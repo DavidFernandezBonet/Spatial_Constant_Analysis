@@ -55,7 +55,21 @@ def classical_mds(distance_matrix, dimensions=2):
 
 
 def compute_gram_matrix_eigenvalues(distance_matrix):
-    """Perform Classical MDS on a given distance matrix, without predefining the dimensions."""
+    """
+       Computes the eigenvalues of the Gram matrix derived from a given distance matrix. The Gram matrix is
+       calculated based on the distance matrix, which is then used to compute its eigenvalues.
+
+       Args:
+           distance_matrix: A numpy array representing the pairwise distances between nodes in a graph,
+                            from which the Gram matrix is derived.
+
+       Returns:
+           numpy.ndarray: An array of eigenvalues of the Gram matrix.
+
+       Note:
+           The function `distance_matrix_to_gram` is used to convert the distance matrix into a Gram matrix
+           before computing its eigenvalues. This step might need optimization for large matrices.
+       """
     # TODO: increase efficiency for large matrices
     B = distance_matrix_to_gram(distance_matrix)
     eigenvalues = compute_matrix_eigenvalues(B)
@@ -486,6 +500,27 @@ def edm_test_statistic(args, matrix, d, variance_threshold=0.99, similarity_thre
     return variance_check and similarity_check and near_zero_check
 
 def plot_cumulative_eigenvalue_contribution(args, eigenvalues, original, first_10_eigenvalues=False):
+    """
+    Plots the cumulative contribution of eigenvalues to the total variance and saves the plot. It can also
+    display the contribution of just the first 10 eigenvalues if specified.
+
+    Args:
+        args: An object containing configuration parameters, including the expected dimensionality of the graph
+              (`dim`) and directory mappings (`directory_map`) for saving plots.
+        eigenvalues: An array of eigenvalues whose contributions are to be plotted.
+        original (bool): Flag indicating whether the original Euclidean distances are used. Affects plot titling.
+        first_10_eigenvalues (bool): If True, only the first 10 eigenvalues are considered in the plot. Defaults to False.
+
+    Returns:
+        float: The cumulative variance explained by the first `d` eigenvalues, where `d` is the dimensionality
+               specified in `args.dim`.
+
+    Note:
+        The plot illustrates both individual and cumulative variance contributions of the eigenvalues, highlighting
+        the significance of the first `d` dimensions. The plot is saved in the directory specified by
+        `args.directory_map['mds_dim']`, with the filename reflecting whether it's based on original distances or
+        the shortest path matrix, and whether it's limited to the first 10 eigenvalues.
+    """
     d = args.dim
     S = eigenvalues
 
@@ -498,8 +533,8 @@ def plot_cumulative_eigenvalue_contribution(args, eigenvalues, original, first_1
     cumulative_variance_first_d_eigenvalues = cumulative_variance[d-1]
 
     plt.figure(figsize=(10, 6))
-    plt.bar(range(1, len(S) + 1), variance_proportion, alpha=0.7, label='Individual Variance Contribution')
-    plt.plot(range(1, len(S) + 1), cumulative_variance, '-o', color='r', label='Cumulative Variance Contribution')
+    plt.bar(range(1, len(S) + 1), variance_proportion, alpha=0.7, label='Individual Contribution')
+    plt.plot(range(1, len(S) + 1), cumulative_variance, '-o', color='r', label='Cumulative Contribution')
     plt.axvline(x=d, color='g', linestyle='--', label=f'Dimension {d} significance')
     # Display cumulative variance for first d eigenvalues
     plt.text(d, cumulative_variance_first_d_eigenvalues, f'{cumulative_variance_first_d_eigenvalues:.2f}', color='g',
@@ -875,6 +910,28 @@ def rankcomplete_distmat(D, dim, iters=100, tol=1e-6, verbose=True):
     return D2, E
 
 def plot_gram_matrix_eigenvalues(args, shortest_path_matrix):
+    """
+    Plots the cumulative eigenvalue contribution of a graph's shortest path matrix after converting it to a Gram matrix.
+    It computes the eigenvalues of the Gram matrix derived from the shortest path matrix, then plots and saves the
+    cumulative contribution of these eigenvalues to understand the variance explained by the principal components.
+
+    Args:
+        args: An object containing configuration parameters and options for the analysis, including
+              the expected dimensionality of the graph (`dim`) and directory mappings (`directory_map`)
+              for saving plots.
+        shortest_path_matrix: A numpy array representing the pairwise shortest path distances between nodes
+                              in the graph.
+
+    Returns:
+        float: The cumulative variance contribution of the first `d` eigenvalues, where `d` is the dimensionality
+               specified in `args.dim`.
+
+    Note:
+        This function relies on `compute_gram_matrix_eigenvalues` to compute the eigenvalues of the Gram matrix
+        corresponding to the shortest path matrix and `plot_cumulative_eigenvalue_contribution` to generate and save
+        a plot of the eigenvalues' cumulative contribution. The plot is saved in the directory specified by
+        `args.directory_map['mds_dim']` with a naming convention that reflects the analysis type and graph properties.
+    """
     eigenvalues_sp_matrix = compute_gram_matrix_eigenvalues(distance_matrix=shortest_path_matrix)
     first_d_values_contribution = plot_cumulative_eigenvalue_contribution(args, eigenvalues=eigenvalues_sp_matrix, original=False)
     return first_d_values_contribution

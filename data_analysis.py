@@ -141,8 +141,38 @@ def get_spatial_constant_results(args, mean_shortest_path, average_degree, num_n
 
 def plot_graph_properties(args, igraph_graph):
     """
-    Plot clustering coefficient and degree distribution
-    Both for unipartite and bipartite grpahs
+    Plots various graph properties including clustering coefficients, degree distributions,
+    and shortest path distributions. It supports both unipartite and bipartite graphs.
+    For bipartite graphs, properties are computed and plotted separately for each set.
+
+    This function also computes and stores spatial constant results based on the mean shortest path
+    and average degree of the graph.
+
+    Args:
+        args: An object containing configuration parameters and options for the graph analysis. This object
+              should include fields for bipartite graph checks (`is_bipartite`), directory mappings
+              (`directory_map`), graph titles (`args_title`), and placeholders for results
+              (`mean_clustering_coefficient`, `average_degree`, etc.).
+        igraph_graph: An igraph graph object. If the graph is not of the desired igraph type, it will be
+                      converted within the function.
+
+    Outputs:
+        - Plots of clustering coefficient distributions and degree distributions saved to specified directories.
+        - A CSV file containing spatial constant results saved in the specified directory.
+
+    Side Effects:
+        - Modifies the `args` object by setting various properties such as `mean_clustering_coefficient`,
+          `average_degree`, and others depending on whether the graph is bipartite or not.
+        - Generates and saves plots to the filesystem.
+        - Saves spatial constant results as a CSV file to the filesystem.
+
+    Note:
+        - The function relies on several helper functions (`convert_graph_type`,
+          `bipartite_clustering_coefficient_optimized`, `get_bipartite_degree_distribution`,
+          `plot_clustering_coefficient_distribution`, `plot_degree_distribution`, `get_local_clustering_coefficients`,
+          `get_degree_distribution`, `get_mean_shortest_path`, `plot_shortest_path_distribution`,
+          `get_spatial_constant_results`) to perform its tasks.
+        - Ensure that all necessary fields are present in the `args` object before calling this function.
     """
     igraph_graph = convert_graph_type(args, graph=igraph_graph, desired_type='igraph')
 
@@ -287,6 +317,41 @@ def run_simulation_graph_growth(args, start_n_nodes=100, n_graphs=10, num_random
 def run_simulation_subgraph_sampling(args, graph, size_interval=100, n_subgraphs=10, add_false_edges=False,
                                      add_mst=False, parallel=True, false_edge_list=[0,1,2,3,4],
                                      plot_spatial_constant_against_false_edges=False):
+    """
+     Runs a simulation that samples subgraphs from a given graph (using BFS) to analyze various properties,
+     optionally adding minimum spanning trees (MST) and/or false edges to the graph before sampling.
+     The function supports parallel processing to speed up computations.
+
+     Args:
+         args: An object containing configuration parameters and options for the graph analysis,
+               including directory mappings and proximity mode settings.
+         graph: An igraph graph object to be analyzed. The graph is converted to the igraph format
+                if not already in that format.
+         size_interval (int): The interval size for subgraph sampling, determining the range of subgraph
+                              sizes to analyze. Defaults to 100.
+         n_subgraphs (int): The number of subgraphs to sample at each size interval. Defaults to 10.
+         add_false_edges (bool): Whether to add false edges to the graph before sampling. Defaults to False.
+         add_mst (bool): Whether to compute and analyze the minimum spanning tree of the graph. Defaults to False.
+         false_edge_list (list of int): A list specifying the numbers of false edges to add for each simulation run.
+                                        Only relevant if `add_false_edges` is True. Defaults to [0,1,2,3,4].
+         plot_spatial_constant_against_false_edges (bool): Whether to plot the spatial constant against the number
+                                                           of false edges added. Only relevant if `add_false_edges`
+                                                           is True. Defaults to False.
+
+     Returns:
+         pandas.DataFrame: A DataFrame containing the aggregated results of the subgraph sampling simulation,
+                           including spatial constant calculations for various subgraph sizes and configurations.
+
+     Raises:
+         ValueError: If `args` does not contain the necessary configuration for the simulation.
+
+     Note:
+         This function modifies the `args` object by updating it with results from the simulation, such as
+         mean shortest path and clustering coefficients. Ensure that `args` is properly configured before
+         calling this function. It plots the spatial constant plot.
+
+     """
+
     # TODO: introduce option to not parallelize (can run into memory problems)
 
     # Needs to be an igraph
@@ -352,6 +417,8 @@ def run_simulation_subgraph_sampling(args, graph, size_interval=100, n_subgraphs
             # # This adds random edges by the number
             # igraph_graph_false = add_random_edges_igraph(igraph_graph.copy(), num_edges_to_add=false_edge_number)
             pool = multiprocessing.Pool(multiprocessing.cpu_count())
+
+
             tasks = [(size_subgraphs, args, igraph_graph_false, n_subgraphs) for size_subgraphs in size_subgraph_list]
             results = pool.starmap(process_subgraph__bfs_parallel, tasks)
             pool.close()
