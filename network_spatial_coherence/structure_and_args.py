@@ -1,3 +1,10 @@
+import sys
+from pathlib import Path
+# This is so the script works as a stand alone and as a package
+package_root = Path(__file__).parent
+if str(package_root) not in sys.path:
+    sys.path.append(str(package_root))
+
 import os
 import importlib
 import config as default_config
