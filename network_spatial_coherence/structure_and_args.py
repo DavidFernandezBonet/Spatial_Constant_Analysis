@@ -139,13 +139,14 @@ class GraphArgs:
         create_project_structure(): Creates and returns a mapping of directory structures, for file organization.
     """
 
-    def __init__(self, config_filename='config.py'):
+    def __init__(self, override_config_path=None):
 
         # Loading Args from configuration file
         self.code_folder = os.getcwd()
         # self.unsorted_config = self.load_config(config_filename, code_folder=self.code_folder)
-        self.unsorted_config = self.load_config(config_filename)
+        self.unsorted_config = self.load_config(override_config_path)
         config = self.get_config(config_module=self.unsorted_config)
+
 
 
         self.edge_list_title = None
