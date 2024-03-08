@@ -411,24 +411,24 @@ class GraphArgs:
 
 
 
-    def export_default_config(filepath='default_config.py'):
-        from config import base, simulation, experiment  # Adjust this import as needed
+def export_default_config(filepath='default_config.py'):
+    from config import base, simulation, experiment  # Adjust this import as needed
 
-        pp = pprint.PrettyPrinter(indent=4)
+    pp = pprint.PrettyPrinter(indent=4)
 
-        with open(filepath, 'w') as f:
-            f.write("# Default configuration template\n\n")
+    with open(filepath, 'w') as f:
+        f.write("# Default configuration template\n\n")
 
-            f.write("# Base settings common to all scenarios\n")
-            f.write("base = ")
-            f.write(pp.pformat(base) + "\n\n")
+        f.write("# Base settings common to all scenarios\n")
+        f.write("base = ")
+        f.write(pp.pformat(base) + "\n\n")
 
-            f.write("# Settings specific to simulation scenarios\n")
-            f.write("simulation = ")
-            f.write(pp.pformat(simulation) + "\n\n")
+        f.write("# Settings specific to simulation scenarios\n")
+        f.write("simulation = ")
+        f.write(pp.pformat(simulation) + "\n\n")
 
-            f.write("# Settings specific to experimental scenarios\n")
-            f.write("experiment = ")
-            f.write(pp.pformat(experiment) + "\n")
+        f.write("# Settings specific to experimental scenarios\n")
+        f.write("experiment = ")
+        f.write(pp.pformat(experiment) + "\n")
 
-        print(f"Default configuration template written to {filepath}")
+    print(f"Default configuration template written to {filepath}")
