@@ -406,3 +406,13 @@ class GraphArgs:
     def dim(self, value):
         self._dim = value
         self.update_args_title()
+
+
+def export_default_config(filepath='default_config.py'):
+    from config import base, simulation, experiment  # Import your default configs
+    with open(filepath, 'w') as f:
+        f.write("# Default configuration template\n")
+        f.write("base = " + repr(base) + "\n\n")
+        f.write("simulation = " + repr(simulation) + "\n\n")
+        f.write("experiment = " + repr(experiment) + "\n")
+    print(f"Default configuration template written to {filepath}")

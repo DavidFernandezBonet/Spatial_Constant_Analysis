@@ -82,11 +82,12 @@ def plot_profiling_results(args):
 
 
 @profile
-def load_and_initialize_graph():
+def load_and_initialize_graph(args=None):
     """
     Step 1: Load the graph with provided arguments and perform initial checks.
     """
-    args = GraphArgs()
+    if args is None:
+        args = GraphArgs()
     print("proximity_mode", args.proximity_mode)
 
     if args.proximity_mode != "experimental":
