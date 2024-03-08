@@ -16,7 +16,7 @@ def create_project_structure(target_dir=None):
     """
     current_script_dir = os.path.dirname(os.path.realpath(__file__))
     parent_dir = os.path.dirname(current_script_dir)
-
+    add_src = False
     if target_dir is None:
         if os.path.exists(os.path.join(parent_dir, "do_not_delete.txt")):
             # Running as a script within the src directory
