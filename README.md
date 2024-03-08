@@ -19,5 +19,5 @@ To begin with NetworkSpatialCoherence, ensure you have Python installed and foll
 2. Install the library using pip:
 
 ```bash
-pip install ./GraphReconstructionToolkit
+pip install git+https://github.com/DavidFernandezBonet/Spatial_Constant_Analysis.git
 

@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     # Basic info
-    name='Network Spatial Coherence',
+    name='network_spatial_coherence',
     version='0.1.0',
     author='David Fernandez Bonet',
     author_email='dfb@kth.se',
