@@ -1,5 +1,11 @@
+import sys
+from pathlib import Path
+# This is so the script works as a stand alone and as a package
+package_root = Path(__file__).parent
+if str(package_root) not in sys.path:
+    sys.path.append(str(package_root))
 import matplotlib.pyplot as plt
-
+import time
 from create_proximity_graph import write_proximity_graph
 from structure_and_args import GraphArgs
 from data_analysis import plot_graph_properties, run_simulation_subgraph_sampling
@@ -10,10 +16,9 @@ from spatial_constant_analysis import run_reconstruction
 from dimension_prediction import run_dimension_prediction
 from gram_matrix_analysis import plot_gram_matrix_eigenvalues
 from structure_and_args import create_project_structure
-
-import time
 from functools import wraps
 from memory_profiler import memory_usage
+
 
 
 # Global storage for profiling data
