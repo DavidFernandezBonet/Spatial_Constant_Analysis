@@ -8,7 +8,7 @@ from utils import read_position_df
 import scipy.stats as stats
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import shortest_path
-import cvxpy as cp
+
 
 from numpy import prod, zeros, sqrt
 from numpy.random import randn

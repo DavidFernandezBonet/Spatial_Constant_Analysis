@@ -1,6 +1,6 @@
 # Base settings common to all scenarios
 base = {
-    "proximity_mode": "experimental",  # Options 1) Simulation: knn, epsilon_ball, lattice, delaunay_corrected... 2) experimental
+    "proximity_mode": "lattice",  # Options 1) Simulation: knn, epsilon_ball, lattice, delaunay_corrected... 2) experimental
     "dim": 2,
     "false_edges_count": 0,
     "colorfile": None,  # For coloring reconstruction. Alternatives: colorful_spiral.jpeg, colored_squares.png, dna.jpg, dna_cool2.png, None
@@ -18,7 +18,7 @@ base = {
 if base['proximity_mode'] != 'experimental':
     # Settings specific to simulation scenarios
     simulation = {
-        "num_points": 5000,
+        "num_points": 1000,
         "intended_av_degree": 10,
         'plot_original_image': True
     }

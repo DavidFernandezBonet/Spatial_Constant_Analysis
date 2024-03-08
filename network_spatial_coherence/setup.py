@@ -16,7 +16,7 @@ setup(
     install_requires=[
         'matplotlib==3.8.3',
         'memory_profiler==0.61.0',
-        'networkx==2.4',
+        'networkx==3.2.1',
         'nodevectors==0.1.23',
         'numpy==1.26.4',
         'pandas==2.2.1',

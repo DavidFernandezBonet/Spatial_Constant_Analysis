@@ -607,7 +607,7 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
         plt.yscale('log')
         plt.xscale('log')
         plt.savefig(f"{plot_folder}/weight_distance_{args.args_title}_log")
-    plt.show()
+    # plt.show()
     plt.close('all')
 
 
