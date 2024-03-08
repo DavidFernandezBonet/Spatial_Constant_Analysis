@@ -9,6 +9,8 @@ import os
 import importlib
 import config as default_config
 import pprint
+import shutil
+import importlib.resources as pkg_resources
 def create_project_structure(target_dir=None):
     """
     Create the project directory structure and return a dictionary mapping directory names to their corresponding paths.
@@ -98,6 +100,23 @@ def create_project_structure(target_dir=None):
 
     # with open(os.path.join(project_root, 'README.md'), 'w') as readme_file:
     #     readme_file.write("# Project: Spatial Constant Analysis\n")
+
+    files_to_copy = {
+        'example_edge_list.pickle': 'data/edge_lists',
+        'dna_cool2.png': 'data/colorcode',
+    }
+
+    if not add_src:
+        ### Move example files for the user to have in the package
+        for filename, rel_dest in files_to_copy.items():
+            # Use importlib.resources to access the package files
+            with pkg_resources.path('network_spatial_coherence', filename) as source_path:
+                # Calculate the destination path
+                dest_path = Path(project_root) / rel_dest / filename
+
+                # Copy file
+                shutil.copy2(source_path, dest_path)
+                print(f"Copied {filename} to {dest_path}")
 
     print(f"Project structure created under '{project_root}'")
     return directory_map
