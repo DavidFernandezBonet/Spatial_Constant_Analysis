@@ -14,12 +14,14 @@ def create_project_structure(target_dir=None):
     Create the project directory structure and return a dictionary mapping directory names to their corresponding paths.
     The user can choose the directory where the project should be created, otherwise it defaults to the current working directory.
     """
+    current_script_dir = os.path.dirname(os.path.realpath(__file__))
+    parent_dir = os.path.dirname(current_script_dir)
 
     if target_dir is None:
-        if '__file__' in globals():
+        if os.path.exists(os.path.join(parent_dir, "do_not_delete.txt")):
             # Running as a script within the src directory
-            current_script_dir = os.path.dirname(os.path.realpath(__file__))
             project_root = os.path.dirname(os.path.dirname(current_script_dir))
+            add_src = True
         else:
             # Running as installed package or no clear indication of being within src
             project_root = os.getcwd()  # Default to current working directory
@@ -31,7 +33,6 @@ def create_project_structure(target_dir=None):
     # project_root = os.path.dirname(current_script_dir)
 
     directory_map = {
-        'source_code': f'{project_root}/src',
         'edge_lists': f'{project_root}/data/edge_lists',
         'original_positions': f'{project_root}/data/original_positions',
         'reconstructed_positions': f'{project_root}/data/reconstructed_positions',
@@ -85,6 +86,8 @@ def create_project_structure(target_dir=None):
 
     }
 
+    if add_src:
+        directory_map['source_code'] = f'{project_root}/src'
     for key, relative_path in directory_map.items():
         full_path = os.path.join(project_root, relative_path)
         os.makedirs(full_path, exist_ok=True)
