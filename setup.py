@@ -18,7 +18,7 @@ setup(
         'memory_profiler==0.61.0',
         'networkx==2.4',
         'nodevectors==0.1.23',
-        'numpy==1.21.5',
+        'numpy==1.26.4',
         'pandas==2.2.1',
         'pecanpy==2.0.9',
         'Pillow==10.2.0',  #

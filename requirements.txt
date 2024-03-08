@@ -2,10 +2,9 @@ matplotlib==3.8.3
 memory_profiler==0.61.0
 networkx==2.4
 nodevectors==0.1.23
-numpy==1.21.5
+numpy==1.26.4
 pandas==2.2.1
 pecanpy==2.0.9
-Pillow==9.0.1
 Pillow==10.2.0
 pixelator==1.2.0
 plotly==5.19.0
