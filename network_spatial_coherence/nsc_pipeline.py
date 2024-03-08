@@ -194,7 +194,7 @@ def reconstruct_graph(graph, args):
 
 
 
-def main(graph, args):
+def run_pipeline(graph, args):
     """
     Main function: graph loading, processing, and analysis.
     """
@@ -224,10 +224,10 @@ if __name__ == "__main__":
         for i, graph_args in enumerate(graph_args_list):
             print("iteration:", i, "graph size:", graph_args.num_points)
             if graph_args.num_points > 30:  # only reconstruct big enough graphs
-                single_graph_args = main(graph=graph_args.sparse_graph, args=graph_args)
+                single_graph_args = run_pipeline(graph=graph_args.sparse_graph, args=graph_args)
                 # optionally profile every time
                 # plot_profiling_results(single_graph_args)  # Plot the results at the end
 
     else:
-        single_graph_args = main(graph, args)
+        single_graph_args = run_pipeline(graph, args)
         plot_profiling_results(single_graph_args)  # Plot the results at the end
