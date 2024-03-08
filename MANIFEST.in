@@ -1,0 +1,4 @@
+recursive-include src/docs/build/html *
+include src/network_spatial_coherence/data/colorcode/dna_cool2.png
+include src/network_spatial_coherence/data/edge_lists/subgraph_8_nodes_160_edges_179_degree_2.24.pickle
+

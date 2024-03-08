@@ -34,20 +34,12 @@ setup(
         'umap-learn',
     ],
 
-    # Optional package data
     package_data={
-        # If any package contains *.txt or *.rst files, include them:
-        'your_package_name': ['*.txt', '*.rst'],
-        # And include any files found in the 'data' subdirectory of the 'your_package_name' package, also:
-        'your_package_name': ['data/*'],
+        'network_spatial_coherence': ['docs/build/html/*.*', 'example_edge_list.pickle', 'dna_cool2.png'],
+        # This includes HTML files and assets. Adjust the pattern as necessary to match your directory structure.
     },
+    include_package_data=True,
 
-    # Could be useful to create a script accessible from the command line
-    entry_points={
-        'console_scripts': [
-            'your_command=your_package.module:function',
-        ],
-    },
 
     # Additional metadata
     classifiers=[
