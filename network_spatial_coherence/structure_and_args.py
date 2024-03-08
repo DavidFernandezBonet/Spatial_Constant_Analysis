@@ -9,13 +9,26 @@ import os
 import importlib
 import config as default_config
 import pprint
-def create_project_structure():
+def create_project_structure(target_dir=None):
     """
     Create the project directory structure and return a dictionary mapping directory names to their corresponding paths.
+    The user can choose the directory where the project should be created, otherwise it defaults to the current working directory.
     """
 
-    current_script_dir = os.path.dirname(os.path.realpath(__file__))
-    project_root = os.path.dirname(current_script_dir)
+    if target_dir is None:
+        if '__file__' in globals():
+            # Running as a script within the src directory
+            current_script_dir = os.path.dirname(os.path.realpath(__file__))
+            project_root = os.path.dirname(os.path.dirname(current_script_dir))
+        else:
+            # Running as installed package or no clear indication of being within src
+            project_root = os.getcwd()  # Default to current working directory
+    else:
+        # User specified target directory
+        project_root = target_dir
+
+    # current_script_dir = os.path.dirname(os.path.realpath(__file__))
+    # project_root = os.path.dirname(current_script_dir)
 
     directory_map = {
         'source_code': f'{project_root}/src',
@@ -76,9 +89,9 @@ def create_project_structure():
         full_path = os.path.join(project_root, relative_path)
         os.makedirs(full_path, exist_ok=True)
 
-        if key == 'source_code':
-            with open(os.path.join(full_path, '__init__.py'), 'w') as init_file:
-                init_file.write("# Init file for src package\n")
+        # if key == 'source_code':
+        #     with open(os.path.join(full_path, '__init__.py'), 'w') as init_file:
+        #         init_file.write("# Init file for src package\n")
 
     # with open(os.path.join(project_root, 'README.md'), 'w') as readme_file:
     #     readme_file.write("# Project: Spatial Constant Analysis\n")
