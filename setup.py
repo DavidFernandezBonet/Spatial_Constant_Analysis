@@ -24,7 +24,7 @@ setup(
         'Pillow==10.2.0',  #
         'pixelator==1.2.0',
         'plotly==5.19.0',
-        #'pymde==0.1.18',
+        'pymde==0.1.18',
         'python_igraph==0.11.4',
         'scienceplots==2.1.1',
         'scikit_learn==1.3.1',
