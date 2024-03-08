@@ -34,12 +34,16 @@ setup(
         'umap-learn',
     ],
 
-    package_data={
-        'network_spatial_coherence': ['docs/build/html/*.*', 'example_edge_list.pickle', 'dna_cool2.png'],
-        # This includes HTML files and assets. Adjust the pattern as necessary to match your directory structure.
-    },
-    include_package_data=True,
 
+
+	package_data={
+	    'network_spatial_coherence': [
+		'docs/build/html/**/*',  # Use glob pattern to include all files and subdirectories
+		'example_edge_list.pickle',
+		'dna_cool2.png',
+	    ],
+	},
+	include_package_data=True,
 
     # Additional metadata
     classifiers=[
