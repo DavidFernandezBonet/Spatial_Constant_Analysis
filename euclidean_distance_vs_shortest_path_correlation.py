@@ -12,6 +12,7 @@ from sklearn.metrics import r2_score
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import linregress
+from algorithms import compute_shortest_path_matrix_sparse_graph
 
 # What about seaborn?
 import scienceplots
@@ -23,7 +24,7 @@ plt.rcParams['xtick.labelsize'] = font_size
 plt.rcParams['ytick.labelsize'] = font_size
 plt.rcParams['legend.fontsize'] = font_size - 10
 
-plt.style.use(['no-latex', 'nature'])
+plt.style.use(['nature'])
 
 sns.set_style("white")  # 'white' is a style option in seaborn
 
@@ -82,20 +83,49 @@ def plot_euclidean_sp_correlation_single(ax, euclidean_distances, shortest_path_
     # cmap = mcolors.LinearSegmentedColormap.from_list("", ["white", color, color])
     cmap = "Blues"
 
-    # Use the created colormap for the hexbin plot
-    hb = ax.hexbin(shortest_path_flat, euclidean_flat, gridsize=50, cmap=cmap, mincnt=1)
-    plt.colorbar(hb, label='Point Density')
+
+
+    # Randomly sample a subset of points for KDE density plot
+    sample_size = 10000  # Adjust based on your computational capacity
+    indices = np.random.choice(range(len(shortest_path_flat)), sample_size, replace=False)
+    sampled_shortest_path = shortest_path_flat[indices]
+    sampled_euclidean = euclidean_flat[indices]
+    print("plotting kde plot...")
+    sns.kdeplot(x=sampled_shortest_path, y=sampled_euclidean, cmap=cmap, fill=True, ax=ax)
+    print("finished kde...")
+
+    # ## Before I was using hexagons
+    # hb = ax.hexbin(shortest_path_flat, euclidean_flat, gridsize=50, cmap=cmap, mincnt=1)
+    # plt.colorbar(hb, label='Point Density')
 
     slope, intercept, _, _, _ = linregress(shortest_path_flat, euclidean_flat)
     x_vals = np.array(ax.get_xlim())
     y_vals = intercept + slope * x_vals
 
     # Use the main color for the trend line
-    ax.plot(x_vals, y_vals, '--', color=color, label=f'{label}$R^2$: {correlation**2:.4f}')
+    ax.plot(x_vals, y_vals, '--', color=color, label=f'$R^2$ = {correlation**2:.4f}')
+
+
+    ### Plot representative points
+    df = pd.DataFrame({'ShortestPath': sampled_shortest_path, 'Euclidean': sampled_euclidean})
+    num_bins = 100  # This could be adjusted based on the range and distribution of shortest path distances
+    df['Bin'] = pd.cut(df['ShortestPath'], bins=num_bins, labels=False)
+    selected_points = []
+    for bin_id in range(num_bins):
+        bin_df = df[df['Bin'] == bin_id]
+        if len(bin_df) >= 10:
+            selected_points.append(bin_df.sample(n=10))
+        else:
+            selected_points.append(bin_df)
+    selected_points_df = pd.concat(selected_points)
+    ax.scatter(selected_points_df['ShortestPath'], selected_points_df['Euclidean'], color='red', s=10, edgecolor='k',
+               label='Representative Points')
+
 
     ax.set_xlabel('Shortest Path Distance')
     ax.set_ylabel('Euclidean Distance')
     ax.legend(facecolor='white', framealpha=1)
+
 
 def plot_multiple_series(args, distance_matrix_pairs, colors, false_edge_list):
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -147,7 +177,7 @@ def plot_r2_vs_false_edges(ax, r2_values, false_edge_list):
     ax.set_ylabel('$R^2$ Coefficient')
     # ax.set_title('R² Coefficient vs. Number of False Edges')
 
-def generate_and_plot_series(args, euclidean_distance_matrix, sparse_graph, false_edge_list):
+def generate_and_plot_series_with_false_edges(args, euclidean_distance_matrix, sparse_graph, false_edge_list):
     fig, axes = plt.subplots(1, 2, figsize=(15, 6))
 
     # Series without false edges
@@ -176,6 +206,34 @@ def generate_and_plot_series(args, euclidean_distance_matrix, sparse_graph, fals
     plot_folder = args.directory_map["plots_euclidean_sp"]
     plt.savefig(f"{plot_folder}/correlation_r2_false_edges_{args.args_title}.svg", format='svg')
 
+def plot_ideal_case(args, original_dist_matrix, shortest_path_distance_matrix):
+    fig, axs = plt.subplots(1, 3, figsize=(18, 6))
+    # Plot 1 - Original Distance Matrix
+    sns.heatmap(original_dist_matrix, ax=axs[0], cmap="viridis", cbar_kws={'label': 'Euclidean Distance'})
+    axs[0].set_title("Euclidean DM")
+    axs[0].collections[0].set_rasterized(True)
+    axs[0].set_xlabel("")
+    axs[0].set_ylabel("")
+    axs[0].set_xticklabels([])  # Remove x-axis number labels
+    axs[0].set_yticklabels([])  # Remove y-axis number labels
+    # Plot 2 - Shortest Path Distance Matrix
+    sns.heatmap(shortest_path_distance_matrix, ax=axs[1], cmap="viridis", cbar_kws={'label': 'Shortest Path Distance'})
+    axs[1].set_title("Shortest Path DM")
+    axs[1].collections[0].set_rasterized(True)
+    axs[1].set_xlabel("")
+    axs[1].set_ylabel("")
+    axs[1].set_xticklabels([])  # Remove x-axis number labels
+    axs[1].set_yticklabels([])  # Remove y-axis number labels
+    # Plot 3 - Correlation between original distance and shortest path distances
+    plot_euclidean_sp_correlation_single(axs[2], original_dist_matrix, shortest_path_distance_matrix, "Correlation", "blue")
+
+
+    plt.tight_layout()
+    plot_folder = args.directory_map["plots_euclidean_sp"]
+    plt.savefig(f"{plot_folder}/heatmap_and_correlation_single_case_{args.args_title}", format='svg')
+    plt.show()
+
+
 def plot_single_correlation_euclidean_sp_series(args, original_dist_matrix, sparse_graph):
     ## Single series
     ### Add random edges? See efect in the dimensionality here
@@ -187,18 +245,18 @@ def plot_single_correlation_euclidean_sp_series(args, original_dist_matrix, spar
     plot_euclidean_sp_correlation(args, original_dist_matrix, sp_matrix)
 
 
-def make_euclidean_sp_correlation_plot():
+def make_euclidean_sp_correlation_plot(single_series=True, multiple_series=False):
     # Parameters
     args = GraphArgs()
     args.proximity_mode = "knn"
     args.dim = 2
-
     args.intended_av_degree = 15
-    args.num_points = 2000
+    args.num_points = 1000  # 2000
 
     # # # 1 Simulation
-    create_proximity_graph.write_proximity_graph(args)
-    sparse_graph, _ = load_graph(args, load_mode='sparse')
+    create_proximity_graph.write_proximity_graph(args, order_indices=True)
+    sparse_graph = load_graph(args, load_mode='sparse')
+    shortest_path_distance_matrix = compute_shortest_path_matrix_sparse_graph(sparse_graph)
 
     ## Original data
     edge_list = read_edge_list(args)
@@ -208,20 +266,17 @@ def make_euclidean_sp_correlation_plot():
 
 
 
+    if single_series:
+        # # Single series
+        # plot_single_correlation_euclidean_sp_series(args, original_dist_matrix, sparse_graph)
+        # Plots the heatmap of the matrices also and the correlation
+        plot_ideal_case(args, original_dist_matrix, shortest_path_distance_matrix)
 
-    # # Single series
-    # plot_single_correlation_euclidean_sp_series(args, original_dist_matrix, sparse_graph)
+    elif multiple_series:
+        ## Multiple series
+        # false_edge_list = [0, 5, 25, 50, 100]
+        false_edge_list = np.linspace(start=0, stop=100, num=10).astype(int)
+        generate_and_plot_series_with_false_edges(args, original_dist_matrix, sparse_graph, false_edge_list)
 
-
-    ## Multiple series
-    # false_edge_list = [0, 5, 25, 50, 100]
-    false_edge_list = np.linspace(start=0, stop=100, num=10).astype(int)
-
-    generate_and_plot_series(args, original_dist_matrix, sparse_graph, false_edge_list)
-
-    # colors = ['green', 'lightcoral', 'indianred', 'darkred']  # Green for 0 edges, progressively redder for more edges
-    # # multiple series looked dirty
-    # distance_matrix_pairs = generate_false_edge_series(sparse_graph, original_dist_matrix, false_edge_list)
-    # plot_multiple_series(args, distance_matrix_pairs, colors)
 
 # make_euclidean_sp_correlation_plot()

@@ -16,56 +16,129 @@ import os
 
 from algorithms import *
 from plots import plot_weight_distribution
+from structure_and_args import GraphArgs
 
 def get_largest_component_sparse(args, sparse_graph, original_node_ids):
     n_components, labels = connected_components(csgraph=sparse_graph, directed=False, return_labels=True)
     print("original graph size")
     if n_components > 1:  # If not connected
-        print("Disconnected (or disordered) graph! Finding largest component...")
-        num_nodes = sparse_graph.shape[0]  # or sparse_graph.shape[1], as it should be a square matrix
-        print("Size of the total graph", num_nodes)
-        # Find the largest component
-        largest_component_label = np.bincount(labels).argmax()
-        component_node_indices = np.where(labels == largest_component_label)[0]
-        component_node_ids = original_node_ids[component_node_indices]
-        largest_component = sparse_graph[component_node_indices][:, component_node_indices]
+        if not args.handle_all_subgraphs:   # Just get the largest component if we don't handle all subgraphs
+            print("Disconnected (or disordered) graph! Finding largest component...")
+            num_nodes = sparse_graph.shape[0]  # or sparse_graph.shape[1], as it should be a square matrix
+            print("Size of the total graph", num_nodes)
+            # Find the largest component
+            largest_component_label = np.bincount(labels).argmax()
+            component_node_indices = np.where(labels == largest_component_label)[0]
+            component_node_ids = original_node_ids[component_node_indices]
+            largest_component = sparse_graph[component_node_indices][:, component_node_indices]
 
-        args.num_points = largest_component.shape[0]
-        print("Size of largest connected component:", args.num_points)
-        # Largeset component to an edge list
-        rows, cols, _ = find(largest_component)
-        edges = list(zip(rows, cols))
-        edge_df = pd.DataFrame(edges, columns=['source', 'target'])
-        edge_list_folder = args.directory_map["edge_lists"]
-        args.edge_list_title = f"edge_list_{args.args_title}.csv"
-        edge_df.to_csv(f"{edge_list_folder}/{args.edge_list_title}", index=False)
+            args.num_points = largest_component.shape[0]
+            print("Size of largest connected component:", args.num_points)
+            # Largeset component to an edge list
+            rows, cols, _ = find(largest_component)
+            edges = list(zip(rows, cols))
+            edge_df = pd.DataFrame(edges, columns=['source', 'target'])
+            edge_list_folder = args.directory_map["edge_lists"]
+            args.edge_list_title = f"edge_list_{args.args_title}.csv"
+            edge_df.to_csv(f"{edge_list_folder}/{args.edge_list_title}", index=False)
+
+            if args.colorcode or args.reconstruct:  # Interested in indices if we want to reconstruct the graph
+                # Component ids to dictionary
+                node_id_mapping = {old_id: new_index for new_index, old_id in enumerate(component_node_ids)}
+                args.node_ids_map_old_to_new = node_id_mapping
+
+                # store also the old edge list
+                node_ids_map_new_to_old = {new_index: old_id for new_index, old_id in enumerate(component_node_ids)}
+                old_index_edge_df = pd.DataFrame()
+                old_index_edge_df['source'] = edge_df['source'].map(node_ids_map_new_to_old)
+                old_index_edge_df['target'] = edge_df['target'].map(node_ids_map_new_to_old)
+                old_index_edge_df.to_csv(f"{edge_list_folder}/old_index_{args.edge_list_title}", index=False)
+
+            # Update largest component properties
+            degrees = largest_component.sum(axis=0).A1  # Sum of non-zero entries in each column (or row)
+            average_degree = np.mean(degrees)
+            args.average_degree = average_degree
+            print(f"Average Degree sparse: {average_degree}")
+            args.num_points = largest_component.shape[0]
+            args.component_node_ids = component_node_ids
+
+            if args.false_edges_count and not args.false_edge_ids:  # TODO: adapt for bipartite case
+                largest_component = add_random_edges_to_csrgraph(args, largest_component, args.false_edges_count)
+                print(args.false_edge_ids)
+
+            # Save the graph in "args"
+            args.sparse_graph = largest_component
+
+            return largest_component
+        else:
+            args_subgraph_list = []
+            for component_label in range(n_components):
+
+                ### Have a graph args for every subgraph
+                args_subgraph = GraphArgs()
+                component_node_indices = np.where(labels == component_label)[0]
+                component_node_ids = original_node_ids[component_node_indices]
+                component_sparse = sparse_graph[component_node_indices][:, component_node_indices]
 
 
-        # ### Print nodes that are left out
-        # # Step 2: Find indices of nodes not in the largest component
-        # non_largest_component_indices = np.where(labels != largest_component_label)[0]
-        #
-        # # Step 3: Retrieve the original IDs for these nodes
-        # non_largest_component_node_ids = original_node_ids[non_largest_component_indices]
-        #
-        # # Now non_largest_component_node_ids contains the IDs/names of the nodes not in the largest component
-        # print("Nodes not in the largest component:", non_largest_component_node_ids)
 
-        if args.colorcode:  # We are only interested in keeping the indices if we want to plot colors in principle
-            # Component ids to dictionary
-            node_id_mapping = {old_id: new_index for new_index, old_id in enumerate(component_node_ids)}
-            args.node_ids_map_old_to_new = node_id_mapping
+                args_subgraph.num_points = component_sparse.shape[0]
+                print("Size of the connected component:", args_subgraph.num_points)
+                # Largeset component to an edge list
+                rows, cols, _ = find(component_sparse)
+                edges = list(zip(rows, cols))
+                edge_df = pd.DataFrame(edges, columns=['source', 'target'])
+                edge_list_folder = args_subgraph.directory_map["edge_lists"]
+                args_subgraph.edge_list_title = f"edge_list_{args_subgraph.args_title}_component_{component_label}.csv"
+                edge_df.to_csv(f"{edge_list_folder}/{args_subgraph.edge_list_title}", index=False)
 
-            # store also the old edge list
-            node_ids_map_new_to_old = {new_index: old_id for new_index, old_id in enumerate(component_node_ids)}
-            old_index_edge_df = pd.DataFrame()
-            old_index_edge_df['source'] = edge_df['source'].map(node_ids_map_new_to_old)
-            old_index_edge_df['target'] = edge_df['target'].map(node_ids_map_new_to_old)
-            old_index_edge_df.to_csv(f"{edge_list_folder}/old_index_{args.edge_list_title}", index=False)
 
-        return largest_component, component_node_ids
-    else:
-        return sparse_graph, original_node_ids
+                # Component ids to dictionary
+                node_id_mapping = {old_id: new_index for new_index, old_id in enumerate(component_node_ids)}
+                args_subgraph.node_ids_map_old_to_new = node_id_mapping
+
+                # store also the old edge list
+                node_ids_map_new_to_old = {new_index: old_id for new_index, old_id in enumerate(component_node_ids)}
+                old_index_edge_df = pd.DataFrame()
+                old_index_edge_df['source'] = edge_df['source'].map(node_ids_map_new_to_old)
+                old_index_edge_df['target'] = edge_df['target'].map(node_ids_map_new_to_old)
+                old_index_edge_df.to_csv(f"{edge_list_folder}/old_index_{args_subgraph.edge_list_title}", index=False)
+
+
+                ### Add subgraph properties
+                degrees = component_sparse.sum(axis=0).A1  # Sum of non-zero entries in each column (or row)
+                average_degree = np.mean(degrees)
+                args_subgraph.average_degree = average_degree
+                print(f"Average Degree sparse: {average_degree}")
+                args_subgraph.num_points = component_sparse.shape[0]
+                args_subgraph.component_node_ids = component_node_ids
+
+                if args_subgraph.false_edges_count and not args.false_edge_ids:  # TODO: adapt for bipartite case
+                    component_sparse = add_random_edges_to_csrgraph(args_subgraph, component_sparse,
+                                                                     args_subgraph.false_edges_count)
+                    print(args_subgraph.false_edge_ids)
+
+                args_subgraph.sparse_graph = component_sparse
+                args_subgraph_list.append(args_subgraph)
+
+            # Returns a list of graph args, containing the graph in "sparse_graph",
+            # the node ids in "node_ids_map_old_to_new"
+            return args_subgraph_list
+
+    else:   # If the graph is completely connected
+        degrees = sparse_graph.sum(axis=0).A1  # Sum of non-zero entries in each column (or row)
+        average_degree = np.mean(degrees)
+        args.average_degree = average_degree
+        print(f"Average Degree sparse: {average_degree}")
+        args.num_points = sparse_graph.shape[0]
+
+        if args.false_edges_count and not args.false_edge_ids:  # TODO: adapt for bipartite case
+            sparse_graph = add_random_edges_to_csrgraph(args, sparse_graph, args.false_edges_count)
+            print(args.false_edge_ids)
+
+        # Save the graph in "args"
+        args.sparse_graph = sparse_graph
+        return sparse_graph
 
 def get_largest_component_igraph(args, igraph_graph, weighted=False):
     components = igraph_graph.clusters()
@@ -317,25 +390,28 @@ def load_graph(args, load_mode='igraph'):
         sparse_graph_coo = coo_matrix((data, (edges[:, 0], edges[:, 1])), shape=(n_nodes, n_nodes))
         # Convert COO matrix to CSR format
         sparse_graph = sparse_graph_coo.tocsr()
-
         original_node_ids = np.arange(n_nodes)
-        largest_component, component_node_ids = get_largest_component_sparse(args, sparse_graph, original_node_ids)
-        # Compute average degree
-        degrees = largest_component.sum(axis=0).A1  # Sum of non-zero entries in each column (or row)
-        average_degree = np.mean(degrees)
-        args.average_degree = average_degree
-        print(f"Average Degree sparse: {average_degree}")
-        args.num_points = largest_component.shape[0]
-        args.component_node_ids = component_node_ids
 
 
+        # TODO: careful, if we have "handle_all_subgraphs" activated, this will return a list of GraphArgs objects
+        # TODO: if not, it will return a single *sparse_graph* object
+        largest_component = get_largest_component_sparse(args, sparse_graph, original_node_ids)
 
-        if args.false_edges_count and not args.false_edge_ids:  #TODO: adapt for bipartite case
-            largest_component = add_random_edges_to_csrgraph(args, largest_component, args.false_edges_count)
-            print(args.false_edge_ids)
-
-        # Save the graph in "args"
-        args.sparse_graph = largest_component
+        ### This is already done in the "get_largest_component_sparse" function
+        # # Compute average degree
+        # degrees = largest_component.sum(axis=0).A1  # Sum of non-zero entries in each column (or row)
+        # average_degree = np.mean(degrees)
+        # args.average_degree = average_degree
+        # print(f"Average Degree sparse: {average_degree}")
+        # args.num_points = largest_component.shape[0]
+        # args.component_node_ids = component_node_ids
+        #
+        # if args.false_edges_count and not args.false_edge_ids:  #TODO: adapt for bipartite case
+        #     largest_component = add_random_edges_to_csrgraph(args, largest_component, args.false_edges_count)
+        #     print(args.false_edge_ids)
+        #
+        # # Save the graph in "args"
+        # args.sparse_graph = largest_component
         return largest_component
 
     elif load_mode == "sparse_weighted":
@@ -412,7 +488,7 @@ def add_random_edges_to_csrgraph(args, csr_graph, num_edges_to_add):
     for _ in range(num_edges_to_add):
         # Randomly select two different nodes
         node_a, node_b = np.random.choice(num_nodes, 2, replace=False)
-        args.false_edge_ids.append(node_a, node_b)
+        args.false_edge_ids.append((node_a, node_b))
         lil_graph[node_a, node_b] = 1
         lil_graph[node_b, node_a] = 1
 
@@ -552,6 +628,7 @@ def convert_graph_type(args, graph, desired_type="igraph"):
     elif desired_type == "sparse":
         # Check if the graph is already a sparse matrix (csgraph)
         if not isspmatrix(graph):
+            print("Original graph format/type:", type(graph).__name__)
             print("Graph is not a csrgraph instance. Converting to csrgraph...")
             if hasattr(args, 'sparse_graph') and args.sparse_graph is not None:
                 return args.sparse_graph

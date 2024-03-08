@@ -95,6 +95,35 @@ def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild
     return reconstructed_points, metrics
 
 
+
+def make_spatial_constant_euc_vs_network():
+    args = GraphArgs()
+    args.proximity_mode = "knn"
+    args.dim = 2
+    args.intended_av_degree = 10
+    args.num_points = 1000
+    create_proximity_graph.write_proximity_graph(args, point_mode="square", order_indices=False)
+    # Parameters for the particular plot
+    size_interval = int(args.num_points / 10)  # collect 10 data points
+    n_samples = 5
+
+    ## Euclidean Spatial Constant
+    euclidean_positions = read_position_df(args=args)
+    euc_results_df = get_spatial_constant_euclidean_df(args, positions_array=euclidean_positions, size_interval=size_interval,
+                                                       num_samples=n_samples)
+    # plot_euc_spatial_constant_against_size_threshold(args, results_df=euc_results_df)
+    ## Network Spatial Constant
+    igraph_graph = load_graph(args, load_mode='igraph')
+
+    net_results_df = run_simulation_subgraph_sampling(args, size_interval=size_interval, n_subgraphs=n_samples,
+                                                      graph=igraph_graph,
+                                     add_false_edges=False, add_mst=False)
+
+    ### Plotting function that encompasses both of them
+    plot_spatial_constant_euc_vs_network(args, results_df_euc=euc_results_df, results_df_net=net_results_df)
+
+
+
 def main():
     # TODO: args_title is not instantiated if you don't call the parameters (maybe just make a config file with the parameters and call them all)
     args = GraphArgs()
@@ -249,7 +278,7 @@ def main():
     #                    node_embedding_mode="node2vec")
 
     # ### Plot cool SP images with heatmaps
-    sparse_graph_original, _ = load_graph(args, load_mode='sparse')
+    sparse_graph_original = load_graph(args, load_mode='sparse')
     ## Individual
 
     # shortest_path_matrix = compute_shortest_path_matrix_sparse_graph(sparse_graph_original)

@@ -5,11 +5,9 @@ nodevectors==0.1.23
 numpy==1.21.5
 pandas==2.2.1
 pecanpy==2.0.9
-Pillow==9.0.1
 Pillow==10.2.0
 pixelator==1.2.0
 plotly==5.19.0
-pymde==0.1.18
 python_igraph==0.11.4
 scienceplots==2.1.1
 scikit_learn==1.3.1
@@ -17,3 +15,8 @@ scipy==1.12.0
 seaborn==0.13.2
 torch==2.1.0
 umap-learn
+
+[dev]
+pytest>=3.7
+check-manifest
+twine

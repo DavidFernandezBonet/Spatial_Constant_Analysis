@@ -16,7 +16,7 @@ class CurveFitting:
     curve_fitting_object.plot_fit_with_uncertainty(self, model_func, xlabel, ylabel, title, save_path)
 
     """
-    def __init__(self, x_data, y_data, y_error_std=None):
+    def __init__(self, x_data, y_data, y_error_std=None, verbose=False):
         """
         x_data: numpy array
         y_data: numpy array
@@ -37,6 +37,8 @@ class CurveFitting:
 
         self.fixed_a = None
         self.fixed_b = None
+
+        self.verbose = verbose
 
     def neg_exponential_model(self, x, a, b, c):
         return a * np.exp(-b * x) + c
@@ -220,11 +222,14 @@ class CurveFitting:
         sst = np.sum((self.sorted_y - mean_y) ** 2)
         ssr = np.sum(residuals ** 2)
         self.r_squared = 1 - (ssr / sst)
-        print("R-squared:", self.r_squared)
+
+        if self.verbose:
+            print("R-squared:", self.r_squared)
 
         # KS test
         ks_statistic, p_value = scipy.stats.kstest(self.sorted_y, lambda x: model_func(x, *self.popt))
-        print("ks stat", ks_statistic, "p-value", p_value)
+        if self.verbose:
+            print("ks stat", ks_statistic, "p-value", p_value)
 
         # Perform the Anderson-Darling test on the residuals
         ad_result = scipy.stats.anderson(residuals)
@@ -234,17 +239,18 @@ class CurveFitting:
         self.ad_critical_values = ad_result.critical_values
         self.ad_significance_levels = ad_result.significance_level
 
-        # Output results
-        print("Anderson-Darling Statistic:", self.ad_statistic)
-        for i in range(len(self.ad_critical_values)):
-            sl, cv = self.ad_significance_levels[i], self.ad_critical_values[i]
-            print(f"Significance Level {sl}%: Critical Value {cv}")
+        if self.verbose:
+            # Output results
+            print("Anderson-Darling Statistic:", self.ad_statistic)
+            for i in range(len(self.ad_critical_values)):
+                sl, cv = self.ad_significance_levels[i], self.ad_critical_values[i]
+                print(f"Significance Level {sl}%: Critical Value {cv}")
 
-        print("Covariance error", self.pcov)
+            print("Covariance error", self.pcov)
 
 
-        dubson_watson = self.calculate_durbin_watson(residuals=residuals)
-        print("Durbin–Watson statistic", dubson_watson)  # values between 1.5 and 2.5 mean no autocorrelation
+            dubson_watson = self.calculate_durbin_watson(residuals=residuals)
+            print("Durbin–Watson statistic", dubson_watson)  # values between 1.5 and 2.5 mean no autocorrelation
 
 
     def plot_fit_with_uncertainty(self, model_func, xlabel, ylabel, title, save_path):

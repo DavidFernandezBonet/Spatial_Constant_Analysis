@@ -639,8 +639,15 @@ class ImageReconstruction:
         if do_write_positions:
             if args == None:
                 raise ValueError("Pass args to the function please")
+
+            if args.handle_all_subgraphs:
+                output_path = args.directory_map["rec_positions_subgraphs"]
+                self.write_positions(args, np_positions=np.array(reconstructed_points), output_path=output_path, old_indices=True)
+
             output_path = args.directory_map["reconstructed_positions"]
-            self.write_positions(args, np_positions=np.array(reconstructed_points), output_path=output_path, old_indices=True)
+            self.write_positions(args, np_positions=np.array(reconstructed_points), output_path=output_path,
+                                 old_indices=True)
+
         return reconstructed_points
 
 
@@ -830,13 +837,24 @@ def compute_eigenvalues_laplacian_csgraph(graph):
     return second_smallest_eigenvalue
 
 
-def find_central_node(distance_matrix):
+def find_central_nodes(distance_matrix, num_central_nodes=1):
     """
-    Finds node that is closer to every other node
+    Finds nodes that are closer to every other node based on the average shortest path.
+
+    Args:
+        distance_matrix (numpy.ndarray): A 2D numpy array representing the pairwise shortest path distances between nodes.
+        num_central_nodes (int): The number of central nodes to return.
+
+    Returns:
+        numpy.ndarray: An array of indices representing the central nodes, sorted from most central to less central.
     """
+    # Calculate the average shortest path for each node
     average_shortest_paths = distance_matrix.mean(axis=1)
-    central_node_index = np.argmin(average_shortest_paths)
-    return central_node_index
+    central_node_indices = np.argsort(average_shortest_paths)[:num_central_nodes]
+    if len(central_node_indices) == 1:
+        central_node_indices = central_node_indices[0]
+    return central_node_indices
+
 
 
 def find_geometric_central_node(positions_df):

@@ -12,6 +12,7 @@ Welcome to Network Spatial Coherence's documentation!
    tutorial   
    main
    structure_and_args
+   folder_structure
 
 
 

@@ -21,9 +21,15 @@ def create_project_structure():
         'plots': f'{project_root}/results/plots',
         'plots_original_image': f'{project_root}/results/plots/original_image',
         'plots_reconstructed_image': f'{project_root}/results/plots/reconstructed_image',
+
+        'reconstructed_positions_subgraphs': f'{project_root}/results/all_subgraphs_reconstruction',
+        'rec_positions_subgraphs': f'{project_root}/results/all_subgraphs_reconstruction/reconstructed_positions_subgraphs',
+        'rec_images_subgraphs': f'{project_root}/results/all_subgraphs_reconstruction/reconstructed_images_subgraphs',
+
         'plots_shortest_path_heatmap': f'{project_root}/results/plots/shortest_path_heatmap',
         'plots_mst_image': f'{project_root}/results/plots/mst_image',
         'plots_euclidean_sp': f'{project_root}/results/plots/correlation_euclidean_sp',
+        'spatial_coherence': f'{project_root}/results/plots/main_spatial_coherence_results',
 
 
         'plots_spatial_constant': f'{project_root}/results/plots/spatial_constant',
@@ -38,6 +44,8 @@ def create_project_structure():
         # 'plots_spatial_constant_variation_degree': f'{project_root}/results/plots/spatial_constant/variation_analysis/degree',
 
         'plots_predicted_dimension': f'{project_root}/results/plots/predicted_dimension',
+        'local_dimension': f'{project_root}/results/plots/predicted_dimension/local_dimension',
+        'heatmap_local': f'{project_root}/results/plots/predicted_dimension/heatmap_local_dimension',
         'dimension_prediction_iterations': f'{project_root}/results/plots/predicted_dimension/several_predictions',
         'centered_msp': f'{project_root}/results/plots/predicted_dimension/centered_msp',
         'mds_dim': f'{project_root}/results/plots/predicted_dimension/MDS_dimension',
@@ -50,7 +58,8 @@ def create_project_structure():
         # Miscellaneous
         'plots_pixelgen': f'{project_root}/results/plots/pixelgen_quality_plots',
         'final_project': f'{project_root}/results/plots/statistical_methods_in_physics_project',
-        'animation_output': f'{project_root}/results/bfs_animation/statistical_methods_in_physics_project'
+        'animation_output': f'{project_root}/results/bfs_animation/statistical_methods_in_physics_project',
+        'profiler': f'{project_root}/results/plots/profiler',
 
     }
 
@@ -71,7 +80,7 @@ def create_project_structure():
 class GraphArgs:
     """
     A class to manage graph arguments and configurations.
-    It is automatically initialized based on the configuration file, which has the default name: "single_graph_configuration.py"
+    It is automatically initialized based on the configuration file, which has the default name: "config.py"
 
     Attributes:
 
@@ -122,7 +131,7 @@ class GraphArgs:
         create_project_structure(): Creates and returns a mapping of directory structures, for file organization.
     """
 
-    def __init__(self, config_filename='single_graph_configuration.py'):
+    def __init__(self, config_filename='config.py'):
 
         # Loading Args from configuration file
         self.code_folder = os.getcwd()
@@ -142,12 +151,13 @@ class GraphArgs:
         self.large_graph_subsampling = config.get('large_graph_subsampling', False)
         self.max_subgraph_size = config.get('max_subgraph_size', 3000)
 
-
+        self.handle_all_subgraphs = config.get('handle_all_subgraphs', False)
+        self.spatial_coherence_validation = config.get('spatial_coherence_validation', False)
         self.reconstruct = config.get('reconstruct', False)
         if self.reconstruct:
             self.reconstruction_mode = config.get('reconstruction_mode')
 
-
+        self._intended_av_degree = config.get('intended_av_degree', 6)
         self.update_proximity_mode()
 
         if self.proximity_mode == "experimental":
@@ -356,6 +366,9 @@ class GraphArgs:
             self._proximity_mode = self._base_proximity_mode
         if self.proximity_mode == "experimental":
             self.dim = 2          # TODO: change this if we ever have 3D experiments
+            print("Setting dimension to 2 for experimental settings...")
+
+        self.update_args_title()
 
 
     @property

@@ -455,6 +455,13 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
 
     # image_type: original, mst, reconstructed
 
+
+    # Simulated colors should only be used for simulation proximity modes
+    if args.colorfile is not None:
+        if args.colorfile[:4] != '.csv' and args.proximity_mode == "experimental":
+            args.colorfile = None
+
+
     # TODO: this should not be working when we reconstruct with sparse matrices right? The order of the edge list is different (so positions and graph are different)
     if edges_df is None:
         edge_list_folder = args.directory_map["edge_lists"]
@@ -507,6 +514,7 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
 
         ### Plot from color ID file
         color_folder = args.directory_map["colorfolder"]
+        print(f"{color_folder}/{args.colorfile}")
         color_df = pd.read_csv(f"{color_folder}/{args.colorfile}")
 
 
@@ -568,16 +576,24 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
 
     if image_type == "original":
         plot_folder = args.directory_map["plots_original_image"]
-        print(args.args_title)
         plt.savefig(f"{plot_folder}/original_image_{args.args_title}", format='png')
+
+        plot_folder2 = args.directory_map['spatial_coherence']
+        plt.savefig(f"{plot_folder2}/original_image_{args.args_title}", format='png')
         # plt.savefig(f"{plot_folder}/original_image_{args.args_title}", format='svg')
     elif image_type == "mst":
         plot_folder = args.directory_map["plots_mst_image"]
         plt.savefig(f"{plot_folder}/mst_image_{args.args_title}", format='png')
         # plt.savefig(f"{plot_folder}/mst_image_{args.args_title}", format='svg')
+        plot_folder2 = args.directory_map['spatial_coherence']
+        plt.savefig(f"{plot_folder2}/mst_image_{args.args_title}", format='png')
     else:
         plot_folder = args.directory_map["plots_reconstructed_image"]
+        plot_folder2 = args.directory_map['spatial_coherence']
+        plot_folder3 = args.directory_map['rec_images_subgraphs']
         plt.savefig(f"{plot_folder}/reconstructed_image_{args.args_title}", format='png')
+        plt.savefig(f"{plot_folder2}/reconstructed_image_{args.args_title}", format='png')
+        plt.savefig(f"{plot_folder3}/reconstructed_image_{args.args_title}", format='png')
         # plt.savefig(f"{plot_folder}/reconstructed_image_{args.args_title}", format='svg')
 
 
@@ -591,6 +607,8 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
         plt.yscale('log')
         plt.xscale('log')
         plt.savefig(f"{plot_folder}/weight_distance_{args.args_title}_log")
+    plt.show()
+    plt.close('all')
 
 
 
@@ -845,7 +863,10 @@ def plot_spatial_constant_against_subgraph_size_with_false_edges(args, dataframe
     plt.legend()
 
     plot_folder = args.directory_map['plots_spatial_constant_subgraph_sampling']
+    plot_folder2 = args.directory_map['spatial_coherence']
+
     plt.savefig(f"{plot_folder}/mean_s_general_vs_intended_size_{args.args_title}_false_edge_version.svg")
+    plt.savefig(f"{plot_folder2}/mean_s_general_vs_intended_size_{args.args_title}_false_edge_version.svg")
 
 
 

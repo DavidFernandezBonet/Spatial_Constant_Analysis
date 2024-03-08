@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from scipy.spatial import distance_matrix
 
 from plots import *
 from algorithms import *
@@ -715,3 +716,140 @@ def compute_several_sp_matrices(args, sparse_graph, false_edges_list):
         sp_matrices.append(shortest_path_matrix)
     return sp_matrices
 
+
+def compute_average_distance(points):
+    """
+    Compute the average distance between points in the given array.
+    """
+    if len(points) < 2:
+        return 0
+    distances = np.sqrt(np.sum((points[:, np.newaxis, :] - points[np.newaxis, :, :]) ** 2, axis=-1))
+    # Exclude the diagonal (distance to self) and divide by 2 (since matrix is symmetric)
+    avg_distance = np.sum(distances) / (len(points) * (len(points) - 1))
+    return avg_distance
+
+
+def get_spatial_constant_euclidean_df(args, positions_array, size_interval, num_samples=10):
+    final_results = []
+    size_threshold_list = np.arange(50, args.num_points, size_interval)
+
+    for size_threshold in size_threshold_list:
+        spatial_constants = []  # Collect spatial constants for current size_threshold
+
+        for _ in range(num_samples):
+            # Pick a random node and create a subset
+            random_index = random.randint(0, positions_array.shape[0] - 1)
+            random_node = positions_array[random_index]
+
+            # Calculate distances and sort indices
+            distances = np.linalg.norm(positions_array - random_node, axis=1)
+            sorted_indices = np.argsort(distances)
+            subset_indices = sorted_indices[:size_threshold]
+            subset = positions_array[subset_indices]
+
+            # Compute average distance
+            avg_distance = compute_average_distance(subset)
+
+            # Compute spatial constant
+            number_points = len(subset)
+            # spatial_constant = avg_distance * ((args.num_points ) / number_points) ** (1 / args.dim)
+            spatial_constant = avg_distance * (((args.num_points)/(np.pi)) / number_points) ** (1 / args.dim)
+
+            spatial_constants.append(spatial_constant)
+
+        # Calculate mean and standard deviation of spatial constants for the current size_threshold
+        mean_spatial_constant = np.mean(spatial_constants)
+        std_spatial_constant = np.std(spatial_constants)
+
+        # Store the mean and std for each size_threshold
+        final_results.append({
+            'size_threshold': size_threshold,
+            'mean_spatial_constant': mean_spatial_constant,
+            'std_spatial_constant': std_spatial_constant
+        })
+
+    # Convert final results to DataFrame
+    results_df = pd.DataFrame(final_results)
+    return results_df
+
+
+def plot_euc_spatial_constant_against_size_threshold(args, results_df):
+    plt.figure(figsize=(10, 6))
+
+    # Data from results_df
+    sizes = results_df['size_threshold'].values
+    means = results_df['mean_spatial_constant'].values
+    std_devs = results_df['std_spatial_constant'].values
+
+    # Scatter plot for mean spatial constants
+    plt.scatter(sizes, means, label='Mean Spatial Constant', color='blue')
+
+    # Ribbon style for standard deviation
+    ribbon_color = '#ADD8E6'
+    contour_ribbon_color = '#00008B'
+    plt.fill_between(sizes, means - std_devs, means + std_devs, color=ribbon_color, alpha=0.3,
+                     edgecolor=contour_ribbon_color, linewidth=1, linestyle='--')
+
+    plt.xlabel('Subgraph Size')
+    plt.ylabel('Mean Spatial Constant')
+    plt.title('Mean Spatial Constant vs. Subgraph Size')
+    plt.legend()
+
+    # If there's a specific plot folder defined in args, save the plot there
+    # plot_folder = args.get('directory_map', {}).get('plots_spatial_constant', 'current_directory')
+    # plt.savefig(f"{plot_folder}/mean_spatial_constant_vs_size_threshold_{args.get('args_title', 'default')}.png")
+    plt.show()
+
+
+def plot_spatial_constant_euc_vs_network(args, results_df_euc, results_df_net):
+    fig, axs = plt.subplots(1, 2, figsize=(20, 6), sharey=True)  # Create two subplots side by side
+
+    plt.figure(figsize=(10, 6))
+
+    ### Euclidean
+    # Data from results_df_euc
+    sizes_euc = results_df_euc['size_threshold'].values
+    means_euc = results_df_euc['mean_spatial_constant'].values
+    std_devs_euc = results_df_euc['std_spatial_constant'].values
+
+    # Scatter plot and ribbon for mean spatial constants (Euclidean)
+    plt.scatter(sizes_euc, means_euc, label='Euclidean Mean Spatial Constant', color='blue')
+    plt.fill_between(sizes_euc, means_euc - std_devs_euc, means_euc + std_devs_euc, color='#ADD8E6', alpha=0.3,
+                     edgecolor='#00008B', linewidth=1, linestyle='--')
+
+    ### Network
+    # Data from results_df_net
+
+    unique_sizes = results_df_net['intended_size'].unique()
+    means = []
+    std_devs = []
+    sizes = []
+
+    # Calculate mean and standard deviation for each size
+    for size in unique_sizes:
+        subset = results_df_net[results_df_net['intended_size'] == size]
+        mean = subset['S_general'].mean()
+        std = subset['S_general'].std()
+        means.append(mean)
+        std_devs.append(std)
+        sizes.append(size)
+
+
+    sizes_net = np.array(sizes)
+    means_net = np.array(means)
+    std_devs_net = np.array(std_devs)
+
+    # Scatter plot and ribbon for mean spatial constants (Network)
+    plt.scatter(sizes_net, means_net, label='Network Mean Spatial Constant', color='green')
+    plt.fill_between(sizes_net, means_net - std_devs_net, means_net + std_devs_net, color='#6FC276', alpha=0.3,
+                     edgecolor='#006400', linewidth=1, linestyle='--')
+
+    plt.xlabel('Subgraph Size')
+    plt.ylabel('Mean Spatial Constant')
+    plt.legend()
+
+
+    # Save the figure
+    plot_folder = f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}"
+    plt.savefig(f"{plot_folder}/mean_spatial_constant_euc_vs_network_{args.args_title}.svg")
+    plt.show()

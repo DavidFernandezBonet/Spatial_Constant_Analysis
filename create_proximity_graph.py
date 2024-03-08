@@ -6,7 +6,8 @@ from collections import defaultdict
 import pandas as pd
 import os
 import random
-
+import scipy.spatial.distance as ssd
+import scipy.cluster.hierarchy as sch
 def generate_random_points(num_points, L, dim):
     """
     Generate 'num_points' random 2D/3D points within 'L' range (square or cube)
@@ -411,7 +412,27 @@ def write_positions(args, np_positions, output_path):
     positions_df.to_csv(output_file_path, index=False)
 
 
-def write_proximity_graph(args):
+def sort_points_by_distance_to_centroid(points):
+    points = np.array(points)
+    centroid = np.mean(points, axis=0)
+    distances = np.sqrt(np.sum((points - centroid) ** 2, axis=1))
+    sorted_indices = np.argsort(distances)
+    sorted_points = points[sorted_indices]
+    return sorted_points
+
+
+def sort_points_for_heatmap(points):
+    # Calculate the Euclidean distance matrix
+    points = np.array(points)
+    dist_matrix = ssd.pdist(points, 'euclidean')
+    dist_square_matrix = ssd.squareform(dist_matrix)
+    linkage_matrix = sch.linkage(dist_matrix, method='average')
+    dendro = sch.dendrogram(linkage_matrix, no_plot=True)
+    order = dendro['leaves']
+    sorted_points = points[order]
+    return sorted_points
+
+def write_proximity_graph(args, order_indices=False, point_mode="square"):
     base_proximity_mode = args.proximity_mode.split("_with_false_edges=")[0]
     if base_proximity_mode == "lattice":
         points = generate_square_lattice(args)
@@ -419,16 +440,18 @@ def write_proximity_graph(args):
         distances, indices = compute_lattice(args, points)
 
     else:
-        # Without density anomalies
-        points = generate_random_points(num_points=args.num_points, L=args.L, dim=args.dim)
+        # Without density anomalies, square
+        if point_mode == "square":
+            points = generate_random_points(num_points=args.num_points, L=args.L, dim=args.dim)
 
-        # ## circle
-        # points = generate_random_points_in_circle_or_sphere(num_points=args.num_points, R=args.L, dim=args.dim)
-
-
+        elif point_mode == "circle":
+            points = generate_random_points_in_circle_or_sphere(num_points=args.num_points, R=args.L, dim=args.dim)
 
         # ## With density anomalies
         # points = generate_random_points_anomaly(num_points=args.num_points, L=args.L, dim=args.dim, anomaly_strength=1)
+
+        if order_indices:
+            points = sort_points_for_heatmap(points)
 
 
         distances, indices = compute_proximity_graph(args, positions=points)

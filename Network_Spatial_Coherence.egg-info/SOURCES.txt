@@ -1,0 +1,8 @@
+README.md
+setup.py
+Network_Spatial_Coherence.egg-info/PKG-INFO
+Network_Spatial_Coherence.egg-info/SOURCES.txt
+Network_Spatial_Coherence.egg-info/dependency_links.txt
+Network_Spatial_Coherence.egg-info/entry_points.txt
+Network_Spatial_Coherence.egg-info/requires.txt
+Network_Spatial_Coherence.egg-info/top_level.txt

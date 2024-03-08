@@ -70,7 +70,7 @@ An optional step is to plot the graph's properties and the positions of the orig
 .. image:: _static/images/original_image_N=10000_dim=2_delaunay_corrected_k=15
    :alt: Original Graph
 
-**Graph Property Analysis**: After analyzing the graph properties, you can visualize aspects like degree distribution and clustering coefficient.
+**Graph Property Analysis**: After analyzing the graph properties, you can visualize aspects like degree distribution, clustering coefficient, and shortest path distribution.
 
    
 .. raw:: html
@@ -97,7 +97,7 @@ The script further validates the network spatial coherence. This is done in 3 st
 .. image:: _static/images/mean_s_general_vs_intended_size_N=3000_dim=2_delaunay_corrected_k=15_false_edge_version.svg
    :alt: Spatial Analysis
 
-**Network Correlation Dimension**: The correlation dimension is obtained by performing BFS from a central node and observing the relationship between the shortest path distance and the number of discovered nodes. In an Euclidean point cloud, this relationship is a power-law with the Euclidean dimension as the power. We expect a similar behavior from networks.
+**Network Dimension**: The correlation dimension is obtained by performing BFS from a central node and observing the relationship between the shortest path distance and the number of discovered nodes. In an Euclidean point cloud, this relationship is a power-law with the Euclidean dimension as the power. We expect a similar behavior from networks.
 
 .. image:: _static/images/dimension_prediction_by_node_count_LINEAR_N=10000_dim=2_delaunay_corrected_k=15.svg
    :alt: Network Correlation Dimension

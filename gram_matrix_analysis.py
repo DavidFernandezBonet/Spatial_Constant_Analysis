@@ -77,7 +77,7 @@ def compute_gram_matrix_eigenvalues(distance_matrix):
 
 def compute_matrix_eigenvalues(matrix):
     eigenvalues, eigenvectors = eigh(matrix)
-    idx = eigenvalues.argsort()[::-1]
+    idx = eigenvalues.argsort()[::-1]  # sort in descending order
     return eigenvalues[idx]
 
 def distance_matrix_to_gram(distance_matrix):
@@ -555,6 +555,9 @@ def plot_cumulative_eigenvalue_contribution(args, eigenvalues, original, first_1
         title = title + "_first_10_eigen"
     plt.savefig(f'{plot_folder}/mds_cumulative_singular_values_{args.args_title}_{title}.svg')
 
+    plot_folder2 = args.directory_map['spatial_coherence']
+    plt.savefig(f"{plot_folder2}/gram_matrix_rank_analysis_{args.args_title}_{title}.svg")
+
     return cumulative_variance_first_d_eigenvalues
 
 
@@ -844,7 +847,7 @@ def perform_simulation(num_points, proximity_mode, intended_av_degree, dim, fals
 
     else:
         create_proximity_graph.write_proximity_graph(args=args1)
-        sparse_graph, _ = load_graph(args1, load_mode='sparse')
+        sparse_graph = load_graph(args1, load_mode='sparse')
 
         if false_edges:
             sparse_graph = add_random_edges_to_csrgraph(sparse_graph, num_edges_to_add=false_edges)
@@ -936,18 +939,93 @@ def plot_gram_matrix_eigenvalues(args, shortest_path_matrix):
     first_d_values_contribution = plot_cumulative_eigenvalue_contribution(args, eigenvalues=eigenvalues_sp_matrix, original=False)
     return first_d_values_contribution
 
+
+def plot_gram_matrix_euclidean_and_shortest_path_comparative(args, eigenvalues_euclidean, eigenvalues_shortest_path):
+
+
+    # TODO: so far we consider only the 5st largest positive eigenvalues
+    # TODO: I get better results when considering all the eigenvalues, but they include the negative ones
+    dim = args.dim
+    fig, axs = plt.subplots(1, 2, figsize=(14, 6), sharey='row')  # Share the y-axis across subplots
+
+    for idx, eigenvalues in enumerate([eigenvalues_euclidean, eigenvalues_shortest_path]):
+        eigenvalues = eigenvalues[eigenvalues > 0][:5]  # keep only positive eigenvalues, up to the first 5
+        total_variance = np.sum(eigenvalues)
+        variance_proportion = eigenvalues / total_variance
+        cumulative_variance = np.cumsum(variance_proportion)
+
+        # For annotation of total contribution at args.dim
+        if dim <= len(eigenvalues):
+            cumulative_variance_first_d_eigenvalues = cumulative_variance[dim - 1]
+        else:
+            cumulative_variance_first_d_eigenvalues = cumulative_variance[-1]
+
+        bars = axs[idx].bar(range(1, len(eigenvalues) + 1), variance_proportion * 100, alpha=0.7,
+                            label='Individual Contribution')
+        line, = axs[idx].plot(range(1, len(eigenvalues) + 1), cumulative_variance * 100, '-o', color='r',
+                              label='Cumulative Contribution')
+
+        # Annotate each bar with its percentage
+        for bar, proportion in zip(bars, variance_proportion):
+            axs[idx].text(bar.get_x() + bar.get_width() / 2.0, bar.get_height(), f'{proportion * 100:.1f}%',
+                          ha='center', va='bottom')
+
+        # Annotate the plot with the total contribution at args.dim
+        axs[idx].text(dim, cumulative_variance_first_d_eigenvalues * 100,
+                      f'{cumulative_variance_first_d_eigenvalues * 100:.2f}%', ha='center', va='bottom', color='blue')
+
+        axs[idx].set_xlabel('Eigenvalue Rank')
+        if idx == 0:
+            axs[idx].set_title('Euclidean')
+            axs[idx].set_ylabel('Eigenvalue Contribution (%)')
+        else:
+            axs[idx].set_title('Network')
+        axs[idx].set_xticks(range(1, 6))  # Ensure x-axis labels go from 1 to 5
+
+    handles, labels = axs[0].get_legend_handles_labels()
+    # Place a single legend outside the rightmost subplot
+    fig.legend(handles, labels, loc='upper right', bbox_to_anchor=(1.3, 1))
+
+    plt.tight_layout()
+
+    plot_folder2 = args.directory_map['spatial_coherence']
+    plt.savefig(f"{plot_folder2}/gram_matrix_comparative_eucl_and_sp_{args.args_title}.svg", format="svg",
+                bbox_inches="tight")
+
+
+def make_comparative_gram_matrix_plot_euc_sp():
+
+    ## Setting up the data
+    args = GraphArgs()
+    args.dim = 2
+    args.intended_av_degree = 6
+    args.num_points = 1000
+    args.false_edges_count = 0
+    args.proximity_mode = "knn"
+    create_proximity_graph.write_proximity_graph(args)
+    sparse_graph = load_graph(args, load_mode='sparse')
+    sp_matrix = np.array(shortest_path(csgraph=sparse_graph, directed=False))
+    original_positions = read_position_df(args=args)
+    original_dist_matrix = compute_distance_matrix(original_positions)
+
+    ### Compute Gram Matrix Eigenvalues
+    eigenvalues_sp_matrix = compute_gram_matrix_eigenvalues(distance_matrix=sp_matrix)
+    eigenvalues_euclidean = compute_gram_matrix_eigenvalues(distance_matrix=original_dist_matrix)
+    plot_gram_matrix_euclidean_and_shortest_path_comparative(args, eigenvalues_euclidean, eigenvalues_sp_matrix)
+
+
+
 def main():
     # Parameters
     args = GraphArgs()
-    args.directory_map = create_project_structure()  # creates folder and appends the directory map at the args
-    args.proximity_mode = "knn"
     args.dim = 2
-
     args.intended_av_degree = 6
     args.num_points = 1000
 
     ### Add random edges? See efect in the dimensionality here
-    num_edges_to_add = 0
+    args.false_edges_count = 0
+
+    args.proximity_mode = "knn"
 
 
     simulation_or_experiment = "simulation"
@@ -956,21 +1034,6 @@ def main():
 
 
     if simulation_or_experiment == "experiment":
-        # # # #Experimental
-        # our group:
-        # subgraph_2_nodes_44_edges_56_degree_2.55.pickle  # subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle  # subgraph_8_nodes_160_edges_179_degree_2.24.pickle
-        # unfiltered pixelgen:
-        # pixelgen_cell_2_RCVCMP0000594.csv, pixelgen_cell_1_RCVCMP0000208.csv, pixelgen_cell_3_RCVCMP0000085.csv
-        # pixelgen_edgelist_CD3_cell_2_RCVCMP0000009.csv, pixelgen_edgelist_CD3_cell_1_RCVCMP0000610.csv, pixelgen_edgelist_CD3_cell_3_RCVCMP0000096.csv
-        # filtered pixelgen:
-        # pixelgen_processed_edgelist_Sample01_human_pbmcs_unstimulated_cell_3_RCVCMP0000563.csv
-        # pixelgen_processed_edgelist_Sample01_human_pbmcs_unstimulated_cell_2_RCVCMP0000828.csv
-        # pixelgen_processed_edgelist_Sample07_pbmc_CD3_capped_cell_3_RCVCMP0000344.csv (stimulated cell)
-        # pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv (treated cell)
-        # shuai_protein_edgelist_unstimulated_RCVCMP0000133_neigbours_s_proteinlist.csv  (shuai protein list)
-        # pixelgen_processed_edgelist_shuai_RCVCMP0000073_cd3_cell_1_RCVCMP0000073.csv (shuai error correction)
-        # weinstein:
-        # weinstein_data_january_corrected.csv
 
         args.edge_list_title = "weinstein_data_corrected_february.csv"
         # args.edge_list_title = "mst_N=1024_dim=2_lattice_k=15.csv"  # Seems to have dimension 1.5
@@ -990,7 +1053,7 @@ def main():
     elif simulation_or_experiment == "simulation":
         # # # 1 Simulation
         create_proximity_graph.write_proximity_graph(args)
-        sparse_graph, _ = load_graph(args, load_mode='sparse')
+        sparse_graph = load_graph(args, load_mode='sparse')
         ## Original data    edge_list = read_edge_list(args)
         original_positions = read_position_df(args=args)
         # plot_original_or_reconstructed_image(args, image_type="original", edges_df=edge_list)
@@ -1010,25 +1073,25 @@ def main():
     # iteration_analysis(num_points_list, proximity_mode_list, intended_av_degree_list, dim_list, false_edges_list, first_10_eigenvalues)
 
 
-    # # Experimental data iteration
-    edge_names_and_weights_dict = {"weinstein_data_corrected_february.csv": [5,10,15],
-                                   "pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv": None,
-                                   "subgraph_8_nodes_160_edges_179_degree_2.24.pickle": None,
-                                   "subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle": None}
-    iteration_analysis_experimental(edge_list_and_weights_dict=edge_names_and_weights_dict, first_10_eigenvalues=first_10_eigenvalues)
+    # # # Experimental data iteration
+    # edge_names_and_weights_dict = {"weinstein_data_corrected_february.csv": [5,10,15],
+    #                                "pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv": None,
+    #                                "subgraph_8_nodes_160_edges_179_degree_2.24.pickle": None,
+    #                                "subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle": None}
+    # iteration_analysis_experimental(edge_list_and_weights_dict=edge_names_and_weights_dict, first_10_eigenvalues=first_10_eigenvalues)
 
 
     ## Only 1 iteration
 
-    sparse_graph = add_random_edges_to_csrgraph(sparse_graph, num_edges_to_add=num_edges_to_add)
-    if num_edges_to_add:
-        args.args_title = args.args_title + f'_false_edges={num_edges_to_add}'
+
 
     # Compute shortest path matrix
     sp_matrix = np.array(shortest_path(csgraph=sparse_graph, directed=False))
 
     eigenvalues_sp_matrix = compute_gram_matrix_eigenvalues(distance_matrix=sp_matrix)
     eigenvalues_euclidean = compute_gram_matrix_eigenvalues(distance_matrix=original_dist_matrix)
+    plot_gram_matrix_euclidean_and_shortest_path_comparative(args, eigenvalues_euclidean, eigenvalues_sp_matrix)
+
 
     plot_cumulative_eigenvalue_contribution(args, eigenvalues=eigenvalues_sp_matrix, original=False)
     plot_cumulative_eigenvalue_contribution(args, eigenvalues=eigenvalues_euclidean, original=True)
@@ -1036,11 +1099,13 @@ def main():
     plot_cumulative_eigenvalue_contribution(args, eigenvalues=eigenvalues_euclidean, original=True, first_10_eigenvalues=True)
 
 
-    entropy_simulation = calculate_eigenvalue_entropy(eigenvalues_sp_matrix)
-    entropy_euclidean = calculate_eigenvalue_entropy(eigenvalues_euclidean)
+    # entropy_simulation = calculate_eigenvalue_entropy(eigenvalues_sp_matrix)
+    # entropy_euclidean = calculate_eigenvalue_entropy(eigenvalues_euclidean)
+    #
+    # print("entropy euclidean", entropy_euclidean)
+    # print("entropy simulation", entropy_simulation)
 
-    print("entropy euclidean", entropy_euclidean)
-    print("entropy simulation", entropy_simulation)
+
     ## ----------------------------------------------
 
 

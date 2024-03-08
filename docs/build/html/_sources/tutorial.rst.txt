@@ -72,8 +72,6 @@ An optional step is to plot the graph's properties and the positions of the orig
 
 **Graph Property Analysis**: After analyzing the graph properties, you can visualize aspects like degree distribution and clustering coefficient.
 
-.. image:: path/to/graph_properties_image.png
-   :alt: Graph Properties
    
 .. raw:: html
 
