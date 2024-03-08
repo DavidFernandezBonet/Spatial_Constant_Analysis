@@ -1,5 +1,6 @@
 import os
 import importlib
+import config as default_config
 def create_project_structure():
     """
     Create the project directory structure and return a dictionary mapping directory names to their corresponding paths.
@@ -135,7 +136,8 @@ class GraphArgs:
 
         # Loading Args from configuration file
         self.code_folder = os.getcwd()
-        self.unsorted_config = self.load_config(config_filename, code_folder=self.code_folder)
+        # self.unsorted_config = self.load_config(config_filename, code_folder=self.code_folder)
+        self.unsorted_config = self.load_config(config_filename)
         config = self.get_config(config_module=self.unsorted_config)
 
 
@@ -242,25 +244,42 @@ class GraphArgs:
         # self.colorcode = {-1: "gray", 0: "gray", 1: "green", 2: "red"}  # what colors to plot. This is based on weinstein ploting
         # self.id_to_color_simulation = None  # for colored simulations
 
-    def load_config(self, config_filename, code_folder):
-        """
-        Loads configuration from a Python file specified by combining the folder path and file name.
+    # def load_config(self, config_filename, code_folder):
+    #     """
+    #     Loads configuration from a Python file specified by combining the folder path and file name.
+    #
+    #     Parameters:
+    #         config_filename (str): The name of the configuration file.
+    #         code_folder (str): The folder where the configuration file is located.
+    #
+    #     Returns:
+    #         module: A module object containing the configurations.
+    #     """
+    #     # Combine the folder and filename to create the full path to the config file
+    #     config_path = os.path.join(code_folder, config_filename)
+    #
+    #     # Dynamically load the configuration module from the constructed path
+    #     spec = importlib.util.spec_from_file_location(config_filename, config_path)
+    #     config = importlib.util.module_from_spec(spec)
+    #     spec.loader.exec_module(config)
+    #     # Convert the module to a dictionary
+    #     config_dict = {key: getattr(config, key) for key in dir(config) if not key.startswith('__')}
+    #     return config_dict
 
-        Parameters:
-            config_filename (str): The name of the configuration file.
-            code_folder (str): The folder where the configuration file is located.
+    def load_config(self, override_config_path=None):
+        config = default_config  # Start with the default config
+        if override_config_path:
+            # Dynamically load the override configuration module from the specified path
+            spec = importlib.util.spec_from_file_location("override_config", override_config_path)
+            override_config = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(override_config)
 
-        Returns:
-            module: A module object containing the configurations.
-        """
-        # Combine the folder and filename to create the full path to the config file
-        config_path = os.path.join(code_folder, config_filename)
+            # Merge the override config attributes with the default config
+            for attr in dir(override_config):
+                if not attr.startswith("__"):
+                    setattr(config, attr, getattr(override_config, attr))
 
-        # Dynamically load the configuration module from the constructed path
-        spec = importlib.util.spec_from_file_location(config_filename, config_path)
-        config = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(config)
-        # Convert the module to a dictionary
+        # Convert the config module to a dictionary for compatibility with your existing code
         config_dict = {key: getattr(config, key) for key in dir(config) if not key.startswith('__')}
         return config_dict
 
