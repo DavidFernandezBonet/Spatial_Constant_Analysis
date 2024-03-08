@@ -8,6 +8,7 @@ if str(package_root) not in sys.path:
 import os
 import importlib
 import config as default_config
+import pprint
 def create_project_structure():
     """
     Create the project directory structure and return a dictionary mapping directory names to their corresponding paths.
@@ -408,11 +409,26 @@ class GraphArgs:
         self.update_args_title()
 
 
-def export_default_config(filepath='default_config.py'):
-    from config import base, simulation, experiment  # Import your default configs
-    with open(filepath, 'w') as f:
-        f.write("# Default configuration template\n")
-        f.write("base = " + repr(base) + "\n\n")
-        f.write("simulation = " + repr(simulation) + "\n\n")
-        f.write("experiment = " + repr(experiment) + "\n")
-    print(f"Default configuration template written to {filepath}")
+
+
+    def export_default_config(filepath='default_config.py'):
+        from config import base, simulation, experiment  # Adjust this import as needed
+
+        pp = pprint.PrettyPrinter(indent=4)
+
+        with open(filepath, 'w') as f:
+            f.write("# Default configuration template\n\n")
+
+            f.write("# Base settings common to all scenarios\n")
+            f.write("base = ")
+            f.write(pp.pformat(base) + "\n\n")
+
+            f.write("# Settings specific to simulation scenarios\n")
+            f.write("simulation = ")
+            f.write(pp.pformat(simulation) + "\n\n")
+
+            f.write("# Settings specific to experimental scenarios\n")
+            f.write("experiment = ")
+            f.write(pp.pformat(experiment) + "\n")
+
+        print(f"Default configuration template written to {filepath}")
