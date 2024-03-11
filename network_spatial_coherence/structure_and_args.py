@@ -179,11 +179,12 @@ class GraphArgs:
 
         # Loading Args from configuration file
         self.code_folder = os.getcwd()
+
         # self.unsorted_config = self.load_config(config_filename, code_folder=self.code_folder)
         self.unsorted_config = self.load_config(override_config_path)
         config = self.get_config(config_module=self.unsorted_config)
 
-
+        self.verbose = config.get('verbose', True)
         self.show_plots = config.get('show_plots', False)
         self.edge_list_title = None
         self.original_edge_list_title = None

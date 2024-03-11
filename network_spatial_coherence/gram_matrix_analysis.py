@@ -927,6 +927,64 @@ def rankcomplete_distmat(D, dim, iters=100, tol=1e-6, verbose=True):
 
     return D2, E
 
+
+def plot_spectral_gap_and_analyze_negatives(args, eigenvalues):
+    # Sort the eigenvalues in descending order
+
+    # Sort the eigenvalues in descending order
+    eigenvalues_sorted = np.sort(eigenvalues)[::-1]
+
+    # Keep only the positive eigenvalues and limit to the first few for analysis
+    positive_eigenvalues = eigenvalues_sorted[eigenvalues_sorted > 0][:args.dim + 2]
+
+    # Calculate spectral gap ratios ((eigenvalue_i - eigenvalue_{i+1}) / eigenvalue_i) for positive eigenvalues
+    spectral_gaps = (positive_eigenvalues[:-1] - positive_eigenvalues[1:]) / positive_eigenvalues[:-1]
+
+    # Initialize the plot with improved aesthetics
+    plt.figure(figsize=(12, 6))
+    plt.plot(spectral_gaps, marker='o', linestyle='-', color='skyblue', linewidth=2, markersize=8,
+             markerfacecolor='darkblue', label='Observed Spectral Gaps')
+
+    # Highlight expected spectral gaps for ideal data up to args.dim
+    ideal_gaps = np.zeros(args.dim)
+    if args.dim > 1:
+        ideal_gaps[:args.dim - 1] = 0  # Ideal gaps near 0 for dimensions before args.dim
+        ideal_gaps[args.dim - 1] = 1  # Expected large gap at args.dim (indexing from 0)
+    plt.plot(range(args.dim), ideal_gaps, marker='x', linestyle='--', color='red', linewidth=2, markersize=10,
+             label='Expected for Euclidean Data')
+
+    # Enhancing the plot
+    plt.title('Spectral Gap Analysis', fontweight='bold')
+    plt.xlabel('Eigenvalue Rank', )
+    plt.ylabel('Spectral Gap Ratio',)
+    plt.xticks()
+    plt.yticks()
+    plt.legend()
+
+
+
+
+    negative_eigenvalues = eigenvalues_sorted[eigenvalues_sorted < 0]
+
+
+    if len(positive_eigenvalues) > 0:
+        negative_proportion = np.sum(np.abs(negative_eigenvalues)) / np.sum(positive_eigenvalues)
+    else:
+        negative_proportion = np.inf
+
+    print(f"Proportion of the sum of negative eigenvalues to positive eigenvalues: {negative_proportion:.4f}")
+
+    print("Spectral gap score:", spectral_gaps[args.dim - 1])
+
+    plot_folder2 = args.directory_map['spatial_coherence']
+    plt.savefig(f"{plot_folder2}/gram_matrix_spectral_gap_{args.args_title}.svg")
+    if args.show_plots:
+        plt.show()
+    plt.close()
+    return spectral_gaps[args.dim - 1]
+
+
+
 def plot_gram_matrix_eigenvalues(args, shortest_path_matrix):
     """
     Plots the cumulative eigenvalue contribution of a graph's shortest path matrix after converting it to a Gram matrix.
@@ -951,7 +1009,13 @@ def plot_gram_matrix_eigenvalues(args, shortest_path_matrix):
         `args.directory_map['mds_dim']` with a naming convention that reflects the analysis type and graph properties.
     """
     eigenvalues_sp_matrix = compute_gram_matrix_eigenvalues(distance_matrix=shortest_path_matrix)
+
+    # 1 - Contribution
     first_d_values_contribution = plot_cumulative_eigenvalue_contribution(args, eigenvalues=eigenvalues_sp_matrix, original=False)
+    # 2 - Spectral Gap
+    plot_spectral_gap_and_analyze_negatives(args, eigenvalues=eigenvalues_sp_matrix)
+
+    # 3 - Negative eigenvalues contribution
     return first_d_values_contribution
 
 
@@ -1108,6 +1172,7 @@ def main():
 
     eigenvalues_sp_matrix = compute_gram_matrix_eigenvalues(distance_matrix=sp_matrix)
     eigenvalues_euclidean = compute_gram_matrix_eigenvalues(distance_matrix=original_dist_matrix)
+    plot_spectral_gap_and_analyze_negatives(args, eigenvalues_euclidean)
     plot_gram_matrix_euclidean_and_shortest_path_comparative(args, eigenvalues_euclidean, eigenvalues_sp_matrix)
 
 

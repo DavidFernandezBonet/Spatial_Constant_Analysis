@@ -14,6 +14,7 @@ from scipy.sparse import csgraph
 from scipy.sparse import random as sparse_random
 from scipy.sparse.linalg import norm
 from scipy.stats import linregress
+from data_analysis import calculate_figsize_n_subplots
 
 font_size = 24
 plt.style.use(['no-latex', 'nature'])
@@ -224,10 +225,13 @@ def plot_dimension_fit(args, dist_threshold, cumulative_count, surface_count, cu
     curve_fitting_object.plot_fit_with_uncertainty(func_fit, "Distance", "Node Count",
                                                    "Dimension Prediction", save_path)
 
+    plt.close("all")
     # Apply the logarithm and just do linear regression
     save_path = f'{plot_folder}/dimension_prediction_by_node_count_LINEAR_{args.args_title}.svg'
     x = np.log(np.arange(1, dist_threshold + 1))
     y = np.log(cumulative_count)
+
+
     # y_std = np.log(cumulative_std)
 
     # Thresholding the values for finite size effects
@@ -241,6 +245,10 @@ def plot_dimension_fit(args, dist_threshold, cumulative_count, surface_count, cu
     curve_fitting_object_linear.perform_curve_fitting(model_func=func_fit)
     curve_fitting_object_linear.plot_fit_with_uncertainty(func_fit, "Log Distance", "Log Node Count",
                                                           "Dimension Prediction", save_path)
+
+    if args.show_plots:
+        plt.show()
+        plt.close()
 
     ## Storing it in main plot function
     plot_folder2 = args.directory_map['spatial_coherence']
@@ -259,7 +267,12 @@ def plot_dimension_fit(args, dist_threshold, cumulative_count, surface_count, cu
     uncertainty_predicted_dimension = perr[indx]
     results_dimension_prediction = {"predicted_dimension": predicted_dimension, "r2": r_squared,
                                     "std_predicted_dimension": uncertainty_predicted_dimension}
-    print("UNCERTAINTY PREDICTED DIMENSION", uncertainty_predicted_dimension)
+    if args.verbose:
+        print("PREDICTED DIMENSION power fit", predicted_dimension)
+        print("UNCERTAINTY PREDICTED DIMENSION", uncertainty_predicted_dimension)
+        print("PREDICTED DIMENSION linear fit", curve_fitting_object_linear.popt[indx])
+        print("RESULTS DIMENSION PREDICTION", results_dimension_prediction)
+
 
     ### Surface prediction
     save_path = f'{plot_folder}/surface_dimension_prediction_{args.args_title}.svg'
@@ -275,11 +288,9 @@ def plot_dimension_fit(args, dist_threshold, cumulative_count, surface_count, cu
     curve_fitting_object.perform_curve_fitting(model_func=func_fit)
     curve_fitting_object.plot_fit_with_uncertainty(func_fit, "Distance", "Node Count",
                                                    "Dimension Prediction", save_path)
+    plt.close('all')
     return results_dimension_prediction
 
-
-import numpy as np
-import matplotlib.pyplot as plt
 
 
 def compute_local_dimension(args, distance_matrix, central_node_indices, dist_threshold):
@@ -402,15 +413,17 @@ def run_dimension_prediction(args, distance_matrix, dist_threshold=6,
     if msp_central_node:
         # Mean shortest path on the central node only
         msp_approx = np.sum(count_by_distance_average * np.arange(len(count_by_distance_average))) / np.sum(count_by_distance_average)
-        print("MEAN SHORTEST PATH APPROXIMATION BY CENTRAL NODE", msp_approx)
-        print("MAXIMUM SHELL RANGE USED", len(count_by_distance_average))
-        print("PREDICTION OF SP APPROXIMATION", predict_sp(args.dim, n=len(count_by_distance_average)))
+        if args.verbose:
+            print("MEAN SHORTEST PATH APPROXIMATION BY CENTRAL NODE", msp_approx)
+            print("MAXIMUM SHELL RANGE USED", len(count_by_distance_average))
+            print("PREDICTION OF SP APPROXIMATION", predict_sp(args.dim, n=len(count_by_distance_average)))
 
 
     if local_dimension:
         # Local dimension approximation
         predicted_dimensions = (count_by_distance_average / cumulative_count) * np.arange(1, dist_threshold + 1)
-        print("PREDICTED DIMENSIONS", predicted_dimensions)
+        if args.verbose:
+            print("PREDICTED DIMENSIONS", predicted_dimensions)
         compute_local_dimension(args=args, distance_matrix=distance_matrix, dist_threshold=dist_threshold,
                                 central_node_indices=central_nodes)
 
@@ -421,12 +434,14 @@ def run_dimension_prediction(args, distance_matrix, dist_threshold=6,
 
 
     if num_central_nodes > 1:
+
+        # TODO: generate a plot to represent the multiple predicted dimensions
         ### Take into account several central nodes for dimension prediction
         results_dimension_prediction = {}
         predicted_dimensions = []
         std_errors = []
 
-        for central_node in central_nodes:
+        for idx, central_node in enumerate(central_nodes):
             count_by_distance_average = distance_count_matrix[central_node]
             cumulative_count = np.cumsum(count_by_distance_average)
             x_data = np.arange(1, dist_threshold + 1)
@@ -465,7 +480,6 @@ def compute_and_plot_predicted_dimensions_for_all_nodes(args, distance_count_mat
     predicted_dimensions = []
     dimension_error = []
 
-    fig_heatmap, ax_heatmap = plt.subplots()
     fig_loglog, ax_loglog = plt.subplots()
 
     # node_count_list = []
@@ -496,9 +510,11 @@ def compute_and_plot_predicted_dimensions_for_all_nodes(args, distance_count_mat
         if central_index is not None:
             if idx == central_index:
 
-                print(f"PREDICTED DIMENSION CENTRAL INDEX, euclidean = {euclidean}", predicted_dimension)
-                print("x data", x_data)
-                print("y data", y_data)
+                if args.verbose:
+                    print("CENTRAL INDEX", idx)
+                    print(f"PREDICTED DIMENSION CENTRAL INDEX, euclidean = {euclidean}", predicted_dimension)
+                    print("x data", x_data)
+                    print("y data", y_data)
                 log_x_data_central = log_x_data
                 log_y_data_central = log_y_data
                 slope_central = slope
@@ -509,8 +525,12 @@ def compute_and_plot_predicted_dimensions_for_all_nodes(args, distance_count_mat
                         label=f'Fit: dimension={predicted_dimension:.2f}')
                 ax_loglog.set_xlabel('Log(Distance)')
                 ax_loglog.set_ylabel('Log(Count)')
-                ax_loglog.set_title('Log-Log Plot for Central Node')
+                ax_loglog.set_title('Predicted Dimension for Central Node')
                 ax_loglog.legend()
+
+                if args.show_plots:
+                    plt.show()
+                plt.close()
 
         predicted_dimensions.append(predicted_dimension)
         dimension_error.append(std_err)

@@ -236,14 +236,13 @@ if __name__ == "__main__":
     # # Modify individual parameters
     # args = GraphArgs()
     # args.show_plots = True
-    # args.dim = 3
+    # args.dim = 2
     # args.plot_graph_properties = False
     # args.colorfile = 'dna_cool2.png'
-    # args.proximity_mode = 'knn'
-    # args.num_points = 10000
+    # args.proximity_mode = 'delaunay_corrected'
+    # args.num_points = 1000
     # args.large_graph_subsampling = True
     #
-    # args.spatial_coherence_validation = True
     #
     # # TODO: solve how it is updated, solve random plots popping up, solve graph with false edges after running spatial constant
     #

@@ -481,7 +481,9 @@ def process_subgraph__bfs_parallel(size_subgraphs, args, igraph_graph, n_subgrap
     if size_subgraphs > args.num_points:
         print("Careful, assigned sampling of nodes is greater than total number of nodes!")
         size_subgraphs = args.num_points
-    print("size:", size_subgraphs)
+
+    if args.verbose:
+        print("size:", size_subgraphs)
     n_subgraphs = 1 if size_subgraphs == args.num_points else n_subgraphs
 
     subgraphs = get_bfs_samples(igraph_graph, n_graphs=n_subgraphs, min_nodes=size_subgraphs)
@@ -851,3 +853,22 @@ def plot_spatial_constant_euc_vs_network(args, results_df_euc, results_df_net):
     plot_folder = f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}"
     plt.savefig(f"{plot_folder}/mean_spatial_constant_euc_vs_network_{args.args_title}.svg")
     plt.show()
+
+
+def calculate_figsize_n_subplots(n_subplots, base_subplot_size=(4, 3), additional_height_per_subplot=0.5, top_margin=2):
+    """
+    Calculates the figsize for a figure based on the number of central nodes.
+
+    Parameters:
+    - n_central_nodes: The number of central nodes (int).
+    - base_subplot_size: A tuple representing the width and height (in inches) of each subplot.
+    - additional_height_per_subplot: Extra height (in inches) to add per subplot for labels, titles, etc.
+    - top_margin: Extra space (in inches) to add at the top for the overall figure.
+
+    Returns:
+    - A tuple representing the figsize (width, height) in inches.
+    """
+    base_width, base_height = base_subplot_size
+    total_height = n_subplots * (base_height + additional_height_per_subplot) + top_margin
+    figsize = (base_width, total_height)
+    return figsize
