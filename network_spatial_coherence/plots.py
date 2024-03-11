@@ -53,6 +53,9 @@ def plot_spatial_constant(args, df):
     # Save the plot
     save_path = args.directory_map['plots_spatial_constant']
     plt.savefig(f"{save_path}/spatial_constant_change_with_false_edges_data.png")
+    if args.show_plots:
+        plt.show()
+        plt.close()
 
 def plot_average_shortest_path(args, df):
     plt.figure()
@@ -68,6 +71,9 @@ def plot_average_shortest_path(args, df):
     # Save the plot
     save_path = args.directory_map['plots_spatial_constant']
     plt.savefig(f"{save_path}/average_shortest_path_vs_random_edges.png")
+    if args.show_plots:
+        plt.show()
+        plt.close()
 
 
 
@@ -221,6 +227,9 @@ def plot_clustering_coefficient_distribution(args, clustering_coefficients, titl
 
     plot_folder = args.directory_map['plots_clustering_coefficient']
     plt.savefig(f"{plot_folder}/clust_coef_{args.args_title}", format="png")
+    if args.show_plots:
+        plt.show()
+        plt.close()
 
 
 
@@ -260,6 +269,8 @@ def plot_degree_distribution(args, degree_distribution, title="Degree Distributi
     plot_folder = args.directory_map['plots_degree_distribution']
     print(args.args_title)
     plt.savefig(f"{plot_folder}/degree_dist_{args.args_title}", format="png")
+    if args.show_plots:
+        plt.show()
     plt.close()
 
 def plot_shortest_path_distribution(args, shortest_path_dist, mean_shortest_path, title="Shortest Path Distribution"):
@@ -278,6 +289,9 @@ def plot_shortest_path_distribution(args, shortest_path_dist, mean_shortest_path
 
     plot_folder = args.directory_map['plots_shortest_path_distribution']
     plt.savefig(f"{plot_folder}/plots_shortest_path_distribution_{args.args_title}", format="png")
+    if args.show_plots:
+        plt.show()
+    plt.close()
 
 
 
@@ -607,7 +621,10 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
         plt.yscale('log')
         plt.xscale('log')
         plt.savefig(f"{plot_folder}/weight_distance_{args.args_title}_log")
-    # plt.show()
+
+    if args.show_plots:
+        plt.show()
+
     plt.close('all')
 
 
@@ -721,6 +738,9 @@ def plot_multiple_shortest_path_heatmaps(args, sp_matrices, false_edge_list):
     plot_folder = args.directory_map['plots_shortest_path_heatmap']
     plt.savefig(f'{plot_folder}/heatmap_several_sp_matrix{args.args_title}.png')
     plt.savefig(f'{plot_folder}/heatmap_several_sp_matrix{args.args_title}.svg')
+    if args.show_plots:
+        plt.show()
+    plt.close()
 
 
 
@@ -768,6 +788,9 @@ def plot_sample_spatial_constant(args, dataframe):
 
     plot_folder = f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}"
     plt.savefig(f"{plot_folder}/subgraph_sampling_{args.args_title}")
+    if args.show_plots:
+        plt.show()
+    plt.close()
 
 
 def plot_spatial_constant_against_subgraph_size(args, dataframe):
@@ -810,6 +833,9 @@ def plot_spatial_constant_against_subgraph_size(args, dataframe):
 
     plot_folder = f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}"
     plt.savefig(f"{plot_folder}/mean_s_general_vs_intended_size_{args.args_title}.png")
+    if args.show_plots:
+        plt.show()
+    plt.close()
 
 
 
@@ -868,7 +894,9 @@ def plot_spatial_constant_against_subgraph_size_with_false_edges(args, dataframe
     plt.savefig(f"{plot_folder}/mean_s_general_vs_intended_size_{args.args_title}_false_edge_version.svg")
     plt.savefig(f"{plot_folder2}/mean_s_general_vs_intended_size_{args.args_title}_false_edge_version.svg")
 
-
+    if args.show_plots:
+        plt.show()
+    plt.close()
 
     plt.yscale('log')
     plt.savefig(f"{plot_folder}/mean_s_general_vs_intended_size_{args.args_title}_false_edge_loglin_version.png")
@@ -1058,6 +1086,9 @@ def plot_weight_distribution(args, edge_list_with_weight_df):
     plt.tight_layout()
     plot_folder = args.directory_map['plots_weight_distribution']
     plt.savefig(f"{plot_folder}/weight_distribution_{args.args_title}.png")
+    if args.show_plots:
+        plt.show()
+    plt.close()
 
 
 def plot_s_general_vs_weight_threshold(args, results):

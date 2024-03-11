@@ -184,7 +184,7 @@ class GraphArgs:
         config = self.get_config(config_module=self.unsorted_config)
 
 
-
+        self.show_plots = config.get('show_plots', False)
         self.edge_list_title = None
         self.original_edge_list_title = None
         self._num_points = config.get('num_points', 300)

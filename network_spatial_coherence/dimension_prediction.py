@@ -334,7 +334,10 @@ def compute_local_dimension(args, distance_matrix, central_node_indices, dist_th
 
 
     plt.savefig(f'{plot_folder}/local_dimension_{args.args_title}.png')
-    plt.close()  # Close the plot to avoid displaying it in non-interactive environments
+    if args.show_plots:
+        plt.show()
+    plt.close()
+
 
 
 
@@ -535,6 +538,12 @@ def compute_and_plot_predicted_dimensions_for_all_nodes(args, distance_count_mat
     # Load original positions
     original_position_folder = args.directory_map["original_positions"]
     positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.original_title}.csv")
+
+    if args.node_ids_map_old_to_new:
+        positions_df['node_ID'] = positions_df['node_ID'].map(args.node_ids_map_old_to_new)
+        positions_df = positions_df.dropna()
+        positions_df['node_ID'] = positions_df['node_ID'].astype(int)
+
     positions_df['predicted_dimension'] = predicted_dimensions[:len(positions_df)]
 
     positions_df['dimension_error'] = dimension_error[:len(positions_df)]
@@ -581,36 +590,81 @@ def compute_and_plot_predicted_dimensions_for_all_nodes(args, distance_count_mat
     else:
         form = 'png'
 
+
     plt.close('all')
-    fig = plt.figure(figsize=(10, 6))
-    scatter = plt.scatter(positions_df['x'], positions_df['y'], c=positions_df['dimension_error'],
-                          cmap='viridis')
-    plt.xlabel('X')
-    plt.ylabel('Y')
+    if 'z' in positions_df.columns:
+        fig = plt.figure(figsize=(10, 6))
+        ax = fig.add_subplot(111, projection='3d')
+        scatter = ax.scatter(positions_df['x'], positions_df['y'], positions_df['z'], c=positions_df['dimension_error'],
+                             cmap='viridis')
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+    else:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        scatter = ax.scatter(positions_df['x'], positions_df['y'], c=positions_df['dimension_error'], cmap='viridis')
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
     plt.colorbar(scatter, label='Dimension STD')
     plt.savefig(f'{plot_folder}/heatmap_predicted_dimension_std_{args.args_title}_{title}', format=form)
+    if args.show_plots:
+        plt.show()
+    plt.close()
 
+    # plt.close('all')
+    # fig = plt.figure(figsize=(10, 6))
+    # scatter = plt.scatter(positions_df['x'], positions_df['y'], c=positions_df['dimension_error'],
+    #                       cmap='viridis')
+    # plt.xlabel('X')
+    # plt.ylabel('Y')
+    # plt.colorbar(scatter, label='Dimension STD')
+    # plt.savefig(f'{plot_folder}/heatmap_predicted_dimension_std_{args.args_title}_{title}', format=form)
+    # if args.show_plots:
+    #     plt.show()
+    # plt.close()
 
-
-    # Plot
     plt.close('all')
-    fig_heatmap, ax = plt.subplots(figsize=(10, 6))
-
-    if plot_in_3d:
+    if 'z' in positions_df.columns:
+        fig = plt.figure(figsize=(10, 6))
         ax = fig.add_subplot(111, projection='3d')
-        scatter = ax_heatmap.scatter(positions_df['x'], positions_df['y'], positions_df.get('z', 0),
+        scatter = ax.scatter(positions_df['x'], positions_df['y'], positions_df['z'],
                              c=positions_df['predicted_dimension'], cmap='viridis')
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
-        ax.set_zlabel('Z' if 'z' in positions_df.columns else 'Predicted Dimension')
+        ax.set_zlabel('Z')
     else:
-        scatter = plt.scatter(positions_df['x'], positions_df['y'], c=positions_df['predicted_dimension'],
-                              cmap='viridis')
-        plt.xlabel('X')
-        plt.ylabel('Y')
-
+        fig, ax = plt.subplots(figsize=(10, 6))
+        scatter = ax.scatter(positions_df['x'], positions_df['y'], c=positions_df['predicted_dimension'], cmap='viridis')
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
     plt.colorbar(scatter, label='Predicted Dimension')
     plt.savefig(f'{plot_folder}/heatmap_predicted_dimension_{args.args_title}_{title}', format=form)
+    if args.show_plots:
+        plt.show()
+    plt.close()
+
+    # # Plot
+    # plt.close('all')
+    # fig_heatmap, ax = plt.subplots(figsize=(10, 6))
+    #
+    # if plot_in_3d:
+    #     ax = fig_heatmap.add_subplot(111, projection='3d')
+    #     scatter = ax_heatmap.scatter(positions_df['x'], positions_df['y'], positions_df.get('z', 0),
+    #                          c=positions_df['predicted_dimension'], cmap='viridis')
+    #     ax.set_xlabel('X')
+    #     ax.set_ylabel('Y')
+    #     ax.set_zlabel('Z' if 'z' in positions_df.columns else 'Predicted Dimension')
+    # else:
+    #     scatter = plt.scatter(positions_df['x'], positions_df['y'], c=positions_df['predicted_dimension'],
+    #                           cmap='viridis')
+    #     plt.xlabel('X')
+    #     plt.ylabel('Y')
+    #
+    # fig_heatmap.colorbar(scatter, label='Predicted Dimension')
+    # plt.savefig(f'{plot_folder}/heatmap_predicted_dimension_{args.args_title}_{title}', format=form)
+    # if args.show_plots:
+    #     plt.show()
+    # plt.close()
 
     figure_data = {
         'log_x_data': log_x_data_central,
@@ -674,7 +728,11 @@ def avg_shortest_path_mean_line_segment(args, sparse_graph, distance_matrix, dis
     plt.title('Mean Shortest Path vs. Distance Threshold')
     plt.legend()
 
+
     plt.savefig(f'{args.directory_map["plots_predicted_dimension"]}/mean_line_segment_{args.args_title}.svg')
+    if args.show_plots:
+        plt.show()
+    plt.close()
 
     return
 
@@ -754,6 +812,9 @@ def plot_barplot(args, distances, title):
 
     plot_folder = args.directory_map['plots_predicted_dimension']
     plt.savefig(f"{plot_folder}/barplot_distance_ratio_{title}.png")
+    if args.show_plots:
+        plt.show()
+    plt.close()
 
 
 
@@ -849,6 +910,9 @@ def make_dimension_prediction_plot(num_central_nodes=1):
 
 
     plt.savefig(f"{plot_folder}/dimension_prediction_iterations.svg", format='svg')
+    if args.show_plots:
+        plt.show()
+    plt.close()
 
 def predict_sp(dim=2, n=20):
 
@@ -889,6 +953,7 @@ def compute_centered_average_sp_distance(args, count_by_distance_average, shell_
     # Calculate the difference between msp_approx_series and y1_series
     difference_series = np.array(msp_approx_series) - np.array(y1_series)
 
+    plt.close('all')
     # Plotting
     fig, axs = plt.subplots(2, 1, figsize=(10, 12))  # Creating 2 subplots vertically
 
@@ -918,6 +983,9 @@ def compute_centered_average_sp_distance(args, count_by_distance_average, shell_
     plt.tight_layout()  # Adjust layout to not overlap
     plot_folder = args.directory_map['centered_msp']
     plt.savefig(f"{plot_folder}/centered_msp_difference_{args.args_title}.svg")
+    if args.show_plots:
+        plt.show()
+    plt.close()
 
 
 
@@ -1115,7 +1183,9 @@ def euclidean_vs_network_plot(args, figure_data_euclidean, figure_data_network, 
     plt.tight_layout()
     plot_folder = args.directory_map['heatmap_local']
     plt.savefig(f"{plot_folder}/euclidean_vs_network_{args.args_title}.svg")
-    plt.show()
+    if args.show_plots:
+        plt.show()
+    plt.close()
 
 
 def make_euclidean_network_dim_pred_comparison_plot():

@@ -6,14 +6,11 @@ from plots import *
 from algorithms import *
 from structure_and_args import *
 from utils import *
-import sys
 
-script_dir = "/home/david/PycharmProjects/Spatial_Graph_Denoising"
-if script_dir not in sys.path:
-    sys.path.append(script_dir)
 
 import itertools
 import multiprocessing
+import copy
 from functools import partial
 
 
@@ -410,7 +407,8 @@ def run_simulation_subgraph_sampling(args, graph, size_interval=100, n_subgraphs
         all_results = []
         # false_edge_list = [0, 5, 20, 100]   # now it is a default argument
         for false_edge_number in false_edge_list:
-            args.false_edges_count = false_edge_number
+            args_copy = copy.deepcopy(args)
+            args_copy.false_edges_count = false_edge_number
             # Work on a copy of the graph for false edges
             # # This adds previously computed false edges, so when you add 1 false edge (a,b) that edge will also be present when you add 2 false edges (a,b) (c,d)
             igraph_graph_false = add_specific_random_edges_igraph(igraph_graph.copy(), all_random_false_edges,
@@ -420,7 +418,7 @@ def run_simulation_subgraph_sampling(args, graph, size_interval=100, n_subgraphs
             pool = multiprocessing.Pool(multiprocessing.cpu_count())
 
 
-            tasks = [(size_subgraphs, args, igraph_graph_false, n_subgraphs) for size_subgraphs in size_subgraph_list]
+            tasks = [(size_subgraphs, args_copy, igraph_graph_false, n_subgraphs) for size_subgraphs in size_subgraph_list]
             results = pool.starmap(process_subgraph__bfs_parallel, tasks)
             pool.close()
             pool.join()

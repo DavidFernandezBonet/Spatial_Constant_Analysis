@@ -136,7 +136,7 @@ def spatial_constant_analysis(graph, args, false_edge_list=None):
     run_simulation_subgraph_sampling(args, size_interval=size_interval, n_subgraphs=10, graph=graph,
                                      add_false_edges=True, add_mst=False, false_edge_list=false_edge_list)
 @profile
-def network_correlation_dimension(args):
+def network_dimension(args):
     """
     Steps 3: Predict the dimension of the graph
     """
@@ -144,7 +144,7 @@ def network_correlation_dimension(args):
     results_pred_dimension = run_dimension_prediction(args, distance_matrix=args.shortest_path_matrix,
                                                       dist_threshold=int(args.mean_shortest_path),
                                                       num_central_nodes=10,
-                                                      local_dimension=True)
+                                                      local_dimension=True, plot_heatmap_all_nodes=True)
     print("Results predicted dimension", results_pred_dimension)
 @profile
 def rank_matrix_analysis(args):
@@ -203,10 +203,11 @@ def run_pipeline(graph, args):
     plot_and_analyze_graph(graph, args)
     compute_shortest_paths(graph, args)
 
-    if args.spatial_coherence_validation:
-        # # Spatial Coherence Validation
+    if args.spatial_coherence_validation['spatial_constant']:
         spatial_constant_analysis(graph, args)
-        network_correlation_dimension(args)
+    if args.spatial_coherence_validation['network_dimension']:
+        network_dimension(args)
+    if args.spatial_coherence_validation['gram_matrix']:
         rank_matrix_analysis(args)
 
     # # Reconstruction
@@ -231,3 +232,25 @@ if __name__ == "__main__":
     else:
         single_graph_args = run_pipeline(graph, args)
         plot_profiling_results(single_graph_args)  # Plot the results at the end
+
+    # # Modify individual parameters
+    # args = GraphArgs()
+    # args.show_plots = True
+    # args.dim = 3
+    # args.plot_graph_properties = False
+    # args.colorfile = 'dna_cool2.png'
+    # args.proximity_mode = 'knn'
+    # args.num_points = 10000
+    # args.large_graph_subsampling = True
+    #
+    # args.spatial_coherence_validation = True
+    #
+    # # TODO: solve how it is updated, solve random plots popping up, solve graph with false edges after running spatial constant
+    #
+    # # Load and process the graph
+    # graph, args = load_and_initialize_graph(args=args)
+    #
+    # # Run the pipeline and plot the results
+    # single_graph_args = run_pipeline(graph, args)
+    # plot_profiling_results(single_graph_args)
+

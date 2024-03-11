@@ -337,6 +337,9 @@ def determine_network_dimension(args, eigenvalues, variance_threshold=0.7):
 
     plot_folder = args.directory_map['mds_dim']
     plt.savefig(f'{plot_folder}/mds_dim_eigenvectors_{args.args_title}.svg')
+    if args.show_plots:
+        plt.show()
+    plt.close()
 
     return len(positive_eigenvalues)  # If threshold not met, return all positive dimensions
 
@@ -557,6 +560,9 @@ def plot_cumulative_eigenvalue_contribution(args, eigenvalues, original, first_1
 
     plot_folder2 = args.directory_map['spatial_coherence']
     plt.savefig(f"{plot_folder2}/gram_matrix_rank_analysis_{args.args_title}_{title}.svg")
+    if args.show_plots:
+        plt.show()
+    plt.close()
 
     return cumulative_variance_first_d_eigenvalues
 
@@ -610,6 +616,9 @@ def visualize_simulation_results(args, results_list):
     plt.tight_layout()
     plot_folder = args.directory_map['mds_dim']
     plt.savefig(f'{plot_folder}/several_iterations.svg')
+    if args.show_plots:
+        plt.show()
+    plt.close()
 
 
 def plot_ratios(args, results_list, categories_to_compare, single_mode=False):
@@ -653,6 +662,9 @@ def plot_ratios(args, results_list, categories_to_compare, single_mode=False):
     plt.tight_layout()
     plot_folder = args.directory_map['mds_dim']
     plt.savefig(f'{plot_folder}/{"experimental" if single_mode else "several"}_iterations_ratios.svg')
+    if args.show_plots:
+        plt.show()
+    plt.close()
 
 
 
@@ -701,6 +713,9 @@ def plot_cumulative_variance(args, results_list, categories_to_compare, single_m
     plt.tight_layout()
     plot_folder = args.directory_map['mds_dim']
     plt.savefig(f'{plot_folder}/{"experimental" if single_mode else "several"}_iterations_cumulative.svg')
+    if args.show_plots:
+        plt.show()
+    plt.close()
 
 def custom_sort(category):
     if category == 'euclidean':
@@ -991,6 +1006,9 @@ def plot_gram_matrix_euclidean_and_shortest_path_comparative(args, eigenvalues_e
     plot_folder2 = args.directory_map['spatial_coherence']
     plt.savefig(f"{plot_folder2}/gram_matrix_comparative_eucl_and_sp_{args.args_title}.svg", format="svg",
                 bbox_inches="tight")
+    if args.show_plots:
+        plt.show()
+    plt.close()
 
 
 def make_comparative_gram_matrix_plot_euc_sp():

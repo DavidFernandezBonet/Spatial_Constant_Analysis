@@ -1,0 +1,2 @@
+proximity_mode,average_degree,mean_shortest_path,num_nodes,dim,S,S_general,S_smallworld_general,mean_shortest_path_prediction,msp_prediction_error,relative_msp_prediction_error
+lattice,4.1171875,21.110644626710656,1024,2,0.659707644584708,1.338603140061282,4.31007407990848,18.924782703627184,-2.185861923083472,-0.10354311588940147

@@ -1,17 +1,18 @@
 # Base settings common to all scenarios
 base = {
-    "proximity_mode": "lattice",  # Options 1) Simulation: knn, epsilon_ball, lattice, delaunay_corrected... 2) experimental
+    "proximity_mode": "delaunay_corrected",  # Options 1) Simulation: knn, epsilon_ball, lattice, delaunay_corrected... 2) experimental
     "dim": 2,
     "false_edges_count": 0,
-    "colorfile": None,  # For coloring reconstruction. Alternatives: colorful_spiral.jpeg, colored_squares.png, dna.jpg, dna_cool2.png, None
+    "colorfile": 'dna_cool2.png',  # For coloring reconstruction. Alternatives: colorful_spiral.jpeg, colored_squares.png, dna.jpg, dna_cool2.png, None
     "plot_graph_properties": False,
+    "show_plots": True,
 
     "large_graph_subsampling": False,   # If the graph is large, subsample it to save time and memory. Cap at 3000 nodes  #TODO: implement this
     "max_subgraph_size": 3000,
     "reconstruct": True,
     "reconstruction_mode": "node2vec",
 
-    "spatial_coherence_validation": False,
+    "spatial_coherence_validation": {"spatial_constant": True, "network_dimension": True, "gram_matrix": True},
     "handle_all_subgraphs": False,
 }
 
