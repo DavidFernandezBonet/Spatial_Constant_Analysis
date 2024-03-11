@@ -1,6 +1,6 @@
 # Base settings common to all scenarios
 base = {
-    "proximity_mode": "lattice",  # Options 1) Simulation: knn, epsilon_ball, lattice, delaunay_corrected... 2) experimental
+    "proximity_mode": "delaunay_corrected",  # Options 1) Simulation: knn, epsilon_ball, lattice, delaunay_corrected... 2) experimental
     "dim": 2,
     "false_edges_count": 0,
     "colorfile": 'dna_cool2.png',  # For coloring reconstruction. Alternatives: colorful_spiral.jpeg, colored_squares.png, dna.jpg, dna_cool2.png, None
@@ -12,7 +12,7 @@ base = {
     "reconstruct": False,
     "reconstruction_mode": "node2vec",
 
-    "spatial_coherence_validation": {"spatial_constant": False, "network_dimension": False, "gram_matrix": True},
+    "spatial_coherence_validation": {"spatial_constant": True, "network_dimension": True, "gram_matrix": True},
     "handle_all_subgraphs": False,
     "verbose": True
 }
@@ -20,7 +20,7 @@ base = {
 
 # Settings specific to simulation scenarios
 simulation = {
-    "num_points": 1000,
+    "num_points": 2000,
     "intended_av_degree": 10,
     'plot_original_image': False
 }
