@@ -141,10 +141,14 @@ def network_dimension(args):
     """
     Steps 3: Predict the dimension of the graph
     """
+    if args.proximity_mode != 'experimental':
+        plot_all_heatmap_nodes = True
+    else:
+        plot_all_heatmap_nodes = False
     results_pred_dimension = run_dimension_prediction(args, distance_matrix=args.shortest_path_matrix,
                                                       dist_threshold=int(args.mean_shortest_path),
                                                       num_central_nodes=10,
-                                                      local_dimension=True, plot_heatmap_all_nodes=True)
+                                                      local_dimension=True, plot_heatmap_all_nodes=plot_all_heatmap_nodes)
     if args.verbose:
         print("Results predicted dimension", results_pred_dimension)
 @profile

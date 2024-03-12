@@ -20,7 +20,7 @@ def create_project_structure(target_dir=None):
     parent_dir = os.path.dirname(current_script_dir)
     add_src = False
     if target_dir is None:
-        if os.path.exists(os.path.join(parent_dir, "do_not_delete.txt")):
+        if os.path.exists(os.path.join(parent_dir, "do_not_delete.txt")):  # this is to distinguish case where user and developer
             # Running as a script within the src directory
             project_root = os.path.dirname(os.path.dirname(current_script_dir))
             add_src = True
@@ -180,7 +180,7 @@ class GraphArgs:
         # Loading Args from configuration file
         self.code_folder = os.getcwd()
 
-        # self.unsorted_config = self.load_config(config_filename, code_folder=self.code_folder)
+
         self.unsorted_config = self.load_config(override_config_path)
         config = self.get_config(config_module=self.unsorted_config)
 

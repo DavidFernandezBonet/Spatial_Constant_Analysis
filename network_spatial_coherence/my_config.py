@@ -8,7 +8,7 @@ base = {   'colorfile': 'dna_cool2.png',
     'large_graph_subsampling': False,
     'max_subgraph_size': 3000,
     'plot_graph_properties': False,
-    'proximity_mode': 'delaunay_corrected',
+    'proximity_mode': 'experimental',
     'reconstruct': False,
     'reconstruction_mode': 'STRND',
     'show_plots': True,
@@ -21,6 +21,6 @@ base = {   'colorfile': 'dna_cool2.png',
 simulation = {'intended_av_degree': 10, 'num_points': 2000, 'plot_original_image': False}
 
 # Settings specific to experimental scenarios
-experiment = {   'edge_list_title': 'edge_list_nbead_0_filtering_march_8.csv',
+experiment = {   'edge_list_title': 'example_edge_list.pickle',
     'weight_threshold': 0,
     'weighted': False}
