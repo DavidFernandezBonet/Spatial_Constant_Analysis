@@ -1,6 +1,6 @@
 # Base settings common to all scenarios
 base = {
-    "proximity_mode": "delaunay_corrected",  # Options 1) Simulation: knn, epsilon_ball, lattice, delaunay_corrected... 2) experimental
+    "proximity_mode": "experimental",  # Options 1) Simulation: knn, epsilon_ball, lattice, delaunay_corrected... 2) experimental
     "dim": 2,
     "false_edges_count": 0,
     "colorfile": 'dna_cool2.png',  # For coloring reconstruction. Alternatives: colorful_spiral.jpeg, colored_squares.png, dna.jpg, dna_cool2.png, None
@@ -29,7 +29,7 @@ simulation = {
 # Settings specific to experimental scenarios
 experiment = {
     # pixelgen_example_graph.csv  #edge_list_nbead_0_filtering_march_8.csv
-    "edge_list_title": "edge_list_nbead_0_filtering_march_8.csv",  # edge_list_distance_150_filtering_goodindex_simon.csv, nbead_7_goodindex_simon.csv, edge_list_nbead_4_filtering.csv
+    "edge_list_title": "example_edge_list.pickle",  # edge_list_distance_150_filtering_goodindex_simon.csv, nbead_7_goodindex_simon.csv, edge_list_nbead_4_filtering.csv
     "weighted": False,
     "weight_threshold": 0,
 }
