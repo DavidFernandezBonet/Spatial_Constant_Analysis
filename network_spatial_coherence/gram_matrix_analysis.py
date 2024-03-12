@@ -1012,6 +1012,7 @@ def plot_gram_matrix_eigenvalues(args, shortest_path_matrix):
 
     # 1 - Contribution
     first_d_values_contribution = plot_cumulative_eigenvalue_contribution(args, eigenvalues=eigenvalues_sp_matrix, original=False)
+    print("First d values contribution", first_d_values_contribution)
     # 2 - Spectral Gap
     plot_spectral_gap_and_analyze_negatives(args, eigenvalues=eigenvalues_sp_matrix)
 

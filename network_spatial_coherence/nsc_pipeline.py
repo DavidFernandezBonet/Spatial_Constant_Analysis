@@ -153,7 +153,7 @@ def rank_matrix_analysis(args):
     Step 4. Analyze the rank matrix
     """
     first_d_values_contribution = plot_gram_matrix_eigenvalues(args=args, shortest_path_matrix=args.shortest_path_matrix)
-    print("First d values contribution", first_d_values_contribution)
+
 
 @profile
 def reconstruct_graph(graph, args):
