@@ -145,6 +145,7 @@ def network_dimension(args):
         plot_all_heatmap_nodes = True
     else:
         plot_all_heatmap_nodes = False
+    print("plot_all_heatmap_nodes", plot_all_heatmap_nodes)
     results_pred_dimension = run_dimension_prediction(args, distance_matrix=args.shortest_path_matrix,
                                                       dist_threshold=int(args.mean_shortest_path),
                                                       num_central_nodes=10,
