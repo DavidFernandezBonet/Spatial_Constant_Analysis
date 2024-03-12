@@ -17,17 +17,7 @@ from algorithms import find_geometric_central_node, compute_shortest_path_mappin
 from map_image_to_colors import map_points_to_colors
 
 
-plt.style.use(['science', 'nature'])
-# plt.rcParams.update({'font.size': 16, 'font.family': 'serif'})
-font_size = 24
-plt.rcParams.update({'font.size': font_size})
-plt.rcParams['axes.labelsize'] = font_size
-plt.rcParams['axes.titlesize'] = font_size + 6
-plt.rcParams['xtick.labelsize'] = font_size
-plt.rcParams['ytick.labelsize'] = font_size
-plt.rcParams['legend.fontsize'] = font_size - 10
 
-plt.style.use(['science','no-latex', 'nature'])
 
 
 def plot_spatial_constant(args, df):

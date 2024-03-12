@@ -18,6 +18,23 @@ from gram_matrix_analysis import plot_gram_matrix_eigenvalues
 from structure_and_args import create_project_structure
 from functools import wraps
 from memory_profiler import memory_usage
+from check_latex_installation import check_latex_installed
+import scienceplots
+
+
+is_latex_in_os = check_latex_installed()
+if is_latex_in_os:
+    plt.style.use(['nature'])
+else:
+    plt.style.use(['no-latex', 'nature'])
+font_size = 24
+plt.rcParams.update({'font.size': font_size})
+plt.rcParams['axes.labelsize'] = font_size
+plt.rcParams['axes.titlesize'] = font_size + 6
+plt.rcParams['xtick.labelsize'] = font_size
+plt.rcParams['ytick.labelsize'] = font_size
+plt.rcParams['legend.fontsize'] = font_size - 10
+
 
 
 

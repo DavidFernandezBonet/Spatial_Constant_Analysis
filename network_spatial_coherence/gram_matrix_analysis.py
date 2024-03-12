@@ -19,15 +19,15 @@ from scipy.linalg import svd
 from sklearn.decomposition import PCA
 from numpy.linalg import matrix_rank
 
-plt.style.use(['science', 'nature'])
-# plt.rcParams.update({'font.size': 16, 'font.family': 'serif'})
-font_size = 24
-plt.rcParams.update({'font.size': font_size})
-plt.rcParams['axes.labelsize'] = font_size
-plt.rcParams['axes.titlesize'] = font_size + 6
-plt.rcParams['xtick.labelsize'] = font_size
-plt.rcParams['ytick.labelsize'] = font_size
-plt.rcParams['legend.fontsize'] = font_size - 10
+# plt.style.use(['science', 'nature'])
+# # plt.rcParams.update({'font.size': 16, 'font.family': 'serif'})
+# font_size = 24
+# plt.rcParams.update({'font.size': font_size})
+# plt.rcParams['axes.labelsize'] = font_size
+# plt.rcParams['axes.titlesize'] = font_size + 6
+# plt.rcParams['xtick.labelsize'] = font_size
+# plt.rcParams['ytick.labelsize'] = font_size
+# plt.rcParams['legend.fontsize'] = font_size - 10
 
 def classical_mds(distance_matrix, dimensions=2):
     """Perform Classical MDS on a given distance matrix."""

@@ -341,27 +341,27 @@ def load_graph(args, load_mode='igraph'):
     if args.original_title is None:
         args.original_title = args.args_title
 
-    # TODO: check that source is not contained in target and viceversa
-    # Convert columns to sets
-    source_set = set(df['source'])
-    target_set = set(df['target'])
-
-    # Maximum value for each set
-    max_source = max(source_set)
-    max_target = max(target_set)
-
-    # Check if sets go from 0 to N
-    source_sequence_check = source_set == set(range(max_source + 1))
-    target_sequence_check = target_set == set(range(max_target + 1))
-
-    # Intersection
-    intersection = source_set.intersection(target_set)
-
-    # Percentage of intersection
-    percentage_source = (len(intersection) / len(source_set)) * 100
-    percentage_target = (len(intersection) / len(target_set)) * 100
-
-    print((source_sequence_check, target_sequence_check, len(intersection), percentage_source, percentage_target))
+    # # TODO: check that source is not contained in target and viceversa
+    # # Convert columns to sets
+    # source_set = set(df['source'])
+    # target_set = set(df['target'])
+    #
+    # # Maximum value for each set
+    # max_source = max(source_set)
+    # max_target = max(target_set)
+    #
+    # # Check if sets go from 0 to N
+    # source_sequence_check = source_set == set(range(max_source + 1))
+    # target_sequence_check = target_set == set(range(max_target + 1))
+    #
+    # # Intersection
+    # intersection = source_set.intersection(target_set)
+    #
+    # # Percentage of intersection
+    # percentage_source = (len(intersection) / len(source_set)) * 100
+    # percentage_target = (len(intersection) / len(target_set)) * 100
+    #
+    # print((source_sequence_check, target_sequence_check, len(intersection), percentage_source, percentage_target))
 
 
     # Handling of weighted graphs, for now just a simple threshold

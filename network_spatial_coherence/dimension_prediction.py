@@ -16,19 +16,19 @@ from scipy.sparse.linalg import norm
 from scipy.stats import linregress
 from data_analysis import calculate_figsize_n_subplots
 
-font_size = 24
-plt.style.use(['no-latex', 'nature'])
-
-sns.set_style("white")  # 'white' is a style option in seaborn
-
-# If you want to use a seaborn style with modifications
-sns.set(style="white", rc={
-    'axes.labelsize': font_size,
-    'axes.titlesize': font_size + 6,
-    'xtick.labelsize': font_size,
-    'ytick.labelsize': font_size,
-    'legend.fontsize': font_size - 10
-})
+# font_size = 24
+# plt.style.use(['no-latex', 'nature'])
+#
+# sns.set_style("white")  # 'white' is a style option in seaborn
+#
+# # If you want to use a seaborn style with modifications
+# sns.set(style="white", rc={
+#     'axes.labelsize': font_size,
+#     'axes.titlesize': font_size + 6,
+#     'xtick.labelsize': font_size,
+#     'ytick.labelsize': font_size,
+#     'legend.fontsize': font_size - 10
+# })
 
 def compute_node_counts_matrix(distance_matrix):
     """

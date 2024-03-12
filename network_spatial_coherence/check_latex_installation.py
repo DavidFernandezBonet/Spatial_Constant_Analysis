@@ -10,4 +10,3 @@ def check_latex_installed():
         # If LaTeX is not installed, a CalledProcessError or FileNotFoundError will be raised
         return False
 
-print(check_latex_installed())
