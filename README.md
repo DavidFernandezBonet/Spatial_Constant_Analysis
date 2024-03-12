@@ -1,23 +1,54 @@
 # Network Spatial Coherence
-
-Network Spatial Coherence, a Python library dedicated to the advanced analysis and reconstruction of graphs. Our toolkit is designed to empower researchers and enthusiasts in the field of network science with the ability to perform comprehensive graph processing tasks. From loading and processing graphs to analyzing their structural properties and reconstructing them, GraphReconstructionToolkit provides a robust platform for exploring the complexities of network data.
+Python library to validate the spatial coherence of a network. It offers tools to analyze network properties, check how "Euclidean" the network is (spatial coherence), and to reconstruct the network. Networks can be both simulated (e.g. a KNN network) or imported.
 
 ## Features
 
-- **Flexible Configuration**: Customize your graph analysis with a wide range of configuration options, allowing for detailed setup of proximity modes, dimensionality, and reconstruction modes.
-- **Efficient Graph Processing**: Load and process graphs efficiently, with built-in support for managing large datasets through effective subsampling techniques.
-- **Comprehensive Analysis Tools**: Dive deep into your graph's structure with tools designed to visualize properties, validate spatial coherence, and analyze network dimensions.
-- **Advanced Visualization**: Bring your data to life with intuitive visualization options, showcasing the original graph structure and key analytical insights.
-- **Robust Reconstruction Algorithms**: Utilize cutting-edge algorithms to reconstruct graphs, gaining insights into the underlying structure and properties of your data.
-- **Support for Large Graphs**: Tackle large-scale graph analysis challenges with strategies designed to reduce computational demands without compromising on analytical depth.
+- Configurable, with solid default parameters but also tunable.
+- Efficient graph loading and processing (using sparse matrices).
+- Analyze the spatial coherence
+- Visualization tools
+- Reconstruction algorithms
 
-## Getting Started
 
-To begin with NetworkSpatialCoherence, ensure you have Python installed and follow these steps:
-
-1. Clone this repository to your local machine.
-2. Install the library using pip:
+## Setup
 
 ```bash
+# Clone repo
+git clone https://github.com/YourRepo/YourProject.git
+```
+
+# Install
 pip install git+https://github.com/DavidFernandezBonet/Spatial_Constant_Analysis.git
+
+## Usage
+For a detailed tutorial on using this toolkit, refer to our [Jupyter Notebook Tutorial](./network_spatial_coherence/network_spatial_coherence_tutorial.ipynb) in this repository.
+
+1. Access documentation for detailed API usage:
+
+```python
+from network_spatial_coherence.docs_util import access_docs
+access_docs()
+```
+
+2. Example analysis workflow:
+
+```python
+from network_spatial_coherence import nsc_pipeline
+args = nsc_pipeline.default_args()
+graph = nsc_pipeline.load_graph(args)
+nsc_pipeline.analyze_graph(graph, args)
+```
+
+
+## Contribute
+
+Report issues, suggest features, or contribute code on GitHub.
+
+## License
+
+[Your License Here]
+
+## Contact
+
+[Your Contact Information Here]
 
