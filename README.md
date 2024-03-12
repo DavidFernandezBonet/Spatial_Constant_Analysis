@@ -30,6 +30,8 @@ access_docs()
 
 ```python
 from network_spatial_coherence import nsc_pipeline
+from network_spatial_coherence import structure_and_args
+structure_and_args.create_project_structure()
 graph, args = nsc_pipeline.load_and_initialize_graph()
 nsc_pipeline.run_pipeline(graph, args)
 ```
