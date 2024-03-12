@@ -11,11 +11,13 @@ Python library to validate the spatial coherence of a network. It offers tools t
 
 ```bash
 pip install git+https://github.com/DavidFernandezBonet/Spatial_Constant_Analysis.git
-
 ```
-
+If you require authentication you can use a PAT (a github token) instead. Go to Developer settings > Personal access tokens > Generate new token and then save the token because it will not be displayed again. You should input it in this line of code
+```bash
+pip install git+https://<token>:x-oauth-basic@github.com/DavidFernandezBonet/Spatial_Constant_Analysis.git
+```
 ## Usage
-For a detailed tutorial on using this toolkit, refer to our [Jupyter Notebook Tutorial](./network_spatial_coherence/network_spatial_coherence_tutorial.ipynb) in this repository.
+For a detailed tutorial, see the [Jupyter Notebook Tutorial](./network_spatial_coherence/network_spatial_coherence_tutorial.ipynb) in this repository.
 
 1. Access documentation for detailed API usage:
 
