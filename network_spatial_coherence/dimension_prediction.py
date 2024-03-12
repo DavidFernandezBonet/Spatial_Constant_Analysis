@@ -462,7 +462,7 @@ def run_dimension_prediction(args, distance_matrix, dist_threshold=6,
         std_error_weighted_avg = np.sqrt(1 / np.sum(1 / variances))
         results_dimension_prediction['predicted_dimension'] = weighted_avg_dimension
         results_dimension_prediction['std_predicted_dimension'] = std_error_weighted_avg
-        print("RESULTS DIMENSION PREDICTION", results_dimension_prediction)
+        print("RESULTS DIMENSION PREDICTION FOR SEVERAL CENTRAL NODES", results_dimension_prediction)
 
 
     if plot_heatmap_all_nodes:
@@ -519,18 +519,19 @@ def compute_and_plot_predicted_dimensions_for_all_nodes(args, distance_count_mat
                 log_y_data_central = log_y_data
                 slope_central = slope
                 intercept_central = intercept
-                ## Central Index Plotting
-                ax_loglog.plot(log_x_data, log_y_data, 'o', label='Data Points')
-                ax_loglog.plot(log_x_data, slope * log_x_data + intercept, 'r-',
-                        label=f'Fit: dimension={predicted_dimension:.2f}')
-                ax_loglog.set_xlabel('Log(Distance)')
-                ax_loglog.set_ylabel('Log(Count)')
-                ax_loglog.set_title('Predicted Dimension for Central Node')
-                ax_loglog.legend()
 
-                if args.show_plots:
-                    plt.show()
-                plt.close()
+                # ## Central Index Plotting  #TODO: right now I plot this with my pipeline
+                # ax_loglog.plot(log_x_data, log_y_data, 'o', label='Data Points')
+                # ax_loglog.plot(log_x_data, slope * log_x_data + intercept, 'r-',
+                #         label=f'Fit: dimension={predicted_dimension:.2f}')
+                # ax_loglog.set_xlabel('Log(Distance)')
+                # ax_loglog.set_ylabel('Log(Count)')
+                # ax_loglog.set_title('Predicted Dimension for Central Node')
+                # ax_loglog.legend()
+                #
+                # if args.show_plots:
+                #     plt.show()
+                # plt.close()
 
         predicted_dimensions.append(predicted_dimension)
         dimension_error.append(std_err)
@@ -611,25 +612,7 @@ def compute_and_plot_predicted_dimensions_for_all_nodes(args, distance_count_mat
         form = 'png'
 
 
-    plt.close('all')
-    if 'z' in positions_df.columns:
-        fig = plt.figure(figsize=(10, 6))
-        ax = fig.add_subplot(111, projection='3d')
-        scatter = ax.scatter(positions_df['x'], positions_df['y'], positions_df['z'], c=positions_df['dimension_error'],
-                             cmap='viridis')
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
-    else:
-        fig, ax = plt.subplots(figsize=(10, 6))
-        scatter = ax.scatter(positions_df['x'], positions_df['y'], c=positions_df['dimension_error'], cmap='viridis')
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-    plt.colorbar(scatter, label='Dimension STD')
-    plt.savefig(f'{plot_folder}/heatmap_predicted_dimension_std_{args.args_title}_{title}', format=form)
-    if args.show_plots:
-        plt.show()
-    plt.close()
+
 
     # plt.close('all')
     # fig = plt.figure(figsize=(10, 6))
@@ -643,6 +626,7 @@ def compute_and_plot_predicted_dimensions_for_all_nodes(args, distance_count_mat
     #     plt.show()
     # plt.close()
 
+    ### Dimension Prediction
     plt.close('all')
     if 'z' in positions_df.columns:
         fig = plt.figure(figsize=(10, 6))
@@ -663,28 +647,26 @@ def compute_and_plot_predicted_dimensions_for_all_nodes(args, distance_count_mat
         plt.show()
     plt.close()
 
-    # # Plot
-    # plt.close('all')
-    # fig_heatmap, ax = plt.subplots(figsize=(10, 6))
-    #
-    # if plot_in_3d:
-    #     ax = fig_heatmap.add_subplot(111, projection='3d')
-    #     scatter = ax_heatmap.scatter(positions_df['x'], positions_df['y'], positions_df.get('z', 0),
-    #                          c=positions_df['predicted_dimension'], cmap='viridis')
-    #     ax.set_xlabel('X')
-    #     ax.set_ylabel('Y')
-    #     ax.set_zlabel('Z' if 'z' in positions_df.columns else 'Predicted Dimension')
-    # else:
-    #     scatter = plt.scatter(positions_df['x'], positions_df['y'], c=positions_df['predicted_dimension'],
-    #                           cmap='viridis')
-    #     plt.xlabel('X')
-    #     plt.ylabel('Y')
-    #
-    # fig_heatmap.colorbar(scatter, label='Predicted Dimension')
-    # plt.savefig(f'{plot_folder}/heatmap_predicted_dimension_{args.args_title}_{title}', format=form)
-    # if args.show_plots:
-    #     plt.show()
-    # plt.close()
+    #### Dimension STD
+    plt.close('all')
+    if 'z' in positions_df.columns:
+        fig = plt.figure(figsize=(10, 6))
+        ax = fig.add_subplot(111, projection='3d')
+        scatter = ax.scatter(positions_df['x'], positions_df['y'], positions_df['z'], c=positions_df['dimension_error'],
+                             cmap='viridis')
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+    else:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        scatter = ax.scatter(positions_df['x'], positions_df['y'], c=positions_df['dimension_error'], cmap='viridis')
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+    plt.colorbar(scatter, label='Dimension STD')
+    plt.savefig(f'{plot_folder}/heatmap_predicted_dimension_std_{args.args_title}_{title}', format=form)
+    if args.show_plots:
+        plt.show()
+    plt.close()
 
     figure_data = {
         'log_x_data': log_x_data_central,
