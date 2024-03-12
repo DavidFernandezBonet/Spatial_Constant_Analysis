@@ -24,13 +24,12 @@ from network_spatial_coherence.docs_util import access_docs
 access_docs()
 ```
 
-2. Example analysis workflow:
+2. Minimum working example
 
 ```python
 from network_spatial_coherence import nsc_pipeline
-args = nsc_pipeline.default_args()
-graph = nsc_pipeline.load_graph(args)
-nsc_pipeline.analyze_graph(graph, args)
+graph, args = nsc_pipeline.load_and_initialize_graph()
+nsc_pipeline.run_pipeline(graph, args)
 ```
 
 
