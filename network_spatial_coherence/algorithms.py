@@ -380,7 +380,7 @@ class ImageReconstruction:
         graph (sparse matrix): The graph to be reconstructed, expected to be in a sparse matrix format.
         dim (int): The target dimension for the reconstruction (typically 2 or 3).
         node_embedding_mode (str): The method used for generating node embeddings. Supported modes include
-                                   'ggvec', 'node2vec', 'landmark_isomap', 'PyMDE', and others.
+                                   'ggvec', 'STRND', 'landmark_isomap', 'PyMDE', and others.
         manifold_learning_mode (str): The manifold learning technique applied for dimensionality reduction,
                                       such as 'UMAP'.
         node_embedding_components (int): The number of components (dimensions) to use for node embeddings.
@@ -438,7 +438,7 @@ class ImageReconstruction:
             node_embeddings = ggvec_model.fit_transform(self.graph)
 
 
-        elif self.node_embedding_mode == "node2vec":
+        elif self.node_embedding_mode == "STRND":
             # TODO: add node_embedding_components
             # raise ValueError("Not implemented yet")
             ### nodevectors

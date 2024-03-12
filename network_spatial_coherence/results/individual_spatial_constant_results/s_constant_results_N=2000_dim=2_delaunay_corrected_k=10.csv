@@ -1,0 +1,2 @@
+proximity_mode,average_degree,mean_shortest_path,num_nodes,dim,S,S_general,S_smallworld_general,mean_shortest_path_prediction,msp_prediction_error,relative_msp_prediction_error
+delaunay_corrected,5.86,18.35138369184592,2000,2,0.4103494141614853,0.9933507539523342,4.2689656883191205,22.16906801811499,3.8176843262690703,0.20803250536172832

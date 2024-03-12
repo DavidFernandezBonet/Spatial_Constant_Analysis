@@ -9,15 +9,16 @@ base = {   'colorfile': 'dna_cool2.png',
     'max_subgraph_size': 3000,
     'plot_graph_properties': False,
     'proximity_mode': 'delaunay_corrected',
-    'reconstruct': True,
+    'reconstruct': False,
     'reconstruction_mode': 'node2vec',
     'show_plots': True,
     'spatial_coherence_validation': {   'gram_matrix': True,
                                         'network_dimension': True,
-                                        'spatial_constant': True}}
+                                        'spatial_constant': True},
+    'verbose': True}
 
 # Settings specific to simulation scenarios
-simulation = {'intended_av_degree': 10, 'num_points': 1000, 'plot_original_image': True}
+simulation = {'intended_av_degree': 10, 'num_points': 2000, 'plot_original_image': False}
 
 # Settings specific to experimental scenarios
 experiment = {   'edge_list_title': 'edge_list_nbead_0_filtering_march_8.csv',

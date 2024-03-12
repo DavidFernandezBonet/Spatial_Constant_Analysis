@@ -93,8 +93,9 @@ def load_and_initialize_graph(args=None):
     if args.proximity_mode != "experimental":
         write_proximity_graph(args)
 
-    print("num_points", args.num_points)
-    print("edge_list_title", args.edge_list_title)
+    print("Number Nodes", args.num_points)
+    print("Average Degree", args.average_degree)
+    print("Title Edge List", args.edge_list_title)
     return load_graph(args, load_mode='sparse'), args
 @profile
 def subsample_graph_if_necessary(graph, args):
@@ -140,12 +141,12 @@ def network_dimension(args):
     """
     Steps 3: Predict the dimension of the graph
     """
-    print("Average Degree", args.average_degree)
     results_pred_dimension = run_dimension_prediction(args, distance_matrix=args.shortest_path_matrix,
                                                       dist_threshold=int(args.mean_shortest_path),
                                                       num_central_nodes=10,
                                                       local_dimension=True, plot_heatmap_all_nodes=True)
-    print("Results predicted dimension", results_pred_dimension)
+    if args.verbose:
+        print("Results predicted dimension", results_pred_dimension)
 @profile
 def rank_matrix_analysis(args):
     """

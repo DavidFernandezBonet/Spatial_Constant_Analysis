@@ -840,6 +840,7 @@ def plot_spatial_constant_against_subgraph_size(args, dataframe):
 
 
 def plot_spatial_constant_against_subgraph_size_with_false_edges(args, dataframes, false_edge_list, mst_case_df=None):
+    plt.close('all')
     font_size = 24
     plt.rcParams.update({'font.size': font_size})
     plt.rcParams['axes.labelsize'] = font_size
@@ -900,10 +901,12 @@ def plot_spatial_constant_against_subgraph_size_with_false_edges(args, dataframe
 
     plt.yscale('log')
     plt.savefig(f"{plot_folder}/mean_s_general_vs_intended_size_{args.args_title}_false_edge_loglin_version.png")
+    plt.close('all')
 
     plt.xscale('log')
     plt.yscale('log')
     plt.savefig(f"{plot_folder}/mean_s_general_vs_intended_size_{args.args_title}_false_edge_loglog_version.png")
+    plt.close('all')
 
 
 def plot_spatial_constant_against_subgraph_size_with_multiple_series(args, dataframe, false_edge_counts, ax=None, title=None, mst_case_df=None):
