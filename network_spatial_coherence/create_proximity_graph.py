@@ -499,5 +499,8 @@ def write_proximity_graph(args, order_indices=False, point_mode="square"):
 
     write_positions(args, np_positions=np.array(points), output_path=position_folder)
     edge_df = pd.DataFrame(list(edges), columns=['source', 'target'])
-    edge_df.to_csv(os.path.join(edge_list_folder, f"edge_list_{args.args_title}.csv"), index=False)
+
+    # # TODO: revert to this if errors arise
+    # edge_df.to_csv(os.path.join(edge_list_folder, f"edge_list_{args.args_title}.csv"), index=False)
+    edge_df.to_csv(os.path.join(edge_list_folder, f"{args.edge_list_title}"), index=False)
     return edge_df

@@ -464,7 +464,7 @@ def run_simulation_subgraph_sampling(args, graph, size_interval=100, n_subgraphs
 
         csv_filename = f"spatial_constant_subgraph_sampling_{args.args_title}.csv"
         results_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}", index=False)
-        plot_sample_spatial_constant(args, results_df)
+        # plot_sample_spatial_constant(args, results_df)  # This is an old barplot
         plot_spatial_constant_against_subgraph_size(args, results_df)
         combined_df = results_df
 
@@ -813,9 +813,11 @@ def plot_spatial_constant_euc_vs_network(args, results_df_euc, results_df_net):
     std_devs_euc = results_df_euc['std_spatial_constant'].values
 
     # Scatter plot and ribbon for mean spatial constants (Euclidean)
-    plt.scatter(sizes_euc, means_euc, label='Euclidean Mean Spatial Constant', color='blue')
-    plt.fill_between(sizes_euc, means_euc - std_devs_euc, means_euc + std_devs_euc, color='#ADD8E6', alpha=0.3,
-                     edgecolor='#00008B', linewidth=1, linestyle='--')
+
+
+
+    plt.plot(sizes_euc, means_euc, label='Euclidean Mean Spatial Constant', color='#ADD8E6', marker='o')
+    plt.fill_between(sizes_euc, means_euc - std_devs_euc, means_euc + std_devs_euc, color='#ADD8E6', alpha=0.3,)
 
     ### Network
     # Data from results_df_net
@@ -839,10 +841,9 @@ def plot_spatial_constant_euc_vs_network(args, results_df_euc, results_df_net):
     means_net = np.array(means)
     std_devs_net = np.array(std_devs)
 
-    # Scatter plot and ribbon for mean spatial constants (Network)
-    plt.scatter(sizes_net, means_net, label='Network Mean Spatial Constant', color='green')
-    plt.fill_between(sizes_net, means_net - std_devs_net, means_net + std_devs_net, color='#6FC276', alpha=0.3,
-                     edgecolor='#006400', linewidth=1, linestyle='--')
+
+    plt.plot(sizes_net, means_net, label='Network Mean Spatial Constant', color='#6FC276', marker='o')
+    plt.fill_between(sizes_net, means_net - std_devs_net, means_net + std_devs_net, color='#6FC276', alpha=0.3)
 
     plt.xlabel('Subgraph Size')
     plt.ylabel('Mean Spatial Constant')

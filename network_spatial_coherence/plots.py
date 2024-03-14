@@ -823,8 +823,8 @@ def plot_spatial_constant_against_subgraph_size(args, dataframe):
 
     plot_folder = f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}"
     plt.savefig(f"{plot_folder}/mean_s_general_vs_intended_size_{args.args_title}.png")
-    if args.show_plots:
-        plt.show()
+    # if args.show_plots:
+    #     plt.show()
     plt.close()
 
 

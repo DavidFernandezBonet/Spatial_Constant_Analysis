@@ -403,8 +403,9 @@ def run_dimension_prediction(args, distance_matrix, dist_threshold=6,
     # Important step, contains the "Volume" --> Number of nodes at <= distance
     cumulative_count = np.cumsum(count_by_distance_average)
 
-    print("Surface Counts", count_by_distance_average)
-    print("Volume Counts", cumulative_count)
+    if args.verbose:
+        print("Surface Counts", count_by_distance_average)
+        print("Volume Counts", cumulative_count)
 
     ### Adding this here, careful with disruptions
     count_by_distance_average = count_by_distance_average[:dist_threshold]
@@ -462,6 +463,8 @@ def run_dimension_prediction(args, distance_matrix, dist_threshold=6,
         std_error_weighted_avg = np.sqrt(1 / np.sum(1 / variances))
         results_dimension_prediction['predicted_dimension'] = weighted_avg_dimension
         results_dimension_prediction['std_predicted_dimension'] = std_error_weighted_avg
+        results_dimension_prediction['predicted_dimension_list'] = predicted_dimensions
+        results_dimension_prediction['std_predicted_dimension_list'] = std_errors
         print("RESULTS DIMENSION PREDICTION FOR SEVERAL CENTRAL NODES", results_dimension_prediction)
 
 

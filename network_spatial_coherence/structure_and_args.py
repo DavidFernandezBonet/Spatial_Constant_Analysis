@@ -41,6 +41,7 @@ def create_project_structure(target_dir=None):
         'pixelgen_data': f'{project_root}/data/pixelgen_data',
         'slidetag_data': f'{project_root}/data/slidetag_data',
         'colorfolder': f'{project_root}/data/colorcode',
+        'us_counties': f'{project_root}/data/us_counties',
 
         's_constant_results': f'{project_root}/results/individual_spatial_constant_results',
         'plots': f'{project_root}/results/plots',
@@ -74,6 +75,7 @@ def create_project_structure(target_dir=None):
         'dimension_prediction_iterations': f'{project_root}/results/plots/predicted_dimension/several_predictions',
         'centered_msp': f'{project_root}/results/plots/predicted_dimension/centered_msp',
         'mds_dim': f'{project_root}/results/plots/predicted_dimension/MDS_dimension',
+        'comparative_plots': f'{project_root}/results/plots/comparative_plots',
 
         'plots_clustering_coefficient': f'{project_root}/results/plots/clustering_coefficient',
         'plots_degree_distribution': f'{project_root}/results/plots/degree_distribution',
@@ -197,10 +199,13 @@ class GraphArgs:
         self.plot_graph_properties = config.get('plot_graph_properties', False)
         self.large_graph_subsampling = config.get('large_graph_subsampling', False)
         self.max_subgraph_size = config.get('max_subgraph_size', 3000)
+        self.network_name = ''
 
         self.handle_all_subgraphs = config.get('handle_all_subgraphs', False)
         self.spatial_coherence_validation = config.get('spatial_coherence_validation', False)
         self.reconstruct = config.get('reconstruct', False)
+
+
         if self.reconstruct:
             self.reconstruction_mode = config.get('reconstruction_mode')
 
@@ -363,6 +368,7 @@ class GraphArgs:
         if "experimental" in self._proximity_mode:
             if self.edge_list_title is not None:
                 self.args_title = f"N={self._num_points}_dim={self._dim}_{self._proximity_mode}_{os.path.splitext(self.original_edge_list_title)[0]}"
+                self.extra_info = "_" + os.path.splitext(self.edge_list_title)[0]
                 # self.args_title = f"N={self._num_points}_dim={self._dim}_{self._proximity_mode}_{os.path.splitext(self.edge_list_title)[0]}"
 
             # else:
@@ -371,19 +377,24 @@ class GraphArgs:
 
             # self.args_title = f"N={self._num_points}_dim={self._dim}_{self._proximity_mode}_{os.path.splitext(self.edge_list_title)[0]}"
         else:
+            ### Old setup for args and edge title
+            # self.args_title = f"N={self._num_points}_dim={self._dim}_{self._proximity_mode}_k={self._intended_av_degree}"
+            # self.edge_list_title = f"edge_list_{self.args_title}.csv"
 
-            self.args_title = f"N={self._num_points}_dim={self._dim}_{self._proximity_mode}_k={self._intended_av_degree}"
+            base_title = f"N={self._num_points}_dim={self._dim}_{self._proximity_mode}_k={self._intended_av_degree}"
+            prefix = "edge_list_"
+            base_with_prefix = f"{prefix}{base_title}"
+            if self.edge_list_title.startswith(base_with_prefix):
 
-
-            # if self.edge_list_title is None:
-            #     self.edge_list_title = f"edge_list_{self.args_title}.csv"
-            # else:
-            #     self.edge_list_title = f"{self.edge_list_title}"
-
-            ## For now just update the edge list every time
+                extra_info = os.path.splitext(self.edge_list_title[len(base_with_prefix):])[0]  # Extract extra info
+                if extra_info == ".csv":
+                    extra_info = ""
+                # print("EXTRA INFO", extra_info)
+                self.extra_info = extra_info
+                self.args_title = f"{base_title}{extra_info}"  # Reconstruct with base and extra_info}"  # Reconstruct with possible new base
+            else:
+                self.args_title = f"{base_title}"
             self.edge_list_title = f"edge_list_{self.args_title}.csv"
-
-
 
 
 

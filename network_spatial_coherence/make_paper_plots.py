@@ -3,6 +3,21 @@ from gram_matrix_analysis import make_comparative_gram_matrix_plot_euc_sp
 from dimension_prediction import make_dimension_prediction_plot
 from dimension_prediction import make_euclidean_network_dim_pred_comparison_plot
 from spatial_constant_analysis import make_spatial_constant_euc_vs_network
+import matplotlib.pyplot as plt
+from check_latex_installation import check_latex_installed
+
+is_latex_in_os = check_latex_installed()
+if is_latex_in_os:
+    plt.style.use(['nature'])
+else:
+    plt.style.use(['no-latex', 'nature'])
+font_size = 24
+plt.rcParams.update({'font.size': font_size})
+plt.rcParams['axes.labelsize'] = font_size
+plt.rcParams['axes.titlesize'] = font_size + 6
+plt.rcParams['xtick.labelsize'] = font_size
+plt.rcParams['ytick.labelsize'] = font_size
+plt.rcParams['legend.fontsize'] = font_size - 10
 
 # # # Euclidean and Shortest Path correlation plot
 # make_euclidean_sp_correlation_plot(single_series=True, multiple_series=False)

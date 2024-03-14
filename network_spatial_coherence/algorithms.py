@@ -999,19 +999,14 @@ def sample_csgraph_subgraph(args, csgraph, min_nodes=3000):
     """
     from utils import custom_bfs_csgraph  # Ensure this is implemented and imported correctly
 
-
     visited_nodes = custom_bfs_csgraph(csgraph, min_nodes=min_nodes)
     mask = np.zeros(csgraph.shape[0], dtype=bool)
     mask[visited_nodes] = True
     subgraph = csgraph[mask, :][:, mask]
     sorted_visited_nodes = sorted(visited_nodes)
 
-
-
     args.num_points = len(visited_nodes)
     rows, cols = subgraph.nonzero()
-
-
 
     filtered_edges = [(i, j) for i, j in zip(rows, cols) if i < j]
     edge_df = pd.DataFrame(filtered_edges, columns=['source', 'target'])
@@ -1020,9 +1015,6 @@ def sample_csgraph_subgraph(args, csgraph, min_nodes=3000):
     edge_list_title = f"edge_list_{args.args_title}_subgraph.csv"  # Assuming 'args.title' exists
     args.edge_list_title = edge_list_title  # update the edge list title
     edge_df.to_csv(f"{edge_list_folder}/{edge_list_title}", index=False)
-
-
-
 
     if args.node_ids_map_old_to_new is not None:  # TODO: case where we have originally a disconnected subgraph. Not sure if this works, and it is relevant for experimental data that is disconnected
         # Reverse the mapping to get from new (csgraph) indices to old (original) indices

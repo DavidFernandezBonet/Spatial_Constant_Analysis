@@ -329,6 +329,7 @@ def load_graph(args, load_mode='igraph'):
         raise ValueError('Please make sure that a) the edgelist in the data/edge_lists folder and b)'
                          'the name of the edgelist is correct.')
 
+
     if os.path.splitext(args.edge_list_title)[1] == ".pickle":
         write_nx_graph_to_edge_list_df(args)  # write a .csv edge list if it is in pickle format
 
@@ -340,6 +341,7 @@ def load_graph(args, load_mode='igraph'):
 
     if args.original_title is None:
         args.original_title = args.args_title
+
 
     # # TODO: check that source is not contained in target and viceversa
     # # Convert columns to sets
@@ -360,7 +362,7 @@ def load_graph(args, load_mode='igraph'):
     # # Percentage of intersection
     # percentage_source = (len(intersection) / len(source_set)) * 100
     # percentage_target = (len(intersection) / len(target_set)) * 100
-    #
+
     # print((source_sequence_check, target_sequence_check, len(intersection), percentage_source, percentage_target))
 
 
@@ -439,7 +441,7 @@ def load_graph(args, load_mode='igraph'):
         degrees = largest_component.degree()
         average_degree = np.mean(degrees)
         args.average_degree = average_degree
-        args.num_points = largest_component.vcount()    # calling args.num_points changes the edge list title
+        args.num_points = largest_component.vcount()    # TODO: calling args.num_points changes the edge list title
         print("average degree igraph", average_degree)
         print("num points", args.num_points)
 
@@ -639,3 +641,12 @@ def convert_graph_type(args, graph, desired_type="igraph"):
             return graph
     else:
         raise ValueError("Unsupported desired graph type. Currently, only 'sparse' and 'igraph' type is supported.")
+
+
+def write_edge_list_sparse_graph(args, sparse_graph):
+    rows, cols = sparse_graph.nonzero()
+    edges = [(i, j) for i, j in zip(rows, cols) if i < j]
+    edge_df = pd.DataFrame(edges, columns=['source', 'target'])
+    edge_list_folder = args.directory_map["edge_lists"]
+    edge_list_title = f"{args.edge_list_title}"
+    edge_df.to_csv(f"{edge_list_folder}/{edge_list_title}", index=False)
