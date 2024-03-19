@@ -177,7 +177,7 @@ class GraphArgs:
         create_project_structure(): Creates and returns a mapping of directory structures, for file organization.
     """
 
-    def __init__(self, override_config_path=None, data_path=None):
+    def __init__(self, override_config_path=None, data_dir=None):
 
         # Loading Args from configuration file
         self.code_folder = os.getcwd()
@@ -252,7 +252,7 @@ class GraphArgs:
         self.bipartite_sets = None
         self.average_degree = -1
         self.mean_clustering_coefficient = None
-        self.directory_map = create_project_structure(target_dir=data_path)
+        self.directory_map = create_project_structure(target_dir=data_dir)
         self.original_title = None
         self.node_ids_map_old_to_new = None
         self.colorcode = {-1: "gray", 0: "gray", 1: "green", 2: "red"}
