@@ -210,12 +210,21 @@ class GraphArgs:
             self.reconstruction_mode = config.get('reconstruction_mode')
 
         self._intended_av_degree = config.get('intended_av_degree', 6)
+
         self.update_proximity_mode()
 
+        ### Set edge list title
         if self.proximity_mode == "experimental":
             initial_title = config.get('edge_list_title', None)
             if initial_title:
                 self.set_edge_list_title(initial_title)
+
+
+
+
+
+
+
 
         if self.proximity_mode == "experimental":
             ### Experiment specific
@@ -384,6 +393,9 @@ class GraphArgs:
             base_title = f"N={self._num_points}_dim={self._dim}_{self._proximity_mode}_k={self._intended_av_degree}"
             prefix = "edge_list_"
             base_with_prefix = f"{prefix}{base_title}"
+            if self.edge_list_title is None:
+                self.edge_list_title = f"edge_list_{base_title}.csv"
+
             if self.edge_list_title.startswith(base_with_prefix):
 
                 extra_info = os.path.splitext(self.edge_list_title[len(base_with_prefix):])[0]  # Extract extra info

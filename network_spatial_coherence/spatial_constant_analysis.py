@@ -99,7 +99,7 @@ def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild
 def make_spatial_constant_euc_vs_network():
     args = GraphArgs()
     args.proximity_mode = "knn"
-    args.dim = 2
+    args.dim = 3
     args.intended_av_degree = 10
     args.num_points = 1000
     create_proximity_graph.write_proximity_graph(args, point_mode="square", order_indices=False)

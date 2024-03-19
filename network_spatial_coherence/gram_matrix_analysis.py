@@ -96,7 +96,7 @@ def gram_to_distance_matrix(G):
 def test_statistic_singular_values(distance_matrix, dim):
 
     dims = dim
-    D = distance_matrix
+    D = distance_matrix**2
     n = D.shape[0]  # shape of EDM
     # double center EDM to retrive the corresponding Gram matrix
     J = np.eye(n) - (1. / n) * np.ones((n, n))

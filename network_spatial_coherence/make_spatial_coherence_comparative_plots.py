@@ -57,11 +57,11 @@ def generate_several_graphs(from_one_graph=False):
     else:
         args = GraphArgs()
         args.verbose = False
-        args.proximity_mode = "knn"
-        args.dim = 2
+        args.proximity_mode = "delaunay_corrected"
+        args.dim = 3
         args.show_plots = False
         args.intended_av_degree = 10
-        args.num_points = 1000
+        args.num_points = 2000
         write_proximity_graph(args, point_mode="square", order_indices=False)
         load_graph(args, load_mode='sparse')
         all_random_false_edges = select_false_edges_csr(args.sparse_graph, max(false_edge_list))
@@ -491,24 +491,23 @@ def plot_pos_neg_eigenvalue_proportions_comparative(args_list, eigenvalues_list)
     plt.tight_layout()
     plt.show()
 if __name__ == "__main__":
+    # ## Simulation with False Edges
+    # args_list = generate_several_graphs(from_one_graph=True)
+    # title = "False_Eddge_Comparison"
 
-    ## Simulation with False Edges
-    args_list = generate_several_graphs(from_one_graph=True)
-    title = "False_Eddge_Comparison"
-
-    # ### Experimental
-    # edge_list_titles_dict = {"weinstein_data_corrected_february.csv": ('W', [5, 10, 15]),
-    #                     "pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv": ('PXL',None),
-    #                     "subgraph_8_nodes_160_edges_179_degree_2.24.pickle": ('HL-S', None),
-    #                     "subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle": ('HL-E', None)}
-    # # edge_list_titles_dict = {"weinstein_data_corrected_february.csv": [5,10,15],
-    # #                     "subgraph_8_nodes_160_edges_179_degree_2.24.pickle": None,
-    # #                          }
-    # title = "Experimental Comparison"
-    # args_list = generate_experimental_graphs(edge_list_titles_dict=edge_list_titles_dict)
+    ### Experimental
+    edge_list_titles_dict = {"weinstein_data_corrected_february.csv": ('W', [5, 10, 15]),
+                        "pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv": ('PXL',None),
+                        "subgraph_8_nodes_160_edges_179_degree_2.24.pickle": ('HL-S', None),
+                        "subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle": ('HL-E', None)}
+    # edge_list_titles_dict = {"weinstein_data_corrected_february.csv": [5,10,15],
+    #                     "subgraph_8_nodes_160_edges_179_degree_2.24.pickle": None,
+    #                          }
+    title = "Experimental Comparison"
+    args_list = generate_experimental_graphs(edge_list_titles_dict=edge_list_titles_dict)
 
 
     ## Pipeline
-    make_spatial_constant_comparative_plot(args_list, title=title)
+    # make_spatial_constant_comparative_plot(args_list, title=title)
     make_dimension_prediction_comparative_plot(args_list, title=title)
-    make_gram_matrix_analysis_comparative_plot(args_list, title=title)
+    # make_gram_matrix_analysis_comparative_plot(args_list, title=title)

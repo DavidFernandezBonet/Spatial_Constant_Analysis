@@ -750,10 +750,14 @@ def get_spatial_constant_euclidean_df(args, positions_array, size_interval, num_
             # Compute average distance
             avg_distance = compute_average_distance(subset)
 
+            print(f"Average distance: {avg_distance} at size_threshold: {size_threshold}")
+
             # Compute spatial constant
             number_points = len(subset)
-            # spatial_constant = avg_distance * ((args.num_points ) / number_points) ** (1 / args.dim)
-            spatial_constant = avg_distance * (((args.num_points)/(np.pi)) / number_points) ** (1 / args.dim)
+            spatial_constant = avg_distance * ((args.num_points ) / number_points) ** (1 / args.dim)
+            # spatial_constant = avg_distance * (((args.num_points)/(np.pi)) / number_points) ** (1 / args.dim)
+
+            print(f"Spatial constant: {spatial_constant} at size_threshold: {size_threshold}")
 
             spatial_constants.append(spatial_constant)
 
@@ -802,7 +806,6 @@ def plot_euc_spatial_constant_against_size_threshold(args, results_df):
 
 
 def plot_spatial_constant_euc_vs_network(args, results_df_euc, results_df_net):
-    fig, axs = plt.subplots(1, 2, figsize=(20, 6), sharey=True)  # Create two subplots side by side
 
     plt.figure(figsize=(10, 6))
 
@@ -853,6 +856,8 @@ def plot_spatial_constant_euc_vs_network(args, results_df_euc, results_df_net):
     # Save the figure
     plot_folder = f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}"
     plt.savefig(f"{plot_folder}/mean_spatial_constant_euc_vs_network_{args.args_title}.svg")
+    plot_folder2 = f"{args.directory_map['spatial_coherence']}"
+    plt.savefig(f"{plot_folder2}/mean_spatial_constant_euc_vs_network_{args.args_title}.svg")
     plt.show()
 
 

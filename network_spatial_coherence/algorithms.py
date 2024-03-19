@@ -592,7 +592,7 @@ class ImageReconstruction:
 
         return reduced_embeddings
 
-    def write_positions(self, args, np_positions, output_path, old_indices=False):
+    def write_positions(self, args, np_positions, output_path, old_indices=True):
         # Write standard dataframe format:
         if args.dim == 2:
             positions_df = pd.DataFrame(np_positions, columns=['x', 'y'])

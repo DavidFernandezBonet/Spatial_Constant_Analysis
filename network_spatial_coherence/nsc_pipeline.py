@@ -166,7 +166,8 @@ def network_dimension(args):
     results_pred_dimension = run_dimension_prediction(args, distance_matrix=args.shortest_path_matrix,
                                                       dist_threshold=int(args.mean_shortest_path),
                                                       num_central_nodes=10,
-                                                      local_dimension=True, plot_heatmap_all_nodes=plot_all_heatmap_nodes)
+                                                      local_dimension=True, plot_heatmap_all_nodes=plot_all_heatmap_nodes,
+                                                      msp_central_node=False, plot_centered_average_sp_distance=False)
     if args.verbose:
         print("Results predicted dimension", results_pred_dimension)
 @profile
