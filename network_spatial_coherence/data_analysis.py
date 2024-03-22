@@ -15,6 +15,7 @@ from functools import partial
 
 
 import create_proximity_graph
+from scipy.stats import linregress
 
 def spatial_constant_variation_analysis(num_points_list, proximity_mode_list, intended_av_degree_list, dim_list, false_edges_list):
     spatial_constant_variation_results = []
@@ -372,6 +373,8 @@ def run_simulation_subgraph_sampling(args, graph, size_interval=100, n_subgraphs
 
 
 
+
+
     if add_mst:
         # Work on a copy of the graph for MST
         igraph_graph_mst = get_minimum_spanning_tree_igraph(igraph_graph.copy())
@@ -474,6 +477,50 @@ def run_simulation_subgraph_sampling(args, graph, size_interval=100, n_subgraphs
 
 
     return combined_df
+
+
+def process_spatial_constant_false_edge_df(combined_df, false_edge_list):
+    # Initialize an empty DataFrame to store results
+    results_df = pd.DataFrame()
+
+    for dataframe, false_edge_count in zip(combined_df, false_edge_list):
+        unique_sizes = dataframe['intended_size'].unique()
+        means = []
+        std_devs = []
+        sizes = []
+
+        # Calculate mean and standard deviation for each size
+        for size in unique_sizes:
+            subset = dataframe[dataframe['intended_size'] == size]
+            mean = subset['S_general'].mean()
+            std = subset['S_general'].std()
+            means.append(mean)
+            std_devs.append(std)
+            sizes.append(size)
+
+        sizes = np.array(sizes)
+        means = np.array(means)
+        std_devs = np.array(std_devs)
+
+        # Perform linear regression
+        slope, intercept, r_value, p_value, std_err = linregress(sizes, means)
+        r_squared = r_value ** 2  # Coefficient of determination
+
+        # Create a DataFrame for the current false_edge_count results
+        temp_df = pd.DataFrame({
+            'False Edge Count': false_edge_count,
+            'Sizes': sizes,
+            'Means': means,
+            'Standard Deviation': std_devs,
+            'Slope': np.repeat(slope, len(sizes)),
+            'R_squared': np.repeat(r_squared, len(sizes))
+        })
+        # Append the temporary DataFrame to the results DataFrame
+        results_df = pd.concat([results_df, temp_df], ignore_index=True)
+
+    spatial_constant_df = results_df
+    return spatial_constant_df
+
 
 
 def process_subgraph__bfs_parallel(size_subgraphs, args, igraph_graph, n_subgraphs):
@@ -805,9 +852,9 @@ def plot_euc_spatial_constant_against_size_threshold(args, results_df):
     plt.show()
 
 
-def plot_spatial_constant_euc_vs_network(args, results_df_euc, results_df_net):
+def plot_spatial_constant_euc_vs_network(args, results_df_euc, results_df_net, useful_plot_folder):
 
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(6, 4.5))
 
     ### Euclidean
     # Data from results_df_euc
@@ -819,8 +866,8 @@ def plot_spatial_constant_euc_vs_network(args, results_df_euc, results_df_net):
 
 
 
-    plt.plot(sizes_euc, means_euc, label='Euclidean Mean Spatial Constant', color='#ADD8E6', marker='o')
-    plt.fill_between(sizes_euc, means_euc - std_devs_euc, means_euc + std_devs_euc, color='#ADD8E6', alpha=0.3,)
+    plt.plot(sizes_euc, means_euc, label='Euclidean', color='#00CD6C', marker='o')
+    plt.fill_between(sizes_euc, means_euc - std_devs_euc, means_euc + std_devs_euc, color='#00CD6C', alpha=0.3,)
 
     ### Network
     # Data from results_df_net
@@ -845,8 +892,8 @@ def plot_spatial_constant_euc_vs_network(args, results_df_euc, results_df_net):
     std_devs_net = np.array(std_devs)
 
 
-    plt.plot(sizes_net, means_net, label='Network Mean Spatial Constant', color='#6FC276', marker='o')
-    plt.fill_between(sizes_net, means_net - std_devs_net, means_net + std_devs_net, color='#6FC276', alpha=0.3)
+    plt.plot(sizes_net, means_net, label='Network', color='#009ADE', marker='o')
+    plt.fill_between(sizes_net, means_net - std_devs_net, means_net + std_devs_net, color='#009ADE', alpha=0.3)
 
     plt.xlabel('Subgraph Size')
     plt.ylabel('Mean Spatial Constant')
@@ -858,6 +905,7 @@ def plot_spatial_constant_euc_vs_network(args, results_df_euc, results_df_net):
     plt.savefig(f"{plot_folder}/mean_spatial_constant_euc_vs_network_{args.args_title}.svg")
     plot_folder2 = f"{args.directory_map['spatial_coherence']}"
     plt.savefig(f"{plot_folder2}/mean_spatial_constant_euc_vs_network_{args.args_title}.svg")
+    plt.savefig(f"{useful_plot_folder}/mean_spatial_constant_euc_vs_network_{args.args_title}.svg")
     plt.show()
 
 

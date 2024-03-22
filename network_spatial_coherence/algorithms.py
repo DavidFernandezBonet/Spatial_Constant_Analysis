@@ -965,7 +965,7 @@ def custom_bfs_csgraph(csgraph, min_nodes=3000):
     Returns:
     - visited_nodes: Indices of the nodes visited during BFS.
     """
-    start_node = 0  # random start node
+    start_node = 0  # random start node  --> #TODO: best would be should actually choose a central one
     n_nodes = csgraph.shape[0]
     visited = np.zeros(n_nodes, dtype=bool)
     queue = [start_node]
@@ -1007,6 +1007,8 @@ def sample_csgraph_subgraph(args, csgraph, min_nodes=3000):
 
     args.num_points = len(visited_nodes)
     rows, cols = subgraph.nonzero()
+    args.sparse_graph = subgraph
+    args.shortest_path_matrix = compute_shortest_path_matrix_sparse_graph(subgraph, None)
 
     filtered_edges = [(i, j) for i, j in zip(rows, cols) if i < j]
     edge_df = pd.DataFrame(filtered_edges, columns=['source', 'target'])

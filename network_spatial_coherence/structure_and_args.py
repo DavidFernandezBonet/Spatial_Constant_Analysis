@@ -76,6 +76,7 @@ def create_project_structure(target_dir=None):
         'centered_msp': f'{project_root}/results/plots/predicted_dimension/centered_msp',
         'mds_dim': f'{project_root}/results/plots/predicted_dimension/MDS_dimension',
         'comparative_plots': f'{project_root}/results/plots/comparative_plots',
+        'euc_vs_net': f'{project_root}/results/plots/euclidean_vs_network',
 
         'plots_clustering_coefficient': f'{project_root}/results/plots/clustering_coefficient',
         'plots_degree_distribution': f'{project_root}/results/plots/degree_distribution',
@@ -185,6 +186,7 @@ class GraphArgs:
 
         self.unsorted_config = self.load_config(override_config_path)
         config = self.get_config(config_module=self.unsorted_config)
+        self.config = config
 
         self.verbose = config.get('verbose', True)
         self.show_plots = config.get('show_plots', False)
@@ -204,6 +206,7 @@ class GraphArgs:
         self.handle_all_subgraphs = config.get('handle_all_subgraphs', False)
         self.spatial_coherence_validation = config.get('spatial_coherence_validation', False)
         self.reconstruct = config.get('reconstruct', False)
+        self.original_positions_available = config.get('original_positions_available', False)
 
 
         if self.reconstruct:
@@ -373,9 +376,11 @@ class GraphArgs:
         self.edge_list_title = title
 
     def update_args_title(self):
-
+        if self.original_edge_list_title is None:
+            self.original_edge_list_title = self.edge_list_title
         if "experimental" in self._proximity_mode:
             if self.edge_list_title is not None:
+                # print(self._num_points, self._dim, self._proximity_mode, self.original_edge_list_title)
                 self.args_title = f"N={self._num_points}_dim={self._dim}_{self._proximity_mode}_{os.path.splitext(self.original_edge_list_title)[0]}"
                 self.extra_info = "_" + os.path.splitext(self.edge_list_title)[0]
                 # self.args_title = f"N={self._num_points}_dim={self._dim}_{self._proximity_mode}_{os.path.splitext(self.edge_list_title)[0]}"

@@ -8,7 +8,7 @@ Python library to validate the spatial coherence of a network. It offers tools t
 
 
 ## Install
-Python 3.11 is reccomended, altough older versions should work.
+Python 3.11 is reccomended, although older versions should work.
 
 ```bash
 pip install git+https://github.com/DavidFernandezBonet/Spatial_Constant_Analysis.git

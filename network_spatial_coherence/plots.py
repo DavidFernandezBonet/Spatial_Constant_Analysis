@@ -583,7 +583,7 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
         plt.savefig(f"{plot_folder}/original_image_{args.args_title}", format='png')
 
         plot_folder2 = args.directory_map['spatial_coherence']
-        plt.savefig(f"{plot_folder2}/original_image_{args.args_title}", format='png')
+        plt.savefig(f"{plot_folder2}/original_image_{args.args_title}.png", format='png')
         # plt.savefig(f"{plot_folder}/original_image_{args.args_title}", format='svg')
     elif image_type == "mst":
         plot_folder = args.directory_map["plots_mst_image"]
@@ -818,7 +818,7 @@ def plot_spatial_constant_against_subgraph_size(args, dataframe):
 
     plt.xlabel('Subgraph Size')
     plt.ylabel('Mean Spatial Constant')
-    plt.title('Mean Spatial Constant vs. Subgraph Size')
+
     plt.legend()
 
     plot_folder = f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}"
@@ -831,15 +831,10 @@ def plot_spatial_constant_against_subgraph_size(args, dataframe):
 
 def plot_spatial_constant_against_subgraph_size_with_false_edges(args, dataframes, false_edge_list, mst_case_df=None):
     plt.close('all')
-    font_size = 24
-    plt.rcParams.update({'font.size': font_size})
-    plt.rcParams['axes.labelsize'] = font_size
-    plt.rcParams['axes.titlesize'] = font_size + 6
-    plt.rcParams['xtick.labelsize'] = font_size
-    plt.rcParams['ytick.labelsize'] = font_size
-    plt.rcParams['legend.fontsize'] = font_size - 10
     # Main plot spatial constant
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(6, 4.5))
+
+
 
     for dataframe, false_edge_count in zip(dataframes, false_edge_list):
         unique_sizes = dataframe['intended_size'].unique()
@@ -859,6 +854,8 @@ def plot_spatial_constant_against_subgraph_size_with_false_edges(args, dataframe
         sizes = np.array(sizes)
         means = np.array(means)
         std_devs = np.array(std_devs)
+
+
         # Plot each series
         label = f'False Edges: {false_edge_count}'
         plt.plot(sizes, means, label=label, marker='o')
@@ -876,7 +873,7 @@ def plot_spatial_constant_against_subgraph_size_with_false_edges(args, dataframe
 
     plt.xlabel('Subgraph Size')
     plt.ylabel('Mean Spatial Constant')
-    plt.title('Mean Spatial Constant vs. Subgraph Size')
+    # plt.title('Mean Spatial Constant vs. Subgraph Size')
     plt.legend()
 
     plot_folder = args.directory_map['plots_spatial_constant_subgraph_sampling']

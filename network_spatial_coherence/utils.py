@@ -17,6 +17,8 @@ import os
 from algorithms import *
 from plots import plot_weight_distribution
 from structure_and_args import GraphArgs
+import warnings
+import re
 
 def get_largest_component_sparse(args, sparse_graph, original_node_ids):
     n_components, labels = connected_components(csgraph=sparse_graph, directed=False, return_labels=True)
@@ -185,12 +187,20 @@ def read_edge_list(args):
     return edge_list_df
 
 
-def read_position_df(args):
+def read_position_df(args, return_df=False):
     if hasattr(args, 'reconstruction_mode') and args.reconstruction_mode in args.args_title:
         old_args_title = args.args_title.replace(f"_{args.reconstruction_mode}",
                                                  "")
     else:
         old_args_title = args.args_title
+
+    if args.proximity_mode == "experimental" and args.original_positions_available:
+        filename = args.original_edge_list_title
+        match = re.search(r"edge_list_(.*?)\.csv", filename)
+        if match:
+            extracted_part = match.group(1)
+
+        old_args_title = extracted_part
 
     original_points_path = f"{args.directory_map['original_positions']}/positions_{old_args_title}.csv"
     original_points_df = pd.read_csv(original_points_path)
@@ -205,7 +215,10 @@ def read_position_df(args):
     # Read the specified columns from the DataFrame
     original_points_array = np.array(original_points_df[columns_to_read])
 
-    return original_points_array
+    if return_df:
+        return original_points_df
+    else:
+        return original_points_array
 
 
 def write_nx_graph_to_edge_list_df(args):
@@ -414,6 +427,11 @@ def load_graph(args, load_mode='igraph'):
         #
         # # Save the graph in "args"
         # args.sparse_graph = largest_component
+
+        if args.large_graph_subsampling and args.num_points > args.max_subgraph_size:
+            warnings.warn(
+                f"Large graph. Subsampling using BFS for efficiency purposes.\nSize of the sample; {args.max_subgraph_size}")
+            sample_csgraph_subgraph(args, largest_component, min_nodes=args.max_subgraph_size)
         return largest_component
 
     elif load_mode == "sparse_weighted":
@@ -472,6 +490,8 @@ def load_graph(args, load_mode='igraph'):
 
     else:
         raise ValueError("Invalid load_mode. Choose 'sparse', 'igraph', or 'networkx'.")
+
+
 
 
 

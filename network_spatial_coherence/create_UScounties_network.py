@@ -4,9 +4,16 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import pandas as pd
 from shapely.geometry import Point
+import scienceplots
 
-args = GraphArgs()
-data_folder = args.directory_map['us_counties']
+plt.style.use(['no-latex', 'nature'])
+font_size = 24
+plt.rcParams.update({'font.size': font_size})
+plt.rcParams['axes.labelsize'] = font_size
+plt.rcParams['axes.titlesize'] = font_size + 6
+plt.rcParams['xtick.labelsize'] = font_size
+plt.rcParams['ytick.labelsize'] = font_size
+plt.rcParams['legend.fontsize'] = font_size - 10
 
 
 
@@ -156,25 +163,37 @@ def plot_network_from_files(edge_list_path, mapping_path, gdf, data_folder):
     # Initialize an empty graph and populate it with edges from the edge list
     G = nx.Graph()
     for _, row in edge_list_df.iterrows():
-        source_name = int_to_name[row['Source']]
-        target_name = int_to_name[row['Target']]
+        source_name = int_to_name[row['source']]
+        target_name = int_to_name[row['target']]
         print("source name", source_name, "target name", target_name)
         if source_name in centroids and target_name in centroids:
             G.add_edge(source_name, target_name)
 
     # Generate a mapping from county names to their centroid coordinates for plotting
     pos = {county: (centroids[county].x, centroids[county].y) for county in G.nodes}
+    positions_df = pd.DataFrame([(name_to_int[node_ID], pos[node_ID][0], pos[node_ID][1]) for node_ID in pos],
+                                columns=['node_ID', 'x', 'y'])
+    positions_df.to_csv(f"{data_folder}/county_positions.csv", index=False)
 
     # Plotting
     fig, ax = plt.subplots(figsize=(15, 15))
     gdf.plot(ax=ax, color='whitesmoke', edgecolor='black')
-    nx.draw(G, pos, node_size=10, edge_color='blue', with_labels=False, ax=ax)
 
-    plt.title("US Counties and Their Adjacencies")
+
+    # Draw edges with specific alpha
+    nx.draw_networkx_edges(G, pos, alpha=0.6, edge_color='blue', ax=ax)
+    # nx.draw_networkx_nodes(G, pos, node_size=10, node_color='black', ax=ax, edgecolors='black', linewidths=2)
+    nx.draw_networkx_nodes(G, pos, node_size=3, node_color='blue', ax=ax, alpha=1)
+
+
+    plt.title("US Counties Network")
     plt.axis('off')
-    plt.savefig(f"{data_folder}/county_network_with_edges.png")
+    plt.savefig(f"{data_folder}/county_network_with_edges.png", dpi=300, bbox_inches='tight')
+
     plt.show()
 
+args = GraphArgs()
+data_folder = args.directory_map['us_counties']
 filename = f"{data_folder}/tl_2023_us_county.shp"
 # plot_counties(filename, highlight_geoids=['36061', '06037']) # Just plots the original image counties
 # create_county_adjacency_network(filename, data_folder=data_folder)  # Creates the network
@@ -187,5 +206,5 @@ gdf['unique_name'] = gdf.apply(lambda row: f"{row['NAME']} ({row['STATEFP']}{row
 
 ## Plot Network Edges
 
-plot_network_from_files(f"{data_folder}/edge_list.csv", f"{data_folder}/name_to_int_mapping.csv",
+plot_network_from_files(f"{data_folder}/edge_list_us_counties.csv", f"{data_folder}/name_to_int_mapping.csv",
                         gdf, data_folder=data_folder)

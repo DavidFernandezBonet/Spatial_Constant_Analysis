@@ -15,6 +15,7 @@ from utils import *
 from spatial_constant_analysis import run_reconstruction
 from dimension_prediction import run_dimension_prediction
 from gram_matrix_analysis import plot_gram_matrix_eigenvalues
+from gram_matrix_analysis import plot_gram_matrix_first_eigenvalues_contribution
 from structure_and_args import create_project_structure
 from functools import wraps
 from memory_profiler import memory_usage
@@ -27,14 +28,37 @@ if is_latex_in_os:
     plt.style.use(['nature'])
 else:
     plt.style.use(['no-latex', 'nature'])
-font_size = 24
-plt.rcParams.update({'font.size': font_size})
-plt.rcParams['axes.labelsize'] = font_size
-plt.rcParams['axes.titlesize'] = font_size + 6
-plt.rcParams['xtick.labelsize'] = font_size
-plt.rcParams['ytick.labelsize'] = font_size
-plt.rcParams['legend.fontsize'] = font_size - 10
+plt.style.use(['science', 'no-latex', 'nature'])
+# font_size = 24
+# plt.rcParams.update({'font.size': font_size})
+# plt.rcParams['axes.labelsize'] = font_size
+# plt.rcParams['axes.titlesize'] = font_size + 6
+# plt.rcParams['xtick.labelsize'] = font_size
+# plt.rcParams['ytick.labelsize'] = font_size
+# plt.rcParams['legend.fontsize'] = font_size - 10
 
+
+base_figsize = (6, 4.5)  # Width, Height in inches
+base_fontsize = 18
+plt.rcParams.update({
+    'figure.figsize': base_figsize,  # Set the default figure size
+    'figure.dpi': 300,  # Set the figure DPI for high-resolution images
+    'savefig.dpi': 300,  # DPI for saved figures
+    'font.size': base_fontsize,  # Base font size
+    'axes.labelsize': base_fontsize ,  # Font size for axis labels
+    'axes.titlesize': base_fontsize + 2,  # Font size for subplot titles
+    'xtick.labelsize': base_fontsize,  # Font size for X-axis tick labels
+    'ytick.labelsize': base_fontsize,  # Font size for Y-axis tick labels
+    'legend.fontsize': base_fontsize - 6,  # Font size for legends
+    'lines.linewidth': 2,  # Line width for plot lines
+    'lines.markersize': 6,  # Marker size for plot markers
+    'figure.autolayout': True,  # Automatically adjust subplot params to fit the figure
+    'text.usetex': False,  # Use LaTeX for text rendering (set to True if LaTeX is installed)
+})
+
+
+np.random.seed(42)
+random.seed(42)
 
 
 
@@ -106,12 +130,10 @@ def load_and_initialize_graph(args=None):
     if args is None:
         args = GraphArgs()
     print("proximity_mode", args.proximity_mode)
-
     if args.proximity_mode != "experimental":
         write_proximity_graph(args)
-
-    print("Number Nodes", args.num_points)
-    print("Average Degree", args.average_degree)
+        print("Number Nodes", args.num_points)
+        print("Average Degree", args.average_degree)
     print("Title Edge List", args.edge_list_title)
     return load_graph(args, load_mode='sparse'), args
 @profile
@@ -150,9 +172,9 @@ def spatial_constant_analysis(graph, args, false_edge_list=None):
     if false_edge_list is None:
         false_edge_list = np.arange(0, 101, step=20)
     size_interval = int(args.num_points / 10)  # collect 10 data points
-    print(size_interval)
-    run_simulation_subgraph_sampling(args, size_interval=size_interval, n_subgraphs=10, graph=graph,
+    combined_df = run_simulation_subgraph_sampling(args, size_interval=size_interval, n_subgraphs=10, graph=graph,
                                      add_false_edges=True, add_mst=False, false_edge_list=false_edge_list)
+
 @profile
 def network_dimension(args):
     """
@@ -166,7 +188,7 @@ def network_dimension(args):
     results_pred_dimension = run_dimension_prediction(args, distance_matrix=args.shortest_path_matrix,
                                                       dist_threshold=int(args.mean_shortest_path),
                                                       num_central_nodes=10,
-                                                      local_dimension=True, plot_heatmap_all_nodes=plot_all_heatmap_nodes,
+                                                      local_dimension=False, plot_heatmap_all_nodes=plot_all_heatmap_nodes,
                                                       msp_central_node=False, plot_centered_average_sp_distance=False)
     if args.verbose:
         print("Results predicted dimension", results_pred_dimension)
@@ -176,6 +198,7 @@ def rank_matrix_analysis(args):
     Step 4. Analyze the rank matrix
     """
     first_d_values_contribution = plot_gram_matrix_eigenvalues(args=args, shortest_path_matrix=args.shortest_path_matrix)
+
 
 
 @profile
@@ -208,24 +231,55 @@ def reconstruct_graph(graph, args):
         mode of reconstruction and whether ground truth is considered available.
     """
     if args.reconstruct:
-
         print("running reconstruction...")
         print("reconstruction mode:", args.reconstruction_mode)
-        ground_truth_available = not (args.proximity_mode == "experimental" or args.large_graph_subsampling)
+        # ground_truth_available = not (args.proximity_mode == "experimental" or args.large_graph_subsampling)
+        # TODO: is large_graph_-subsampling messinge up the indices or something? Why did exclude it
+
+        ground_truth_available = args.proximity_mode == "experimental" and args.original_positions_available
+
+
+        print("ground truth available:", ground_truth_available)
         run_reconstruction(args, sparse_graph=graph, ground_truth_available=ground_truth_available,
                            node_embedding_mode=args.reconstruction_mode)
 
 
+def collect_graph_properties(args):
+    # Create a dictionary with the graph properties
+    args.num_edges = args.sparse_graph.nnz // 2
+    properties_dict = {
+        'Property': ['Number of Points', 'Number of Edges', 'Average Degree', 'Clustering Coefficient',
+                     'Mean Shortest Path'],
+        'Value': [
+            args.num_points if args.num_points else "not computed",
+            args.num_edges if args.num_edges else "not computed",
+            args.average_degree if args.average_degree else "not computed",
+            args.mean_clustering_coefficient if args.mean_clustering_coefficient else "not computed",
+            args.mean_shortest_path if args.mean_shortest_path else "not computed"
+        ]
+    }
 
+    # Create DataFrame
+    graph_properties_df = pd.DataFrame(properties_dict)
+    graph_properties_df['Category'] = 'Graph Properties'  # Adding a category column for consistency
+
+    return graph_properties_df
 
 def run_pipeline(graph, args):
     """
     Main function: graph loading, processing, and analysis.
     """
 
+
+
     graph = subsample_graph_if_necessary(graph, args)
     plot_and_analyze_graph(graph, args)
     compute_shortest_paths(graph, args)
+
+    results_df = pd.DataFrame()
+    graph_properties_df = collect_graph_properties(args)
+
+
 
     if args.spatial_coherence_validation['spatial_constant']:
         spatial_constant_analysis(graph, args)
@@ -236,6 +290,14 @@ def run_pipeline(graph, args):
 
     # # Reconstruction
     reconstruct_graph(graph, args)
+
+    graph_properties_df = results_df[results_df['Category'] == 'Graph Properties']
+    spatial_coherence_df = results_df[results_df['Category'] == 'Spatial Coherence']
+    reconstruction_metrics_df = results_df[results_df['Category'] == 'Reconstruction Metrics']
+    graph_properties_df.to_csv('graph_properties.csv', index=False)
+    spatial_coherence_df.to_csv('spatial_coherence.csv', index=False)
+    reconstruction_metrics_df.to_csv('reconstruction_metrics.csv', index=False)
+
     return args
 
 if __name__ == "__main__":

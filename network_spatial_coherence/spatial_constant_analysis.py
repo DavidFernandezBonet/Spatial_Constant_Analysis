@@ -19,15 +19,15 @@ from metrics import *
 from bfs_animation import *
 
 import scienceplots
-plt.style.use(['science', 'nature'])
-# plt.rcParams.update({'font.size': 16, 'font.family': 'serif'})
-font_size = 24
-plt.rcParams.update({'font.size': font_size})
-plt.rcParams['axes.labelsize'] = font_size
-plt.rcParams['axes.titlesize'] = font_size + 6
-plt.rcParams['xtick.labelsize'] = font_size
-plt.rcParams['ytick.labelsize'] = font_size
-plt.rcParams['legend.fontsize'] = font_size - 10
+# plt.style.use(['science', 'nature'])
+# # plt.rcParams.update({'font.size': 16, 'font.family': 'serif'})
+# font_size = 24
+# plt.rcParams.update({'font.size': font_size})
+# plt.rcParams['axes.labelsize'] = font_size
+# plt.rcParams['axes.titlesize'] = font_size + 6
+# plt.rcParams['xtick.labelsize'] = font_size
+# plt.rcParams['ytick.labelsize'] = font_size
+# plt.rcParams['legend.fontsize'] = font_size - 10
 
 # plt.style.use(['science','no-latex', 'nature'])
 
@@ -65,6 +65,10 @@ def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild
     sparse_graph = convert_graph_type(graph=sparse_graph, args=args, desired_type='sparse')
     metrics = {}
     args.args_title = args.args_title + '_' + node_embedding_mode
+    # print("Network Name", args.network_name)
+    # print("Edge list name", args.edge_list_title)
+    # print("Original edge list name", args.original_edge_list_title)
+
     reconstruction = ImageReconstruction(graph=sparse_graph, dim=args.dim, node_embedding_mode=node_embedding_mode,
                                          manifold_learning_mode=manifild_learning_mode)
     reconstructed_points = reconstruction.reconstruct(do_write_positions=True, args=args)
@@ -84,7 +88,63 @@ def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild
 
     # Ground Truth-based quality metrics
     if ground_truth_available:
-        original_points = read_position_df(args)
+        # Case where we had some index change: e.g. disconnected graph, subsampled graph
+        if args.node_ids_map_old_to_new is not None:
+            original_points = read_position_df(args, return_df=True)
+            original_points['node_ID'] = original_points['node_ID'].map(args.node_ids_map_old_to_new)
+            original_points = original_points.dropna()
+            original_points['node_ID'] = original_points['node_ID'].astype(int)
+            print(original_points)
+            original_points_df = original_points.sort_values(by='node_ID')
+
+            original_points = original_points_df[['x', 'y']].to_numpy()
+
+
+            ### Plotting
+            # Load positions DataFrame
+            positions_df = original_points_df
+
+            # Load edges DataFrame
+            edge_list_folder = args.directory_map["edge_lists"]
+            edges_df = pd.read_csv(f"{edge_list_folder}/{args.edge_list_title}")
+
+            # Convert positions_df to a dictionary for efficient access
+            positions_dict = positions_df.set_index('node_ID')[['x', 'y']].T.to_dict('list')
+
+            # Start plotting
+            plt.figure(figsize=(10, 10))
+
+            # Plot original points
+            for node_ID, (x, y) in positions_dict.items():
+                plt.plot(x, y, 'o', color='blue')  # Adjust color as necessary
+
+            for _, row in edges_df.iterrows():
+                # Map old IDs to new IDs
+                source_new_id = args.node_ids_map_old_to_new.get(row['source'], None)
+                target_new_id = args.node_ids_map_old_to_new.get(row['target'], None)
+
+                if source_new_id in positions_dict and target_new_id in positions_dict:
+                    source_pos = positions_dict[source_new_id]
+                    target_pos = positions_dict[target_new_id]
+
+                    # Determine edge properties based on old IDs
+                    edge_color = 'red' if (row['source'], row['target']) in args.false_edge_ids or (
+                    row['target'], row['source']) in args.false_edge_ids else 'k'
+                    edge_alpha = 1 if (row['source'], row['target']) in args.false_edge_ids or (
+                    row['target'], row['source']) in args.false_edge_ids else 0.2
+                    edge_linewidth = 1  # Adjust this as necessary based on your conditions
+
+                    # Draw the edge
+                    plt.plot([source_pos[0], target_pos[0]], [source_pos[1], target_pos[1]], color=edge_color,
+                             alpha=edge_alpha, linewidth=edge_linewidth)
+
+            plt.xlabel('X')
+            plt.ylabel('Y')
+            plt.title('Original Points and Edges')
+            plt.show()
+
+        else:
+            original_points = read_position_df(args)
         qm = QualityMetrics(original_points, reconstructed_points)
         qm.evaluate_metrics()
         metrics["ground_truth"] = qm
@@ -96,13 +156,13 @@ def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild
 
 
 
-def make_spatial_constant_euc_vs_network():
+def make_spatial_constant_euc_vs_network(useful_plot_folder):
     args = GraphArgs()
     args.proximity_mode = "knn"
     args.dim = 3
     args.intended_av_degree = 10
     args.num_points = 1000
-    create_proximity_graph.write_proximity_graph(args, point_mode="square", order_indices=False)
+    create_proximity_graph.write_proximity_graph(args, point_mode="circle", order_indices=False)
     # Parameters for the particular plot
     size_interval = int(args.num_points / 10)  # collect 10 data points
     n_samples = 5
@@ -120,7 +180,8 @@ def make_spatial_constant_euc_vs_network():
                                      add_false_edges=False, add_mst=False)
 
     ### Plotting function that encompasses both of them
-    plot_spatial_constant_euc_vs_network(args, results_df_euc=euc_results_df, results_df_net=net_results_df)
+    plot_spatial_constant_euc_vs_network(args, results_df_euc=euc_results_df, results_df_net=net_results_df,
+                                         useful_plot_folder=useful_plot_folder)
 
 
 

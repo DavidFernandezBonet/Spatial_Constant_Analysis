@@ -16,15 +16,15 @@ from algorithms import compute_shortest_path_matrix_sparse_graph
 
 # What about seaborn?
 import scienceplots
-font_size = 24
-plt.rcParams.update({'font.size': font_size})
-plt.rcParams['axes.labelsize'] = font_size
-plt.rcParams['axes.titlesize'] = font_size + 6
-plt.rcParams['xtick.labelsize'] = font_size
-plt.rcParams['ytick.labelsize'] = font_size
-plt.rcParams['legend.fontsize'] = font_size - 10
-
-plt.style.use(['nature'])
+font_size = 18
+# plt.rcParams.update({'font.size': font_size})
+# plt.rcParams['axes.labelsize'] = font_size
+# plt.rcParams['axes.titlesize'] = font_size + 6
+# plt.rcParams['xtick.labelsize'] = font_size
+# plt.rcParams['ytick.labelsize'] = font_size
+# plt.rcParams['legend.fontsize'] = font_size - 10
+#
+# plt.style.use(['nature'])
 
 sns.set_style("white")  # 'white' is a style option in seaborn
 
@@ -34,7 +34,7 @@ sns.set(style="white", rc={
     'axes.titlesize': font_size + 6,
     'xtick.labelsize': font_size,
     'ytick.labelsize': font_size,
-    'legend.fontsize': font_size - 10
+    'legend.fontsize': font_size - 6
 })
 def compute_correlation_euclidean_sp(euclidean_distances, shortest_path_distances):
     # Flatten the matrices to compute correlation
@@ -177,8 +177,9 @@ def plot_r2_vs_false_edges(ax, r2_values, false_edge_list):
     ax.set_ylabel('$R^2$ Coefficient')
     # ax.set_title('R² Coefficient vs. Number of False Edges')
 
-def generate_and_plot_series_with_false_edges(args, euclidean_distance_matrix, sparse_graph, false_edge_list):
-    fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+def generate_and_plot_series_with_false_edges(args, euclidean_distance_matrix, sparse_graph, false_edge_list,
+                                              useful_plot_folder):
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
 
     # Series without false edges
     original_dist_matrix = euclidean_distance_matrix
@@ -205,9 +206,10 @@ def generate_and_plot_series_with_false_edges(args, euclidean_distance_matrix, s
     plt.tight_layout()
     plot_folder = args.directory_map["plots_euclidean_sp"]
     plt.savefig(f"{plot_folder}/correlation_r2_false_edges_{args.args_title}.svg", format='svg')
+    plt.savefig(f"{useful_plot_folder}/correlation_r2_false_edges_{args.args_title}.svg", format='svg')
 
-def plot_ideal_case(args, original_dist_matrix, shortest_path_distance_matrix):
-    fig, axs = plt.subplots(1, 3, figsize=(18, 6))
+def plot_ideal_case(args, original_dist_matrix, shortest_path_distance_matrix, useful_plot_folder):
+    fig, axs = plt.subplots(1, 3, figsize=(18, 4.5))
     # Plot 1 - Original Distance Matrix
     sns.heatmap(original_dist_matrix, ax=axs[0], cmap="viridis", cbar_kws={'label': 'Euclidean Distance'})
     axs[0].set_title("Euclidean DM")
@@ -231,6 +233,7 @@ def plot_ideal_case(args, original_dist_matrix, shortest_path_distance_matrix):
     plt.tight_layout()
     plot_folder = args.directory_map["plots_euclidean_sp"]
     plt.savefig(f"{plot_folder}/heatmap_and_correlation_single_case_{args.args_title}", format='svg')
+    plt.savefig(f"{useful_plot_folder}/heatmap_and_correlation_single_case_{args.args_title}", format='svg')
     plt.show()
 
 
@@ -245,7 +248,7 @@ def plot_single_correlation_euclidean_sp_series(args, original_dist_matrix, spar
     plot_euclidean_sp_correlation(args, original_dist_matrix, sp_matrix)
 
 
-def make_euclidean_sp_correlation_plot(single_series=True, multiple_series=False):
+def make_euclidean_sp_correlation_plot(single_series=True, multiple_series=False, useful_plot_folder=None):
     # Parameters
     args = GraphArgs()
     args.proximity_mode = "knn"
@@ -270,13 +273,13 @@ def make_euclidean_sp_correlation_plot(single_series=True, multiple_series=False
         # # Single series
         # plot_single_correlation_euclidean_sp_series(args, original_dist_matrix, sparse_graph)
         # Plots the heatmap of the matrices also and the correlation
-        plot_ideal_case(args, original_dist_matrix, shortest_path_distance_matrix)
+        plot_ideal_case(args, original_dist_matrix, shortest_path_distance_matrix, useful_plot_folder)
 
     elif multiple_series:
         ## Multiple series
         # false_edge_list = [0, 5, 25, 50, 100]
         false_edge_list = np.linspace(start=0, stop=100, num=10).astype(int)
-        generate_and_plot_series_with_false_edges(args, original_dist_matrix, sparse_graph, false_edge_list)
+        generate_and_plot_series_with_false_edges(args, original_dist_matrix, sparse_graph, false_edge_list, useful_plot_folder)
 
 
 # make_euclidean_sp_correlation_plot()

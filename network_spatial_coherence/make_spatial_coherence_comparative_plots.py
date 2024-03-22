@@ -14,21 +14,61 @@ from check_latex_installation import check_latex_installed
 from dimension_prediction import run_dimension_prediction
 from gram_matrix_analysis import compute_gram_matrix_eigenvalues
 import copy
+import random
+import matplotlib
+matplotlib.use('Agg')  # Use a non-GUI backend, it was throwing errors otherwise when running the experimental setting
+
+# is_latex_in_os = check_latex_installed()
+# if is_latex_in_os:
+#     plt.style.use(['nature'])
+# else:
+#     plt.style.use(['no-latex', 'nature'])
+# plt.style.use(['no-latex', 'nature'])
+# font_size = 24
+# plt.rcParams.update({'font.size': font_size})
+# plt.rcParams['axes.labelsize'] = font_size
+# plt.rcParams['axes.titlesize'] = font_size + 6
+# plt.rcParams['xtick.labelsize'] = font_size
+# plt.rcParams['ytick.labelsize'] = font_size
+# plt.rcParams['legend.fontsize'] = font_size - 10
 
 is_latex_in_os = check_latex_installed()
 if is_latex_in_os:
     plt.style.use(['nature'])
 else:
     plt.style.use(['no-latex', 'nature'])
-font_size = 24
-plt.rcParams.update({'font.size': font_size})
-plt.rcParams['axes.labelsize'] = font_size
-plt.rcParams['axes.titlesize'] = font_size + 6
-plt.rcParams['xtick.labelsize'] = font_size
-plt.rcParams['ytick.labelsize'] = font_size
-plt.rcParams['legend.fontsize'] = font_size - 10
+plt.style.use(['no-latex', 'nature'])
+# font_size = 24
+# plt.rcParams.update({'font.size': font_size})
+# plt.rcParams['axes.labelsize'] = font_size
+# plt.rcParams['axes.titlesize'] = font_size + 6
+# plt.rcParams['xtick.labelsize'] = font_size
+# plt.rcParams['ytick.labelsize'] = font_size
+# plt.rcParams['legend.fontsize'] = font_size - 10
 
-def generate_several_graphs(from_one_graph=False):
+
+base_figsize = (6, 4.5)  # Width, Height in inches
+base_fontsize = 18
+plt.rcParams.update({
+    'figure.figsize': base_figsize,  # Set the default figure size
+    'figure.dpi': 300,  # Set the figure DPI for high-resolution images
+    'savefig.dpi': 300,  # DPI for saved figures
+    'font.size': base_fontsize,  # Base font size
+    'axes.labelsize': base_fontsize ,  # Font size for axis labels
+    'axes.titlesize': base_fontsize + 2,  # Font size for subplot titles
+    'xtick.labelsize': base_fontsize - 4,  # Font size for X-axis tick labels
+    'ytick.labelsize': base_fontsize,  # Font size for Y-axis tick labels
+    'legend.fontsize': base_fontsize - 6,  # Font size for legends
+    'lines.linewidth': 2,  # Line width for plot lines
+    'lines.markersize': 6,  # Marker size for plot markers
+    'figure.autolayout': True,  # Automatically adjust subplot params to fit the figure
+    'text.usetex': False,  # Use LaTeX for text rendering (set to True if LaTeX is installed)
+})
+
+np.random.seed(42)
+random.seed(42)
+
+def generate_several_graphs(from_one_graph=False, proximity_mode="knn"):
     args_list = []
     # false_edge_list = [0, 20, 40, 60, 80, 100]
     false_edge_list = [0, 2, 5, 10, 20, 1000]
@@ -38,7 +78,7 @@ def generate_several_graphs(from_one_graph=False):
         for idx, false_edge_count in enumerate(false_edge_list):
             args = GraphArgs()
             args.verbose = False
-            args.proximity_mode = "knn"
+            args.proximity_mode = proximity_mode
             args.dim = 2
             args.show_plots = False
             args.intended_av_degree = 10
@@ -50,15 +90,14 @@ def generate_several_graphs(from_one_graph=False):
             args.original_edge_list_title = edge_list_title
             write_proximity_graph(args, point_mode="square", order_indices=False)
             # compute_shortest_path_matrix_sparse_graph(graph, args=args)
-            print(args.edge_list_title)
             args_list.append(args)
     # TODO: just add false edges to one graph, but "create" different ones
 
     else:
         args = GraphArgs()
         args.verbose = False
-        args.proximity_mode = "delaunay_corrected"
-        args.dim = 3
+        args.proximity_mode = "knn"
+        args.dim = 2
         args.show_plots = False
         args.intended_av_degree = 10
         args.num_points = 2000
@@ -98,33 +137,44 @@ def generate_experimental_graphs(edge_list_titles_dict):
         if weight_list[1] is None:
             args = GraphArgs()
             args.verbose = False
-            args.proximity_mode = "experimental"
+
             args.dim = 2
             args.show_plots = False
             args.edge_list_title = edge_list
+            args.proximity_mode = "experimental"
+            if args.num_points > 3000:
+                args.large_graph_subsampling = True
+                args.max_subgraph_size = 3000
             load_graph(args, load_mode='sparse')
             args.network_name = weight_list[0]
+
             args_list.append(args)
         else:
             for weight in weight_list[1]:
                 args = GraphArgs()
                 args.verbose = False
-                args.proximity_mode = "experimental"
                 args.dim = 2
                 args.show_plots = False
                 args.weighted = True
                 args.weight_threshold = weight
                 args.edge_list_title = edge_list
+                args.proximity_mode = "experimental"
+                if args.num_points > 3000:
+                    args.large_graph_subsampling = True
+                    args.max_subgraph_size = 3000
                 load_graph(args, load_mode='sparse')
                 args.edge_list_title = f"{os.path.splitext(edge_list)[0]}_weight_threshold_{args.weight_threshold}.csv"
                 args.network_name = weight_list[0] + f"{args.weight_threshold}"
                 write_edge_list_sparse_graph(args, args.sparse_graph)
+
                 args_list.append(args)
+
+
 
     ## add simulated graph for compariosn
     args = GraphArgs()
     args.num_points = 1000
-    args.proximity_mode = "knn"
+    args.proximity_mode = "delaunay_corrected"
     args.dim = 2
     args.intended_av_degree = 10
     args.verbose = False
@@ -143,7 +193,7 @@ def get_maximally_separated_colors(num_colors):
     return colors
 
 def plot_comparative_spatial_constant(results_dfs, args_list, title=""):
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(12, 4.5))
     num_colors = len(args_list)
     colors = get_maximally_separated_colors(num_colors)
 
@@ -189,13 +239,11 @@ def make_spatial_constant_comparative_plot(args_list, title=""):
     n_samples = 5
     net_results_df_list = []
     for args in args_list:
-        print("edge list title", args.edge_list_title)
-        print("extra info", args.network_name)
-
         size_interval = int(args.num_points / 10)  # collect 10 data points
-        print(args.edge_list_title)
+
         ## Network Spatial Constant
         igraph_graph = load_graph(args, load_mode='igraph')
+
         net_results_df = run_simulation_subgraph_sampling(args, size_interval=size_interval, n_subgraphs=n_samples,
                                                           graph=igraph_graph,
                                                           add_false_edges=False, add_mst=False)
@@ -223,7 +271,7 @@ def make_dimension_prediction_comparative_plot(args_list, title=""):
 
 
 def plot_comparative_predicted_dimension(args_list, results_predicted_dimension_list, title=""):
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(12, 4.5))
 
     num_colors = len(args_list)
     colors = get_maximally_separated_colors(num_colors)
@@ -264,7 +312,7 @@ def plot_comparative_predicted_dimension(args_list, results_predicted_dimension_
 
 def make_gram_matrix_analysis_comparative_plot(args_list, title=""):
     eigenvalues_list = []
-    for args in args_list:
+    for i, args in enumerate(args_list):
         if args.sparse_graph is None:
             sparse_graph = load_graph(args, load_mode='sparse')
             compute_shortest_path_matrix_sparse_graph(sparse_graph=sparse_graph, args=args)
@@ -276,7 +324,7 @@ def make_gram_matrix_analysis_comparative_plot(args_list, title=""):
     plot_eigenvalue_contributions_comparative(eigenvalues_list, args_list, title=title)
     plot_eigenvalue_contributions_comparative(eigenvalues_list, args_list, consider_first_eigenvalues_only=True, title=title)
     plot_spectral_gap_comparative(args_list, eigenvalues_list, score_method='i', title=title)
-    # plot_pos_neg_eigenvalue_proportions_comparative(args_list, eigenvalues_list)
+    plot_pos_neg_eigenvalue_proportions_comparative(args_list, eigenvalues_list)
 
 
 
@@ -289,7 +337,7 @@ def plot_eigenvalue_contributions_comparative(eigenvalues_list, args_list, title
     :param args_list: List of args objects, used for labeling.
     """
     # Create figure and subplots
-    fig, axs = plt.subplots(1, 2, figsize=(20, 6), gridspec_kw={'width_ratios': [1, 1]})
+    fig, axs = plt.subplots(1, 2, figsize=(12, 4.5), gridspec_kw={'width_ratios': [1, 1]})
 
     colors = get_maximally_separated_colors(len(args_list))
 
@@ -381,10 +429,14 @@ def calculate_spectral_score(eigenvalues, args, method):
 
     elif method == 'i':
         # Gab between the mean of the first d eigenvalues and the d+1 value --> This seems to work quite well
+        # THIS IS THE METHOD I CHOOSE TO USE
         d_values = np.mean(positive_eigenvalues[:args.dim])
         gap = (d_values - positive_eigenvalues[args.dim+1]) / d_values
         score = gap
-
+    elif method == 'negative_mass_fraction':
+        # Mass fraction of negative eigenvalues
+        negative_eigenvalues = eigenvalues_sorted[eigenvalues_sorted < 0]
+        score = np.sum(np.abs(negative_eigenvalues)) / (np.sum(positive_eigenvalues) + np.sum(np.abs(negative_eigenvalues)))
     else:
         raise ValueError("Invalid scoring method specified.")
 
@@ -392,7 +444,7 @@ def calculate_spectral_score(eigenvalues, args, method):
 
 
 def plot_spectral_gap_comparative(args_list, eigenvalues_list, score_method='i', title=''):
-    fig, axs = plt.subplots(1, 2, figsize=(20, 6), gridspec_kw={'width_ratios': [1, 1]})
+    fig, axs = plt.subplots(1, 2, figsize=(12, 4.5), gridspec_kw={'width_ratios': [1, 1]})
     # Retrieve the default color cycle
     # color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
     colors = get_maximally_separated_colors(len(args_list))
@@ -421,7 +473,7 @@ def plot_spectral_gap_comparative(args_list, eigenvalues_list, score_method='i',
         spectral_gap_scores.append(spectral_gap_score)
 
     # Setting for the first plot (Spectral Gap Analysis)
-    axs[0].set_title('Spectral Gap Analysis', fontweight='bold')
+    axs[0].set_title('Spectral Gap Analysis')
     axs[0].set_xlabel('Eigenvalue Rank')
     axs[0].set_ylabel('Spectral Gap Ratio')
     axs[0].legend()
@@ -471,6 +523,10 @@ def plot_pos_neg_eigenvalue_proportions_comparative(args_list, eigenvalues_list)
             # proportion = num_negative / num_positive
             proportion = num_positive_dim / (num_negative + num_positive_nondim)
             proportion = (num_negative + num_positive_nondim) / num_positive_dim
+            proportion =  num_negative / (num_positive + num_negative)  # proportion of badness (negative mass ratio)
+            proportion = np.max(num_negative) / np.max(num_positive)   # same but taking into account biggest eigenvalues only
+            print("proportion", proportion)
+            print("num positive", num_positive, "num negative", num_negative)
         else:
             proportion = num_positive
 
@@ -491,23 +547,31 @@ def plot_pos_neg_eigenvalue_proportions_comparative(args_list, eigenvalues_list)
     plt.tight_layout()
     plt.show()
 if __name__ == "__main__":
-    # ## Simulation with False Edges
-    # args_list = generate_several_graphs(from_one_graph=True)
-    # title = "False_Eddge_Comparison"
+    what_to_run = "simulation"  # simulation or experimental
 
-    ### Experimental
-    edge_list_titles_dict = {"weinstein_data_corrected_february.csv": ('W', [5, 10, 15]),
-                        "pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv": ('PXL',None),
-                        "subgraph_8_nodes_160_edges_179_degree_2.24.pickle": ('HL-S', None),
-                        "subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle": ('HL-E', None)}
-    # edge_list_titles_dict = {"weinstein_data_corrected_february.csv": [5,10,15],
-    #                     "subgraph_8_nodes_160_edges_179_degree_2.24.pickle": None,
-    #                          }
-    title = "Experimental Comparison"
-    args_list = generate_experimental_graphs(edge_list_titles_dict=edge_list_titles_dict)
+    if what_to_run == "simulation":
+        ## Simulation with False Edges
+        proximity_mode = "knn_bipartite"
+        args_list = generate_several_graphs(from_one_graph=True, proximity_mode=proximity_mode)
+        title = f"False Edge Comparison {proximity_mode}"
+    elif what_to_run == "experimental":
+        ### Experimental
+        # pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv
+        # pixelgen_example_graph.csv
+        edge_list_titles_dict = {"weinstein_data_corrected_february.csv": ('W', [5, 10, 15]),
+                            "pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv": ('PXL', None),
+                            "subgraph_8_nodes_160_edges_179_degree_2.24.pickle": ('HL-S', None),
+                            "subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle": ('HL-E', None)}
+        # edge_list_titles_dict = {"weinstein_data_corrected_february.csv": [5,10,15],
+        #                     "subgraph_8_nodes_160_edges_179_degree_2.24.pickle": None,
+        #                          }
+        title = "Experimental Comparison"
+        args_list = generate_experimental_graphs(edge_list_titles_dict=edge_list_titles_dict)
+    else:
+        raise ValueError("what_to_run must be 'simulation' or 'experimental'")
 
 
     ## Pipeline
-    # make_spatial_constant_comparative_plot(args_list, title=title)
+    make_spatial_constant_comparative_plot(args_list, title=title)
     make_dimension_prediction_comparative_plot(args_list, title=title)
-    # make_gram_matrix_analysis_comparative_plot(args_list, title=title)
+    make_gram_matrix_analysis_comparative_plot(args_list, title=title)
