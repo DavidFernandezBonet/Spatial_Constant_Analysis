@@ -165,6 +165,7 @@ def compute_shortest_paths(graph, args):
     Step 1.5: Compute shortest paths and store it in args. This is done only once.
     """
     compute_shortest_path_matrix_sparse_graph(args=args, sparse_graph=graph)
+    return args
 
 
 @profile
@@ -190,16 +191,28 @@ def network_dimension(args):
     else:
         plot_all_heatmap_nodes = False
     print("plot_all_heatmap_nodes", plot_all_heatmap_nodes)
-    results_pred_dimension = run_dimension_prediction(args, distance_matrix=args.shortest_path_matrix,
+    print("mean shortest path", args.mean_shortest_path)
+    results_dimension_prediction = run_dimension_prediction(args, distance_matrix=args.shortest_path_matrix,
                                                       dist_threshold=int(args.mean_shortest_path),
                                                       num_central_nodes=10,
                                                       local_dimension=False, plot_heatmap_all_nodes=plot_all_heatmap_nodes,
                                                       msp_central_node=False, plot_centered_average_sp_distance=False)
     if args.verbose:
-        print("Results predicted dimension", results_pred_dimension)
-    results_pred_dimension = pd.DataFrame(results_pred_dimension)
-    results_pred_dimension['Category'] = 'Spatial_Coherence'
-    return results_pred_dimension
+        print("Results predicted dimension", results_dimension_prediction)
+
+    df_fit_properties = pd.DataFrame([results_dimension_prediction['fit_dict']])
+    df_log_data = pd.DataFrame({
+        'log_x_data': results_dimension_prediction['fit_data'][0],
+        'log_y_data': results_dimension_prediction['fit_data'][1]
+    })
+    df_dimensions = pd.DataFrame({
+        'predicted_dimension': results_dimension_prediction['predicted_dimension_list'],
+        'std_predicted_dimension': results_dimension_prediction['std_predicted_dimension_list']
+    })
+
+
+    # results_pred_dimension['Category'] = 'Spatial_Coherence'
+    return results_dimension_prediction
 @profile
 def rank_matrix_analysis(args):
     """
@@ -298,42 +311,42 @@ def run_pipeline(graph, args):
     # don't return DataFrames and are just part of the processing
     graph = subsample_graph_if_necessary(graph, args)
     plot_and_analyze_graph(graph, args)
-    compute_shortest_paths(graph, args)
+    args = compute_shortest_paths(graph, args)
 
-    # Collect graph properties into DataFrame
-    graph_properties_df = collect_graph_properties(args)
-
-    # Initialize an empty list to store all results DataFrames
-    results_dfs = [graph_properties_df]
+    # # Collect graph properties into DataFrame
+    # graph_properties_df = collect_graph_properties(args)
+    #
+    # # Initialize an empty list to store all results DataFrames
+    # results_dfs = [graph_properties_df]
 
     # Conditional analysis based on args
     if args.spatial_coherence_validation['spatial_constant']:
         spatial_constant_df = spatial_constant_analysis(graph, args)
-        results_dfs.append(spatial_constant_df)
+        # results_dfs.append(spatial_constant_df)
     if args.spatial_coherence_validation['network_dimension']:
         results_pred_dimension_df = network_dimension(args)
-        results_dfs.append(results_pred_dimension_df)
+        # results_dfs.append(results_pred_dimension_df)
     if args.spatial_coherence_validation['gram_matrix']:
         results_gram_matrix_df = rank_matrix_analysis(args)
-        results_dfs.append(results_gram_matrix_df)
+        # results_dfs.append(results_gram_matrix_df)
 
     # Reconstruction metrics
     reconstruction_metrics_df = reconstruct_graph(graph, args)
-    results_dfs.append(reconstruction_metrics_df)
+    # results_dfs.append(reconstruction_metrics_df)
 
-    # Concatenate all result DataFrames into one
-    results_df = pd.concat(results_dfs, ignore_index=True)
-
-    # Now filter the aggregated DataFrame by 'Category' to extract specific analyses
-    graph_properties_df = results_df[results_df['Category'] == 'Graph Properties']
-    spatial_coherence_df = results_df[results_df['Category'] == 'Spatial Coherence']
-    reconstruction_metrics_df = results_df[results_df['Category'] == 'Reconstruction Metrics']
-
-    data_folder = args.directory_map['output_pipeline']
-    # Save to CSV files
-    graph_properties_df.to_csv(f'{data_folder}/graph_properties.csv', index=False)
-    spatial_coherence_df.to_csv(f'{data_folder}/spatial_coherence.csv', index=False)
-    reconstruction_metrics_df.to_csv(f'{data_folder}/reconstruction_metrics.csv', index=False)
+    # # Concatenate all result DataFrames into one
+    # results_df = pd.concat(results_dfs, ignore_index=True)
+    #
+    # # Now filter the aggregated DataFrame by 'Category' to extract specific analyses
+    # graph_properties_df = results_df[results_df['Category'] == 'Graph Properties']
+    # spatial_coherence_df = results_df[results_df['Category'] == 'Spatial Coherence']
+    # reconstruction_metrics_df = results_df[results_df['Category'] == 'Reconstruction Metrics']
+    #
+    # data_folder = args.directory_map['output_pipeline']
+    # # Save to CSV files
+    # graph_properties_df.to_csv(f'{data_folder}/graph_properties.csv', index=False)
+    # spatial_coherence_df.to_csv(f'{data_folder}/spatial_coherence.csv', index=False)
+    # reconstruction_metrics_df.to_csv(f'{data_folder}/reconstruction_metrics.csv', index=False)
 
     return args
 

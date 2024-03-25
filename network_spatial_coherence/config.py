@@ -9,10 +9,10 @@ base = {
 
     "large_graph_subsampling": True,   # If the graph is large, subsample it to save time and memory. Cap at 3000 nodes  #TODO: implement this
     "max_subgraph_size": 1000,
-    "reconstruct": True,
+    "reconstruct": False,
     "reconstruction_mode": "STRND",  # STNRD, ggvec, landmark_isomap, PyMDE, MDS
 
-    "spatial_coherence_validation": {"spatial_constant": False, "network_dimension": False, "gram_matrix": True},
+    "spatial_coherence_validation": {"spatial_constant": False, "network_dimension": True, "gram_matrix": False},
     "handle_all_subgraphs": False,
     "verbose": True
 }
