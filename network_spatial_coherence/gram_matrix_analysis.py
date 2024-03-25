@@ -1018,15 +1018,15 @@ def plot_gram_matrix_eigenvalues(args, shortest_path_matrix):
     first_d_values_contribution = plot_cumulative_eigenvalue_contribution(args, eigenvalues=eigenvalues_sp_matrix, original=False)
 
     # # this plots the contribution of the first 5 eigenvalues
-    plot_gram_matrix_first_eigenvalues_contribution(args, eigenvalues=eigenvalues_sp_matrix)
+    first_d_values_contribution_5_eigen = plot_gram_matrix_first_eigenvalues_contribution(args, eigenvalues=eigenvalues_sp_matrix)
     print("First d values contribution", first_d_values_contribution)
 
     # 2 - Spectral Gap
-    plot_spectral_gap_and_analyze_negatives(args, eigenvalues=eigenvalues_sp_matrix)
+    spectral_gap = plot_spectral_gap_and_analyze_negatives(args, eigenvalues=eigenvalues_sp_matrix)
 
 
     # 3 - Negative eigenvalues contribution
-    return first_d_values_contribution
+    return first_d_values_contribution, first_d_values_contribution_5_eigen, spectral_gap
 
 
 def plot_gram_matrix_euclidean_and_shortest_path_comparative(args, eigenvalues_euclidean, eigenvalues_shortest_path,
@@ -1153,6 +1153,7 @@ def plot_gram_matrix_first_eigenvalues_contribution(args, eigenvalues):
     if args.show_plots:
         plt.show()
     plt.close()
+    return cumulative_variance_first_d_eigenvalues
 
 
 def make_comparative_gram_matrix_plot_euc_sp(useful_plot_folder):

@@ -468,6 +468,14 @@ def run_simulation_subgraph_sampling(args, graph, size_interval=100, n_subgraphs
         csv_filename = f"spatial_constant_subgraph_sampling_{args.args_title}.csv"
         results_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}", index=False)
         # plot_sample_spatial_constant(args, results_df)  # This is an old barplot
+        processed_spatial_constant = process_spatial_constant_false_edge_df(combined_df=results_df,
+                                                                            false_edge_list=false_edge_list)
+        combined_df = processed_spatial_constant
+
+        csv_filename = f"spatial_constant_subgraph_sampling_processed_{args.args_title}.csv"
+        results_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}",
+                          index=False)
+
         plot_spatial_constant_against_subgraph_size(args, results_df)
         combined_df = results_df
 

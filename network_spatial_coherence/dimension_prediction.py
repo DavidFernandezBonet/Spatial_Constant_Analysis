@@ -15,7 +15,7 @@ from scipy.sparse import random as sparse_random
 from scipy.sparse.linalg import norm
 from scipy.stats import linregress
 from data_analysis import calculate_figsize_n_subplots
-import powerlaw
+
 import statsmodels.api as sm
 
 # font_size = 24

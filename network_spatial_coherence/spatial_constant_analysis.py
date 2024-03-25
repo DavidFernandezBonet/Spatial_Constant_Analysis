@@ -137,7 +137,7 @@ def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild
                     # Draw the edge
                     plt.plot([source_pos[0], target_pos[0]], [source_pos[1], target_pos[1]], color=edge_color,
                              alpha=edge_alpha, linewidth=edge_linewidth)
-
+                    
             plt.xlabel('X')
             plt.ylabel('Y')
             plt.title('Original Points and Edges')

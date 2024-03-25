@@ -44,6 +44,7 @@ def create_project_structure(target_dir=None):
         'us_counties': f'{project_root}/data/us_counties',
 
         's_constant_results': f'{project_root}/results/individual_spatial_constant_results',
+        'output_pipeline': f'{project_root}/results/output_pipeline',
         'plots': f'{project_root}/results/plots',
         'plots_original_image': f'{project_root}/results/plots/original_image',
         'plots_reconstructed_image': f'{project_root}/results/plots/reconstructed_image',

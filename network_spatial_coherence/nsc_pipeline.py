@@ -1,5 +1,8 @@
 import sys
 from pathlib import Path
+
+import pandas as pd
+
 # This is so the script works as a stand alone and as a package
 package_root = Path(__file__).parent
 if str(package_root) not in sys.path:
@@ -174,6 +177,8 @@ def spatial_constant_analysis(graph, args, false_edge_list=None):
     size_interval = int(args.num_points / 10)  # collect 10 data points
     combined_df = run_simulation_subgraph_sampling(args, size_interval=size_interval, n_subgraphs=10, graph=graph,
                                      add_false_edges=True, add_mst=False, false_edge_list=false_edge_list)
+    combined_df['Category'] = 'Spatial Coherence'
+    return combined_df
 
 @profile
 def network_dimension(args):
@@ -192,12 +197,26 @@ def network_dimension(args):
                                                       msp_central_node=False, plot_centered_average_sp_distance=False)
     if args.verbose:
         print("Results predicted dimension", results_pred_dimension)
+    results_pred_dimension = pd.DataFrame(results_pred_dimension)
+    results_pred_dimension['Category'] = 'Spatial_Coherence'
+    return results_pred_dimension
 @profile
 def rank_matrix_analysis(args):
     """
     Step 4. Analyze the rank matrix
     """
-    first_d_values_contribution = plot_gram_matrix_eigenvalues(args=args, shortest_path_matrix=args.shortest_path_matrix)
+    first_d_values_contribution,\
+    first_d_values_contribution_5_eigen,\
+    spectral_gap, \
+        = plot_gram_matrix_eigenvalues(args=args, shortest_path_matrix=args.shortest_path_matrix)
+
+    results_dict = {"first_d_values_contribution": first_d_values_contribution, "first_d_values_contribution_5_eigen":
+        first_d_values_contribution_5_eigen, "spectral_gap": spectral_gap}
+
+    results_dict = pd.DataFrame(results_dict, index=[0])
+    results_dict['Category'] = 'Spatial_Coherence'
+    return results_dict
+
 
 
 
@@ -240,8 +259,11 @@ def reconstruct_graph(graph, args):
 
 
         print("ground truth available:", ground_truth_available)
-        run_reconstruction(args, sparse_graph=graph, ground_truth_available=ground_truth_available,
-                           node_embedding_mode=args.reconstruction_mode)
+        reconstructed_points, metrics =(
+            run_reconstruction(args, sparse_graph=graph, ground_truth_available=ground_truth_available,
+                           node_embedding_mode=args.reconstruction_mode))
+        metrics = pd.DataFrame(metrics, index=[0])
+        return metrics
 
 
 def collect_graph_properties(args):
@@ -272,31 +294,46 @@ def run_pipeline(graph, args):
 
 
 
+    # Assuming subsample_graph_if_necessary, plot_and_analyze_graph, compute_shortest_paths
+    # don't return DataFrames and are just part of the processing
     graph = subsample_graph_if_necessary(graph, args)
     plot_and_analyze_graph(graph, args)
     compute_shortest_paths(graph, args)
 
-    results_df = pd.DataFrame()
+    # Collect graph properties into DataFrame
     graph_properties_df = collect_graph_properties(args)
 
+    # Initialize an empty list to store all results DataFrames
+    results_dfs = [graph_properties_df]
 
-
+    # Conditional analysis based on args
     if args.spatial_coherence_validation['spatial_constant']:
-        spatial_constant_analysis(graph, args)
+        spatial_constant_df = spatial_constant_analysis(graph, args)
+        results_dfs.append(spatial_constant_df)
     if args.spatial_coherence_validation['network_dimension']:
-        network_dimension(args)
+        results_pred_dimension_df = network_dimension(args)
+        results_dfs.append(results_pred_dimension_df)
     if args.spatial_coherence_validation['gram_matrix']:
-        rank_matrix_analysis(args)
+        results_gram_matrix_df = rank_matrix_analysis(args)
+        results_dfs.append(results_gram_matrix_df)
 
-    # # Reconstruction
-    reconstruct_graph(graph, args)
+    # Reconstruction metrics
+    reconstruction_metrics_df = reconstruct_graph(graph, args)
+    results_dfs.append(reconstruction_metrics_df)
 
+    # Concatenate all result DataFrames into one
+    results_df = pd.concat(results_dfs, ignore_index=True)
+
+    # Now filter the aggregated DataFrame by 'Category' to extract specific analyses
     graph_properties_df = results_df[results_df['Category'] == 'Graph Properties']
     spatial_coherence_df = results_df[results_df['Category'] == 'Spatial Coherence']
     reconstruction_metrics_df = results_df[results_df['Category'] == 'Reconstruction Metrics']
-    graph_properties_df.to_csv('graph_properties.csv', index=False)
-    spatial_coherence_df.to_csv('spatial_coherence.csv', index=False)
-    reconstruction_metrics_df.to_csv('reconstruction_metrics.csv', index=False)
+
+    data_folder = args.directory_map['output_pipeline']
+    # Save to CSV files
+    graph_properties_df.to_csv(f'{data_folder}/graph_properties.csv', index=False)
+    spatial_coherence_df.to_csv(f'{data_folder}/spatial_coherence.csv', index=False)
+    reconstruction_metrics_df.to_csv(f'{data_folder}/reconstruction_metrics.csv', index=False)
 
     return args
 
