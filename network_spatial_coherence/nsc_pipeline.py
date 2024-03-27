@@ -200,15 +200,15 @@ def network_dimension(args):
     if args.verbose:
         print("Results predicted dimension", results_dimension_prediction)
 
-    df_fit_properties = pd.DataFrame([results_dimension_prediction['fit_dict']])
-    df_log_data = pd.DataFrame({
-        'log_x_data': results_dimension_prediction['fit_data'][0],
-        'log_y_data': results_dimension_prediction['fit_data'][1]
-    })
-    df_dimensions = pd.DataFrame({
-        'predicted_dimension': results_dimension_prediction['predicted_dimension_list'],
-        'std_predicted_dimension': results_dimension_prediction['std_predicted_dimension_list']
-    })
+    # df_fit_properties = pd.DataFrame([results_dimension_prediction['fit_dict']])
+    # df_log_data = pd.DataFrame({
+    #     'log_x_data': results_dimension_prediction['fit_data'][0],
+    #     'log_y_data': results_dimension_prediction['fit_data'][1]
+    # })
+    # df_dimensions = pd.DataFrame({
+    #     'predicted_dimension': results_dimension_prediction['predicted_dimension_list'],
+    #     'std_predicted_dimension': results_dimension_prediction['std_predicted_dimension_list']
+    # })
 
 
     # results_pred_dimension['Category'] = 'Spatial_Coherence'
