@@ -305,8 +305,6 @@ def run_pipeline(graph, args):
     Main function: graph loading, processing, and analysis.
     """
 
-
-
     # Assuming subsample_graph_if_necessary, plot_and_analyze_graph, compute_shortest_paths
     # don't return DataFrames and are just part of the processing
     graph = subsample_graph_if_necessary(graph, args)
