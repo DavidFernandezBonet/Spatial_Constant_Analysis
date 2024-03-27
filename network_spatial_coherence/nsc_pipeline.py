@@ -228,7 +228,8 @@ def rank_matrix_analysis(args):
     #
     # results_dict = pd.DataFrame(results_dict, index=[0])
     # results_dict['Category'] = 'Spatial_Coherence'
-    return results_dict
+    # return results_dict
+    return
 
 
 
@@ -307,7 +308,7 @@ def run_pipeline(graph, args):
 
     # Assuming subsample_graph_if_necessary, plot_and_analyze_graph, compute_shortest_paths
     # don't return DataFrames and are just part of the processing
-    graph = subsample_graph_if_necessary(graph, args)
+    # graph = subsample_graph_if_necessary(graph, args)  # this is done with the load function now
     plot_and_analyze_graph(graph, args)
     args = compute_shortest_paths(graph, args)
 
