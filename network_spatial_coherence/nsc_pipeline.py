@@ -223,11 +223,11 @@ def rank_matrix_analysis(args):
     spectral_gap, \
         = plot_gram_matrix_eigenvalues(args=args, shortest_path_matrix=args.shortest_path_matrix)
 
-    results_dict = {"first_d_values_contribution": first_d_values_contribution, "first_d_values_contribution_5_eigen":
-        first_d_values_contribution_5_eigen, "spectral_gap": spectral_gap}
-
-    results_dict = pd.DataFrame(results_dict, index=[0])
-    results_dict['Category'] = 'Spatial_Coherence'
+    # results_dict = {"first_d_values_contribution": first_d_values_contribution, "first_d_values_contribution_5_eigen":
+    #     first_d_values_contribution_5_eigen, "spectral_gap": spectral_gap}
+    #
+    # results_dict = pd.DataFrame(results_dict, index=[0])
+    # results_dict['Category'] = 'Spatial_Coherence'
     return results_dict
 
 
@@ -351,6 +351,7 @@ def run_pipeline(graph, args):
 if __name__ == "__main__":
     create_project_structure()  # Create structure if not done before
     # Load and process the graph
+
 
     graph, args = load_and_initialize_graph()
 
