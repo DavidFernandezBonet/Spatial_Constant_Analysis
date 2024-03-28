@@ -123,6 +123,7 @@ def plot_profiling_results(args):
     # Save the plot
     plot_folder = args.directory_map['profiler']
     plt.savefig(f'{plot_folder}/function_performance_{args.args_title}.svg', bbox_inches='tight')
+    plt.close()
 
 
 @profile
