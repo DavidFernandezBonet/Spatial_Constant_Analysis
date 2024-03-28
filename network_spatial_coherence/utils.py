@@ -22,7 +22,6 @@ import re
 
 def get_largest_component_sparse(args, sparse_graph, original_node_ids):
     n_components, labels = connected_components(csgraph=sparse_graph, directed=False, return_labels=True)
-    print("original graph size")
     if n_components > 1:  # If not connected
         if not args.handle_all_subgraphs:   # Just get the largest component if we don't handle all subgraphs
             print("Disconnected (or disordered) graph! Finding largest component...")
@@ -431,7 +430,7 @@ def load_graph(args, load_mode='igraph'):
         if args.large_graph_subsampling and args.num_points > args.max_subgraph_size:
             warnings.warn(
                 f"Large graph. Subsampling using BFS for efficiency purposes.\nSize of the sample; {args.max_subgraph_size}")
-            sample_csgraph_subgraph(args, largest_component, min_nodes=args.max_subgraph_size)
+            largest_component = sample_csgraph_subgraph(args, largest_component, min_nodes=args.max_subgraph_size)
         return largest_component
 
     elif load_mode == "sparse_weighted":

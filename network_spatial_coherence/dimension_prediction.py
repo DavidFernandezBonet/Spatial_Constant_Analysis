@@ -17,7 +17,7 @@ from scipy.stats import linregress
 from data_analysis import calculate_figsize_n_subplots
 
 import statsmodels.api as sm
-
+from matplotlib.gridspec import GridSpec
 # font_size = 24
 # plt.style.use(['no-latex', 'nature'])
 #
@@ -723,74 +723,18 @@ def run_dimension_prediction(args, distance_matrix, dist_threshold=6,
     # results_dimension_prediction = plot_dimension_fit(args, dist_threshold, cumulative_count, cumulative_std=None,
     #                                                   surface_count=count_by_distance_average)
 
+    try:
+        results_dimension_prediction = compute_dimension_prediction_fits(args, central_nodes, num_central_nodes, distance_count_matrix)
+    except Exception as e:
+        # Handle the error: log it, pass, or take corrective action
+        print(f"An error occurred when computing the fits. It could be because the fits are not linear enough,"
+              f" or because there is not enough data. Either network too small or too not well-behaved. Error: {e}")
 
-
-    if num_central_nodes > 1:
-        ### Take into account several central nodes for dimension prediction
-        results_dimension_prediction = {}
-        predicted_dimensions = []
-        std_errors = []
-
-        for idx, central_node in enumerate(central_nodes):
-            count_by_distance_average = distance_count_matrix[central_node]
-            cumulative_count = np.cumsum(count_by_distance_average)
-            # TODO: apply the best fit prediction for all the fits...
-            ## cut by threshold
-            # x_data = np.arange(1, dist_threshold + 1)
-            # y_data = cumulative_count[:dist_threshold]
-
-            ## uncut:
-            x_data = np.arange(1, len(cumulative_count)+ 1)
-            y_data = cumulative_count
-            filtered_indices = y_data > 0  # Create a mask for y_data values that are positive
-            filtered_x_data = x_data[filtered_indices]
-            filtered_y_data = y_data[filtered_indices]
-            log_x_data = np.log(filtered_x_data)
-            log_y_data = np.log(filtered_y_data)
-
-            if len(log_y_data) > 10:  # if the network is large enough, we can ommit the first points which might introduce instabilities
-                log_x_data = log_x_data[2:]
-                log_y_data = log_y_data[2:]
-            # slope, intercept, r_value, p_value, std_err = linregress(log_x_data, log_y_data)
-
-            ### Best fit   #TODO: what is the best way to do this?
-            # fit_dict = find_best_fit_segment_with_derivative_analysis(log_x_data, log_y_data, min_points=10)
-
-            # fit_dict = find_most_linear_part(log_x_data, log_y_data)
-            fit_dict = linear_part_and_stats(log_x_data, log_y_data)  # with breakpoints
-            print("fit dict", fit_dict)
-            # print("Best fit r2",  fit_dict['best_r2'], "Best slope", fit_dict['best_slope'], "Best p_value", fit_dict['best_p_value'],
-            #       "Best std_err", fit_dict['best_std_err'])
-
-
-            # plot_best_fit_segment(log_x_data, log_y_data, fit_dict['best_start'], fit_dict['best_end'],
-            #                       fit_dict['best_p_value'], fit_dict['best_r2'])
-
-            slope = fit_dict['best_slope']
-            std_err = fit_dict['best_std_err']
-
-            ### Store a random fit
-            results_dimension_prediction["fit_dict"] = fit_dict
-            results_dimension_prediction["fit_data"] = (log_x_data, log_y_data)
+        # Optionally, set result to None or an appropriate value if needed
+        results_dimension_prediction = None
 
 
 
-            predicted_dimension = slope
-            predicted_dimensions.append(predicted_dimension)
-            std_errors.append(std_err)
-
-
-        variances = np.array(std_errors) ** 2
-        weighted_avg_dimension = np.sum(np.array(predicted_dimensions) / variances) / np.sum(1 / variances)
-        std_error_weighted_avg = np.sqrt(1 / np.sum(1 / variances))
-        results_dimension_prediction['predicted_dimension'] = weighted_avg_dimension
-        results_dimension_prediction['std_predicted_dimension'] = std_error_weighted_avg
-        results_dimension_prediction['predicted_dimension_list'] = predicted_dimensions
-        results_dimension_prediction['std_predicted_dimension_list'] = std_errors
-        print("RESULTS DIMENSION PREDICTION FOR SEVERAL CENTRAL NODES", results_dimension_prediction)
-
-        # TODO: this works only if we have more than 1 central node
-        plot_main_predicted_dimension_1series(args, results_dimension_prediction, title=args.args_title)
 
     # plot_heatmap_all_nodes = False   #TODO: change this
 
@@ -833,6 +777,80 @@ def run_dimension_prediction(args, distance_matrix, dist_threshold=6,
     else:
         return results_dimension_prediction
 
+
+def compute_dimension_prediction_fits(args, central_nodes, num_central_nodes, distance_count_matrix):
+    ### Take into account several central nodes for dimension prediction
+    results_dimension_prediction = {}
+    predicted_dimensions = []
+    std_errors = []
+    fit_dict_list = []
+    fit_data_list = []
+
+    for idx, central_node in enumerate(central_nodes):
+        count_by_distance_average = distance_count_matrix[central_node]
+        cumulative_count = np.cumsum(count_by_distance_average)
+        # TODO: apply the best fit prediction for all the fits...
+        ## cut by threshold
+        # x_data = np.arange(1, dist_threshold + 1)
+        # y_data = cumulative_count[:dist_threshold]
+
+        ## uncut:
+        x_data = np.arange(1, len(cumulative_count)+ 1)
+        y_data = cumulative_count
+        filtered_indices = y_data > 0  # Create a mask for y_data values that are positive
+        filtered_x_data = x_data[filtered_indices]
+        filtered_y_data = y_data[filtered_indices]
+        log_x_data = np.log(filtered_x_data)
+        log_y_data = np.log(filtered_y_data)
+
+        if len(log_y_data) > 15:  # if the network is large enough, we can ommit the first points to improve the fit reliability
+            log_x_data = log_x_data[2:]
+            log_y_data = log_y_data[2:]
+        # slope, intercept, r_value, p_value, std_err = linregress(log_x_data, log_y_data)
+
+        ### Best fit   #TODO: what is the best way to do this?
+        # fit_dict = find_best_fit_segment_with_derivative_analysis(log_x_data, log_y_data, min_points=10)
+
+        # fit_dict = find_most_linear_part(log_x_data, log_y_data)
+        fit_dict = linear_part_and_stats(log_x_data, log_y_data)  # with breakpoints
+        print("fit dict", fit_dict)
+        # print("Best fit r2",  fit_dict['best_r2'], "Best slope", fit_dict['best_slope'], "Best p_value", fit_dict['best_p_value'],
+        #       "Best std_err", fit_dict['best_std_err'])
+
+
+        # plot_best_fit_segment(log_x_data, log_y_data, fit_dict['best_start'], fit_dict['best_end'],
+        #                       fit_dict['best_p_value'], fit_dict['best_r2'])
+
+        slope = fit_dict['best_slope']
+        std_err = fit_dict['best_std_err']
+
+        ### Store a random fit
+        results_dimension_prediction["fit_dict"] = fit_dict
+        results_dimension_prediction["fit_data"] = (log_x_data, log_y_data)
+        fit_dict_list.append(fit_dict)
+        fit_data_list.append((log_x_data, log_y_data))
+
+
+
+        predicted_dimension = slope
+        predicted_dimensions.append(predicted_dimension)
+        std_errors.append(std_err)
+
+
+    variances = np.array(std_errors) ** 2
+    weighted_avg_dimension = np.sum(np.array(predicted_dimensions) / variances) / np.sum(1 / variances)
+    std_error_weighted_avg = np.sqrt(1 / np.sum(1 / variances))
+    results_dimension_prediction['predicted_dimension'] = weighted_avg_dimension
+    results_dimension_prediction['std_predicted_dimension'] = std_error_weighted_avg
+    results_dimension_prediction['predicted_dimension_list'] = predicted_dimensions
+    results_dimension_prediction['std_predicted_dimension_list'] = std_errors
+    results_dimension_prediction['fit_dict_list'] = fit_dict_list
+    results_dimension_prediction['fit_data_list'] = fit_data_list
+    print("RESULTS DIMENSION PREDICTION FOR SEVERAL CENTRAL NODES", results_dimension_prediction)
+    # TODO: this works only if we have more than 1 central node
+    plot_main_predicted_dimension_1series(args, results_dimension_prediction, title=args.args_title)
+    plot_main_predicted_dimension_multiple_fits(args, results_dimension_prediction, title=args.args_title)
+    return results_dimension_prediction
 
 def plot_main_predicted_dimension_1series(args, results_predicted_dimension, title=""):
     fig, axs = plt.subplots(1, 2, figsize=(12, 4.5))  # Define figure and two subplots
@@ -879,6 +897,54 @@ def plot_main_predicted_dimension_1series(args, results_predicted_dimension, tit
         plt.show()
 
     plt.close(fig)  # Close the figure properly
+
+
+def plot_main_predicted_dimension_multiple_fits(args, results_dimension_prediction, title=""):
+    num_fits = len(results_dimension_prediction['fit_dict_list'])
+    # Calculate the number of rows for fits, up to 3 fits per row
+    rows_for_fits = -(-num_fits // 3)  # Ceiling division
+
+    # Total rows = 1 (for the main density plot) + rows needed for fits
+    total_rows = 1 + rows_for_fits
+
+    fig = plt.figure(figsize=(18, 4.5 * total_rows))
+    gs = GridSpec(total_rows, 3, figure=fig)  # 3 columns
+
+    # First Row, Main Plot: Density Curve Plot with points
+    main_ax = fig.add_subplot(gs[0, :])  # Span all columns for the main plot
+    data = results_dimension_prediction['predicted_dimension_list']
+    label = args.network_name
+    sns.kdeplot(data, ax=main_ax, fill=True, alpha=0.7, color='#009ADE', bw_adjust=0.5)
+    neutral_y_value = np.zeros(len(data))
+    main_ax.scatter(data, neutral_y_value, alpha=0.5, edgecolor='black', color='dodgerblue', s=20, zorder=5,
+                    clip_on=False)
+    main_ax.set_ylabel('Density')
+    main_ax.set_xlabel('Predicted Dimension')
+    main_ax.set_title(label)
+
+    # Plotting all fits in subsequent rows
+    for i, fit_dict in enumerate(results_dimension_prediction['fit_dict_list']):
+        row = (i // 3) + 1  # Determine the row for the fit, starting from row 1
+        col = i % 3  # Column index within the row
+        ax = fig.add_subplot(gs[row, col])
+        log_x_data, log_y_data = results_dimension_prediction["fit_data_list"][i]
+        ax.scatter(log_x_data, log_y_data, color='#009ADE')
+        x_fit = np.array(log_x_data)
+        y_fit = fit_dict['best_slope'] * x_fit + fit_dict['best_intercept']
+        ax.plot(x_fit, y_fit, color='red', linestyle='--', label=f"Fit {i + 1}: slope={fit_dict['best_slope']:.3f}")
+        ax.set_xlabel('$\log(r)$')
+        ax.set_ylabel('$\log(N_v)$')
+        ax.legend(fontsize=10)
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])  # Adjust layout
+
+    # Save and show plot
+    if hasattr(args, 'directory_map') and 'spatial_coherence' in args.directory_map:
+        plot_folder = args.directory_map['spatial_coherence']
+        plt.savefig(f"{plot_folder}/predicted_dimension_and_multiple_fits_{title}.svg", format="svg",
+                    bbox_inches="tight")
+    plt.close(fig)  # Close the figure properly
+
 def compute_and_plot_predicted_dimensions_for_all_nodes(args, distance_count_matrix, dist_threshold, plot_in_3d=False,
                                                         euclidean=False, binned_distance=None, central_index=None,
                                                         local_dimension_mode=False):

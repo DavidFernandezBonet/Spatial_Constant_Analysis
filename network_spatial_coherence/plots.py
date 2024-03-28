@@ -462,7 +462,7 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
 
     # Simulated colors should only be used for simulation proximity modes
     if args.colorfile is not None:
-        if args.colorfile[:4] != '.csv' and args.proximity_mode == "experimental":
+        if args.colorfile[-4:] != '.csv' and args.proximity_mode == "experimental":
             args.colorfile = None
 
 
@@ -507,9 +507,9 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
 
     ax = setup_plot(args)
 
+
     # Plot data
     if (args.colorfile is not None) and args.proximity_mode == "experimental":
-
         # Change the position ID for weinstein case also
         if args.colorfile[:4] == "wein" and image_type == 'original':  # mapping should only be applied when we have original image
             positions_df['node_ID'] = positions_df['node_ID'].map(args.node_ids_map_old_to_new)
@@ -531,7 +531,6 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
 
         # Additional processing for color_df if required
         plot_positions(ax, positions_df, args, color_df)
-
     else:
         if args.id_to_color_simulation is not None:
             plot_positions(ax, positions_df, args, simulated_colors=True)

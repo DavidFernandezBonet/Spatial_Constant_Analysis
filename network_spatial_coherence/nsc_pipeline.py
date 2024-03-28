@@ -154,8 +154,18 @@ def plot_and_analyze_graph(graph, args):
     """
     Plots the original graph and analyzes its properties.
     """
-    if args.proximity_mode != "experimental" and args.plot_original_image:
-        plot_original_or_reconstructed_image(args, image_type='original')
+    if args.original_positions_available and args.plot_original_image:
+        if args.proximity_mode == "experimental":
+            warnings.warn("Make sure the original image is available for experimental mode. If not, "
+                          "set original_positions_available to False")
+            positions_file = f"positions_{args.network_name}.csv"
+            if "weinstein" in args.network_name:
+                args.colorfile = 'weinstein_colorcode_february_corrected.csv'
+
+        else:
+            positions_file = None
+
+        plot_original_or_reconstructed_image(args, image_type='original', position_filename=positions_file)
 
     if args.plot_graph_properties:
         plot_graph_properties(args, igraph_graph=graph)
@@ -179,7 +189,21 @@ def spatial_constant_analysis(graph, args, false_edge_list=None):
     combined_df = run_simulation_subgraph_sampling(args, size_interval=size_interval, n_subgraphs=10, graph=graph,
                                      add_false_edges=True, add_mst=False, false_edge_list=false_edge_list)
     combined_df['Category'] = 'Spatial Coherence'
-    return combined_df
+    filtered_df = combined_df
+
+    spatial_slope = filtered_df['Slope'].iloc[0]
+    spatial_r_squared = filtered_df['R_squared'].iloc[0] if 'R_squared' in filtered_df.columns else None
+
+    spatial_slope_false_edge_100 = filtered_df['Slope'].iloc[-1]
+    spatial_r_squared_false_edge_100 = filtered_df['R_squared'].iloc[-1] if 'R_squared' in filtered_df.columns else None
+
+    ## Update in main results dictionary
+    args.spatial_coherence_quantiative_dict['slope_spatial_constant'] = spatial_slope
+    args.spatial_coherence_quantiative_dict['r2_slope_spatial_constant'] = spatial_r_squared
+    args.spatial_coherence_quantiative_dict['slope_spatial_constant_false_edge_100'] = spatial_slope_false_edge_100
+    args.spatial_coherence_quantiative_dict['r2_slope_spatial_constant_false_edge_100'] = spatial_r_squared_false_edge_100
+    args.spatial_coherence_quantiative_dict['ratio_slope_0_to_100_false_edges'] = spatial_slope_false_edge_100 / spatial_slope
+    return args, combined_df
 
 @profile
 def network_dimension(args):
@@ -194,25 +218,22 @@ def network_dimension(args):
     print("mean shortest path", args.mean_shortest_path)
     results_dimension_prediction = run_dimension_prediction(args, distance_matrix=args.shortest_path_matrix,
                                                       dist_threshold=int(args.mean_shortest_path),
-                                                      num_central_nodes=10,
+                                                      num_central_nodes=12,
                                                       local_dimension=False, plot_heatmap_all_nodes=plot_all_heatmap_nodes,
                                                       msp_central_node=False, plot_centered_average_sp_distance=False)
     if args.verbose:
         print("Results predicted dimension", results_dimension_prediction)
 
-    # df_fit_properties = pd.DataFrame([results_dimension_prediction['fit_dict']])
-    # df_log_data = pd.DataFrame({
-    #     'log_x_data': results_dimension_prediction['fit_data'][0],
-    #     'log_y_data': results_dimension_prediction['fit_data'][1]
-    # })
-    # df_dimensions = pd.DataFrame({
-    #     'predicted_dimension': results_dimension_prediction['predicted_dimension_list'],
-    #     'std_predicted_dimension': results_dimension_prediction['std_predicted_dimension_list']
-    # })
-
-
-    # results_pred_dimension['Category'] = 'Spatial_Coherence'
-    return results_dimension_prediction
+    if results_dimension_prediction is not None:
+        predicted_dimension = results_dimension_prediction['predicted_dimension']
+        std_predicted_dimension = results_dimension_prediction['std_predicted_dimension']
+        args.spatial_coherence_quantiative_dict.update({
+            'network_dim': predicted_dimension,
+            'network_dim_std': std_predicted_dimension
+        })
+        return args, results_dimension_prediction
+    else:
+        return
 @profile
 def rank_matrix_analysis(args):
     """
@@ -229,7 +250,12 @@ def rank_matrix_analysis(args):
     # results_dict = pd.DataFrame(results_dict, index=[0])
     # results_dict['Category'] = 'Spatial_Coherence'
     # return results_dict
-    return
+    args.spatial_coherence_quantiative_dict.update( {
+        'gram_total_contribution': first_d_values_contribution_5_eigen,
+        'gram_spectral_gap': spectral_gap
+    })
+
+    return args, first_d_values_contribution
 
 
 
@@ -263,21 +289,25 @@ def reconstruct_graph(graph, args):
         The function directly prints updates regarding the reconstruction process, including the
         mode of reconstruction and whether ground truth is considered available.
     """
-    if args.reconstruct:
-        print("running reconstruction...")
-        print("reconstruction mode:", args.reconstruction_mode)
-        # ground_truth_available = not (args.proximity_mode == "experimental" or args.large_graph_subsampling)
-        # TODO: is large_graph_-subsampling messinge up the indices or something? Why did exclude it
 
-        ground_truth_available = args.proximity_mode == "experimental" and args.original_positions_available
+    print("running reconstruction...")
+    print("reconstruction mode:", args.reconstruction_mode)
+    # ground_truth_available = not (args.proximity_mode == "experimental" or args.large_graph_subsampling)
+    # TODO: is large_graph_-subsampling messinge up the indices or something? Why did exclude it
+
+    ground_truth_available = args.proximity_mode == "experimental" and args.original_positions_available
 
 
-        print("ground truth available:", ground_truth_available)
-        reconstructed_points, metrics =(
-            run_reconstruction(args, sparse_graph=graph, ground_truth_available=ground_truth_available,
-                           node_embedding_mode=args.reconstruction_mode))
-        metrics = pd.DataFrame(metrics, index=[0])
-        return metrics
+    print("ground truth available:", ground_truth_available)
+    reconstructed_points, metrics =(
+        run_reconstruction(args, sparse_graph=graph, ground_truth_available=ground_truth_available,
+                       node_embedding_mode=args.reconstruction_mode))
+
+    if ground_truth_available:
+        args.spatial_coherence_quantiative_dict.update(metrics['ground_truth'])
+    args.spatial_coherence_quantiative_dict.update(metrics['gta'])
+    return args, metrics
+
 
 
 def collect_graph_properties(args):
@@ -287,20 +317,63 @@ def collect_graph_properties(args):
         'Property': ['Number of Points', 'Number of Edges', 'Average Degree', 'Clustering Coefficient',
                      'Mean Shortest Path'],
         'Value': [
-            args.num_points if args.num_points else "not computed",
-            args.num_edges if args.num_edges else "not computed",
-            args.average_degree if args.average_degree else "not computed",
-            args.mean_clustering_coefficient if args.mean_clustering_coefficient else "not computed",
-            args.mean_shortest_path if args.mean_shortest_path else "not computed"
+            args.num_points,
+            args.num_edges ,
+            args.average_degree ,
+            args.mean_clustering_coefficient,
+            args.mean_shortest_path
         ]
     }
 
     # Create DataFrame
     graph_properties_df = pd.DataFrame(properties_dict)
     graph_properties_df['Category'] = 'Graph Properties'  # Adding a category column for consistency
+    if args.num_points:
+        args.spatial_coherence_quantiative_dict['num_points'] = args.num_points
+    if args.num_edges:
+        args.spatial_coherence_quantiative_dict['num_edges'] = args.num_edges
+    if args.average_degree:
+        args.spatial_coherence_quantiative_dict['average_degree'] = args.average_degree
+    if args.mean_clustering_coefficient:
+        args.spatial_coherence_quantiative_dict['clustering_coefficient'] = args.mean_clustering_coefficient
+    if args.mean_shortest_path:
+        args.spatial_coherence_quantiative_dict['mean_shortest_path'] = args.mean_shortest_path
+    return args, graph_properties_df
 
-    return graph_properties_df
+def output_df_category_mapping():
+    category_mapping = {
+        'num_points': 'Graph Property',
+        'num_edges': 'Graph Property',
+        'average_degree': 'Graph Property',
+        'clustering_coefficient': 'Graph Property',
+        'mean_shortest_path': 'Graph Property',
+        'slope_spatial_constant': 'Spatial Constant',
+        'r2_slope_spatial_constant': 'Spatial Constant',
+        'slope_spatial_constant_false_edge_100': 'Spatial Constant',
+        'r2_slope_spatial_constant_false_edge_100': 'Spatial Constant',
+        'ratio_slope_0_to_100_false_edges': 'Spatial Constant',
+        'network_dim': 'Network Dimension',
+        'network_dim_std': 'Network Dimension',
+        'gram_total_contribution': 'Gram Matrix',
+        'gram_spectral_gap': 'Gram Matrix',
+        'KNN': 'Reconstruction',
+        'CPD': 'Reconstruction',
+        'GTA_KNN': 'Reconstruction',
+        'GTA_CPD': 'Reconstruction'
+    }
+    return category_mapping
 
+def write_output_data(args):
+    output_df = pd.DataFrame(list(args.spatial_coherence_quantiative_dict.items()), columns=['Property', 'Value'])
+    category_mapping = output_df_category_mapping()
+    expected_properties = set(category_mapping.keys())
+    missing_properties = expected_properties - set(output_df['Property'])
+    for prop in missing_properties:
+        output_df = output_df._append({'Property': prop, 'Value': "not computed"}, ignore_index=True)
+    output_df['Category'] = output_df['Property'].map(category_mapping)
+
+    df_folder = args.directory_map['output_dataframe']
+    output_df.to_csv(f"{df_folder}/quantitative_metrics_{args.args_title}.csv", index=False)
 def run_pipeline(graph, args):
     """
     Main function: graph loading, processing, and analysis.
@@ -312,41 +385,21 @@ def run_pipeline(graph, args):
     plot_and_analyze_graph(graph, args)
     args = compute_shortest_paths(graph, args)
 
-    # # Collect graph properties into DataFrame
-    # graph_properties_df = collect_graph_properties(args)
-    #
-    # # Initialize an empty list to store all results DataFrames
-    # results_dfs = [graph_properties_df]
-
+    # Collect graph properties into DataFrame
+    args, graph_properties_df = collect_graph_properties(args)
     # Conditional analysis based on args
     if args.spatial_coherence_validation['spatial_constant']:
-        spatial_constant_df = spatial_constant_analysis(graph, args)
-        # results_dfs.append(spatial_constant_df)
+        args, spatial_constant_df = spatial_constant_analysis(graph, args)
     if args.spatial_coherence_validation['network_dimension']:
-        results_pred_dimension_df = network_dimension(args)
-        # results_dfs.append(results_pred_dimension_df)
+        args, results_pred_dimension_df = network_dimension(args)
     if args.spatial_coherence_validation['gram_matrix']:
-        results_gram_matrix_df = rank_matrix_analysis(args)
-        # results_dfs.append(results_gram_matrix_df)
+        args, results_gram_matrix_df = rank_matrix_analysis(args)
 
     # Reconstruction metrics
-    reconstruction_metrics_df = reconstruct_graph(graph, args)
-    # results_dfs.append(reconstruction_metrics_df)
+    if args.reconstruct:
+        args, reconstruction_metrics_df = reconstruct_graph(graph, args)
 
-    # # Concatenate all result DataFrames into one
-    # results_df = pd.concat(results_dfs, ignore_index=True)
-    #
-    # # Now filter the aggregated DataFrame by 'Category' to extract specific analyses
-    # graph_properties_df = results_df[results_df['Category'] == 'Graph Properties']
-    # spatial_coherence_df = results_df[results_df['Category'] == 'Spatial Coherence']
-    # reconstruction_metrics_df = results_df[results_df['Category'] == 'Reconstruction Metrics']
-    #
-    # data_folder = args.directory_map['output_pipeline']
-    # # Save to CSV files
-    # graph_properties_df.to_csv(f'{data_folder}/graph_properties.csv', index=False)
-    # spatial_coherence_df.to_csv(f'{data_folder}/spatial_coherence.csv', index=False)
-    # reconstruction_metrics_df.to_csv(f'{data_folder}/reconstruction_metrics.csv', index=False)
-
+    write_output_data(args)
     return args
 
 if __name__ == "__main__":

@@ -450,6 +450,10 @@ def run_simulation_subgraph_sampling(args, graph, size_interval=100, n_subgraphs
         combined_df = pd.concat(all_results, ignore_index=True)
         combined_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}", index=False)
 
+        processed_spatial_constant = process_spatial_constant_false_edge_df(combined_df=all_results,
+                                                                            false_edge_list=false_edge_list)
+        combined_df = processed_spatial_constant
+
     else:   # If we don't add false edges
         #     # Generate subgraphs with BFS
         print("running normal bfs")
@@ -473,11 +477,11 @@ def run_simulation_subgraph_sampling(args, graph, size_interval=100, n_subgraphs
         combined_df = processed_spatial_constant
 
         csv_filename = f"spatial_constant_subgraph_sampling_processed_{args.args_title}.csv"
-        results_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}",
+        combined_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}",
                           index=False)
 
         plot_spatial_constant_against_subgraph_size(args, results_df)
-        combined_df = results_df
+
 
     if 'experimental' in args.proximity_mode:
         args.false_edges_count = 0
@@ -514,15 +518,40 @@ def process_spatial_constant_false_edge_df(combined_df, false_edge_list):
         slope, intercept, r_value, p_value, std_err = linregress(sizes, means)
         r_squared = r_value ** 2  # Coefficient of determination
 
+        # # Plotting the data
+        # plt.figure(figsize=(10, 6))
+        # plt.scatter(sizes, means, label='Data Points')
+        # plt.errorbar(sizes, means, yerr=std_devs, fmt='o', ecolor='lightgray', elinewidth=3, capsize=0)
+        #
+        # # Plotting the linear fit
+        # fit_line = slope * sizes + intercept
+        # plt.plot(sizes, fit_line, color='red', label=f'Linear Fit: y={slope:.2f}x+{intercept:.2f}')
+        #
+        # plt.xlabel('Sizes')
+        # plt.ylabel('Means')
+        # plt.title('Linear Regression Fit')
+        # plt.legend()
+        # plt.show()
+
+
         # Create a DataFrame for the current false_edge_count results
+        ### #TODO: here do we want to store also the sizes and means?
+        # temp_df = pd.DataFrame({
+        #     'False Edge Count': false_edge_count,
+        #     'Sizes': sizes,
+        #     'Means': means,
+        #     'Standard Deviation': std_devs,
+        #     'Slope': np.repeat(slope, len(sizes)),
+        #     'R_squared': np.repeat(r_squared, len(sizes))
+        # })
+
         temp_df = pd.DataFrame({
-            'False Edge Count': false_edge_count,
-            'Sizes': sizes,
-            'Means': means,
-            'Standard Deviation': std_devs,
-            'Slope': np.repeat(slope, len(sizes)),
-            'R_squared': np.repeat(r_squared, len(sizes))
+            'False Edge Count': [false_edge_count],  # Ensure this is a list so it's treated as a single row
+            'Slope': [slope],
+            'R_squared': [r_squared],
+            'Spatial_Constant_at_max_size': [means[-1]]
         })
+
         # Append the temporary DataFrame to the results DataFrame
         results_df = pd.concat([results_df, temp_df], ignore_index=True)
 

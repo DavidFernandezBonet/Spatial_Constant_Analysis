@@ -44,7 +44,7 @@ def create_project_structure(target_dir=None):
         'us_counties': f'{project_root}/data/us_counties',
 
         's_constant_results': f'{project_root}/results/individual_spatial_constant_results',
-        'output_pipeline': f'{project_root}/results/output_pipeline',
+        'output_dataframe': f'{project_root}/results/output_dataframe',
         'plots': f'{project_root}/results/plots',
         'plots_original_image': f'{project_root}/results/plots/original_image',
         'plots_reconstructed_image': f'{project_root}/results/plots/reconstructed_image',
@@ -208,6 +208,8 @@ class GraphArgs:
         self.spatial_coherence_validation = config.get('spatial_coherence_validation', False)
         self.reconstruct = config.get('reconstruct', False)
         self.original_positions_available = config.get('original_positions_available', False)
+        self.plot_original_image = config.get('plot_original_image', False)
+        self.spatial_coherence_quantiative_dict = {}
 
 
         if self.reconstruct:
@@ -235,10 +237,11 @@ class GraphArgs:
             self.title_experimental = config.get('title_experimental', None)
             self.weighted = config.get('weighted', False)
             if self.weighted:
+                self.weight_threshold = config.get('weight_threshold', 0)
                 self.weighted_threshold = config.get('weight_threshold', 0)
         else:
             ### Simulation specific
-            self.plot_original_image = config.get('plot_original_image', False)
+
             self._intended_av_degree = config.get('intended_av_degree', 6)
 
         # self.update_proximity_mode()
@@ -374,6 +377,7 @@ class GraphArgs:
     def set_edge_list_title(self, title):
         if self.original_edge_list_title is None:  # Only set the original title once or when explicitly needed
             self.original_edge_list_title = title
+            self.network_name = os.path.splitext(title)[0]   # TODO: make sure this doesn't conflict with custom network names
         self.edge_list_title = title
 
     def update_args_title(self):
@@ -384,6 +388,8 @@ class GraphArgs:
                 # print(self._num_points, self._dim, self._proximity_mode, self.original_edge_list_title)
                 self.args_title = f"N={self._num_points}_dim={self._dim}_{self._proximity_mode}_{os.path.splitext(self.original_edge_list_title)[0]}"
                 self.extra_info = "_" + os.path.splitext(self.edge_list_title)[0]
+
+                # self.network_name = os.path.splitext(self.edge_list_title)[0]
                 # self.args_title = f"N={self._num_points}_dim={self._dim}_{self._proximity_mode}_{os.path.splitext(self.edge_list_title)[0]}"
 
             # else:

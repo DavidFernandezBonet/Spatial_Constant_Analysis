@@ -69,6 +69,8 @@ def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild
     # print("Edge list name", args.edge_list_title)
     # print("Original edge list name", args.original_edge_list_title)
 
+    print("length sparse graph", sparse_graph.shape[0])
+
     reconstruction = ImageReconstruction(graph=sparse_graph, dim=args.dim, node_embedding_mode=node_embedding_mode,
                                          manifold_learning_mode=manifild_learning_mode)
     reconstructed_points = reconstruction.reconstruct(do_write_positions=True, args=args)
@@ -99,59 +101,63 @@ def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild
 
             original_points = original_points_df[['x', 'y']].to_numpy()
 
+            print(len(args.node_ids_map_old_to_new))
 
-            ### Plotting
-            # Load positions DataFrame
-            positions_df = original_points_df
 
-            # Load edges DataFrame
-            edge_list_folder = args.directory_map["edge_lists"]
-            edges_df = pd.read_csv(f"{edge_list_folder}/{args.edge_list_title}")
 
-            # Convert positions_df to a dictionary for efficient access
-            positions_dict = positions_df.set_index('node_ID')[['x', 'y']].T.to_dict('list')
 
-            # Start plotting
-            plt.figure(figsize=(10, 10))
-
-            # Plot original points
-            for node_ID, (x, y) in positions_dict.items():
-                plt.plot(x, y, 'o', color='blue')  # Adjust color as necessary
-
-            for _, row in edges_df.iterrows():
-                # Map old IDs to new IDs
-                source_new_id = args.node_ids_map_old_to_new.get(row['source'], None)
-                target_new_id = args.node_ids_map_old_to_new.get(row['target'], None)
-
-                if source_new_id in positions_dict and target_new_id in positions_dict:
-                    source_pos = positions_dict[source_new_id]
-                    target_pos = positions_dict[target_new_id]
-
-                    # Determine edge properties based on old IDs
-                    edge_color = 'red' if (row['source'], row['target']) in args.false_edge_ids or (
-                    row['target'], row['source']) in args.false_edge_ids else 'k'
-                    edge_alpha = 1 if (row['source'], row['target']) in args.false_edge_ids or (
-                    row['target'], row['source']) in args.false_edge_ids else 0.2
-                    edge_linewidth = 1  # Adjust this as necessary based on your conditions
-
-                    # Draw the edge
-                    plt.plot([source_pos[0], target_pos[0]], [source_pos[1], target_pos[1]], color=edge_color,
-                             alpha=edge_alpha, linewidth=edge_linewidth)
-                    
-            plt.xlabel('X')
-            plt.ylabel('Y')
-            plt.title('Original Points and Edges')
-            plt.show()
+            # ### Plotting
+            # # Load positions DataFrame
+            # positions_df = original_points_df
+            # node_ids_map_new_to_old = {v: k for k, v in args.node_ids_map_old_to_new.items()}
+            # # Load edges DataFrame
+            # edge_list_folder = args.directory_map["edge_lists"]
+            # edges_df = pd.read_csv(f"{edge_list_folder}/{args.edge_list_title}")
+            #
+            # # Convert positions_df to a dictionary for efficient access
+            # positions_dict = positions_df.set_index('node_ID')[['x', 'y']].T.to_dict('list')
+            #
+            # # Start plotting
+            # plt.figure(figsize=(10, 10))
+            #
+            # # Plot original points
+            # for node_ID, (x, y) in positions_dict.items():
+            #     plt.plot(x, y, 'o', color='blue')  # Adjust color as necessary
+            #
+            # for _, row in edges_df.iterrows():
+            #     # Map old IDs to new IDs
+            #     source_new_id = row['source']
+            #     target_new_id = row['target']
+            #
+            #     if source_new_id in positions_dict and target_new_id in positions_dict:
+            #         source_pos = positions_dict[source_new_id]
+            #         target_pos = positions_dict[target_new_id]
+            #
+            #         # Determine edge properties based on old IDs
+            #         edge_color = 'red' if (row['source'], row['target']) in args.false_edge_ids or (
+            #         row['target'], row['source']) in args.false_edge_ids else 'k'
+            #         edge_alpha = 1 if (row['source'], row['target']) in args.false_edge_ids or (
+            #         row['target'], row['source']) in args.false_edge_ids else 0.2
+            #         edge_linewidth = 1  # Adjust this as necessary based on your conditions
+            #
+            #         # Draw the edge
+            #         plt.plot([source_pos[0], target_pos[0]], [source_pos[1], target_pos[1]], color=edge_color,
+            #                  alpha=edge_alpha, linewidth=edge_linewidth)
+            #
+            # plt.xlabel('X')
+            # plt.ylabel('Y')
+            # plt.title('Original Points and Edges')
+            # plt.show()
 
         else:
             original_points = read_position_df(args)
         qm = QualityMetrics(original_points, reconstructed_points)
-        qm.evaluate_metrics()
-        metrics["ground_truth"] = qm
+        og_metrics_dict = qm.evaluate_metrics()
+        metrics["ground_truth"] = og_metrics_dict
     # GTA metrics
     gta_qm = GTA_Quality_Metrics(edge_list=edge_list, reconstructed_points=reconstructed_points)
-    gta_qm.evaluate_metrics()
-    metrics["gta"] = gta_qm
+    gta_metrics_dict = gta_qm.evaluate_metrics()
+    metrics["gta"] = gta_metrics_dict
     return reconstructed_points, metrics
 
 
