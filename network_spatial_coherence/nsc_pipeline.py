@@ -133,12 +133,15 @@ def load_and_initialize_graph(args=None):
     """
     if args is None:
         args = GraphArgs()
-    print("proximity_mode", args.proximity_mode)
+
     if args.proximity_mode != "experimental":
         write_proximity_graph(args)
-        print("Number Nodes", args.num_points)
-        print("Average Degree", args.average_degree)
-    print("Title Edge List", args.edge_list_title)
+        if args.verbose:
+            print("Number Nodes", args.num_points)
+            print("Average Degree", args.average_degree)
+    if args.verbose:
+        print("Title Edge List", args.edge_list_title)
+        print("proximity_mode", args.proximity_mode)
     return load_graph(args, load_mode='sparse'), args
 @profile
 def subsample_graph_if_necessary(graph, args):
@@ -215,8 +218,6 @@ def network_dimension(args):
         plot_all_heatmap_nodes = True
     else:
         plot_all_heatmap_nodes = False
-    print("plot_all_heatmap_nodes", plot_all_heatmap_nodes)
-    print("mean shortest path", args.mean_shortest_path)
     results_dimension_prediction = run_dimension_prediction(args, distance_matrix=args.shortest_path_matrix,
                                                       dist_threshold=int(args.mean_shortest_path),
                                                       num_central_nodes=12,
@@ -291,15 +292,16 @@ def reconstruct_graph(graph, args):
         mode of reconstruction and whether ground truth is considered available.
     """
 
-    print("running reconstruction...")
-    print("reconstruction mode:", args.reconstruction_mode)
+
     # ground_truth_available = not (args.proximity_mode == "experimental" or args.large_graph_subsampling)
     # TODO: is large_graph_-subsampling messinge up the indices or something? Why did exclude it
 
     ground_truth_available = args.proximity_mode == "experimental" and args.original_positions_available
 
-
-    print("ground truth available:", ground_truth_available)
+    if args.verbose:
+        print("running reconstruction...")
+        print("reconstruction mode:", args.reconstruction_mode)
+        print("ground truth available:", ground_truth_available)
     reconstructed_points, metrics =(
         run_reconstruction(args, sparse_graph=graph, ground_truth_available=ground_truth_available,
                        node_embedding_mode=args.reconstruction_mode))
@@ -404,10 +406,10 @@ def run_pipeline(graph, args):
     return args
 
 if __name__ == "__main__":
-    create_project_structure()  # Create structure if not done before
+    # create_project_structure()  # Create structure if not done before
     # Load and process the graph
 
-
+    print("hel1")
     graph, args = load_and_initialize_graph()
 
     if args.handle_all_subgraphs and type(graph) is list:

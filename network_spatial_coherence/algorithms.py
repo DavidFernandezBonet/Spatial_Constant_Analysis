@@ -910,13 +910,11 @@ def compute_shortest_path_matrix_sparse_graph(sparse_graph, args=None):
         sp_matrix = np.array(shortest_path(csgraph=sparse_graph, directed=False))
         return sp_matrix
     elif args is not None and args.shortest_path_matrix is not None:
-        print("Mean shortest path 2", args.mean_shortest_path)
         return args.shortest_path_matrix
     else:
         sp_matrix = np.array(shortest_path(csgraph=sparse_graph, directed=False))
         args.shortest_path_matrix = sp_matrix
         args.mean_shortest_path = sp_matrix.mean()
-        print("Mean shortest path 3", args.mean_shortest_path)
         return sp_matrix
 
 

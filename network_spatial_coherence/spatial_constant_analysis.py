@@ -65,11 +65,8 @@ def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild
     sparse_graph = convert_graph_type(graph=sparse_graph, args=args, desired_type='sparse')
     metrics = {}
     args.args_title = args.args_title + '_' + node_embedding_mode
-    # print("Network Name", args.network_name)
-    # print("Edge list name", args.edge_list_title)
-    # print("Original edge list name", args.original_edge_list_title)
 
-    print("length sparse graph", sparse_graph.shape[0])
+
 
     reconstruction = ImageReconstruction(graph=sparse_graph, dim=args.dim, node_embedding_mode=node_embedding_mode,
                                          manifold_learning_mode=manifild_learning_mode)
@@ -96,12 +93,10 @@ def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild
             original_points['node_ID'] = original_points['node_ID'].map(args.node_ids_map_old_to_new)
             original_points = original_points.dropna()
             original_points['node_ID'] = original_points['node_ID'].astype(int)
-            print(original_points)
             original_points_df = original_points.sort_values(by='node_ID')
-
             original_points = original_points_df[['x', 'y']].to_numpy()
 
-            print(len(args.node_ids_map_old_to_new))
+
 
 
 

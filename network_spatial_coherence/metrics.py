@@ -51,8 +51,8 @@ class QualityMetrics:
             # TODO: this probably raises error if len(reconstructed) < len(original)
             if count==0:
                 count+=1
-                print("original neighbors", original)
-                print("reconstructed neighbors", reconstructed)
+                # print("original neighbors", original)
+                # print("reconstructed neighbors", reconstructed)
             individual_knn.append(len(set(original).intersection(set(reconstructed[:n]))) / n)
 
         self.knn_individual = individual_knn

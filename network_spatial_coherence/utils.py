@@ -26,7 +26,7 @@ def get_largest_component_sparse(args, sparse_graph, original_node_ids):
         if not args.handle_all_subgraphs:   # Just get the largest component if we don't handle all subgraphs
             print("Disconnected (or disordered) graph! Finding largest component...")
             num_nodes = sparse_graph.shape[0]  # or sparse_graph.shape[1], as it should be a square matrix
-            print("Size of the total graph", num_nodes)
+
             # Find the largest component
             largest_component_label = np.bincount(labels).argmax()
             component_node_indices = np.where(labels == largest_component_label)[0]
@@ -34,7 +34,9 @@ def get_largest_component_sparse(args, sparse_graph, original_node_ids):
             largest_component = sparse_graph[component_node_indices][:, component_node_indices]
 
             args.num_points = largest_component.shape[0]
-            print("Size of largest connected component:", args.num_points)
+            if args.verbose:
+                print("Size of the total graph", num_nodes)
+                print("Size of largest connected component:", args.num_points)
             # Largeset component to an edge list
             rows, cols, _ = find(largest_component)
             edges = list(zip(rows, cols))
@@ -59,7 +61,8 @@ def get_largest_component_sparse(args, sparse_graph, original_node_ids):
             degrees = largest_component.sum(axis=0).A1  # Sum of non-zero entries in each column (or row)
             average_degree = np.mean(degrees)
             args.average_degree = average_degree
-            print(f"Average Degree sparse: {average_degree}")
+            if args.verbose:
+                print(f"Average Degree sparse: {average_degree}")
             args.num_points = largest_component.shape[0]
             args.component_node_ids = component_node_ids
 
@@ -110,14 +113,16 @@ def get_largest_component_sparse(args, sparse_graph, original_node_ids):
                 degrees = component_sparse.sum(axis=0).A1  # Sum of non-zero entries in each column (or row)
                 average_degree = np.mean(degrees)
                 args_subgraph.average_degree = average_degree
-                print(f"Average Degree sparse: {average_degree}")
+                if args.verbose:
+                    print(f"Average Degree sparse: {average_degree}")
                 args_subgraph.num_points = component_sparse.shape[0]
                 args_subgraph.component_node_ids = component_node_ids
 
                 if args_subgraph.false_edges_count and not args.false_edge_ids:  # TODO: adapt for bipartite case
                     component_sparse = add_random_edges_to_csrgraph(args_subgraph, component_sparse,
                                                                      args_subgraph.false_edges_count)
-                    print(args_subgraph.false_edge_ids)
+                    if args.verbose:
+                        print(args_subgraph.false_edge_ids)
 
                 args_subgraph.sparse_graph = component_sparse
                 args_subgraph_list.append(args_subgraph)
@@ -130,12 +135,14 @@ def get_largest_component_sparse(args, sparse_graph, original_node_ids):
         degrees = sparse_graph.sum(axis=0).A1  # Sum of non-zero entries in each column (or row)
         average_degree = np.mean(degrees)
         args.average_degree = average_degree
-        print(f"Average Degree sparse: {average_degree}")
+        if args.verbose:
+            print(f"Average Degree sparse: {average_degree}")
         args.num_points = sparse_graph.shape[0]
 
         if args.false_edges_count and not args.false_edge_ids:  # TODO: adapt for bipartite case
             sparse_graph = add_random_edges_to_csrgraph(args, sparse_graph, args.false_edges_count)
-            print(args.false_edge_ids)
+            if args.verbose:
+                print(args.false_edge_ids)
 
         # Save the graph in "args"
         args.sparse_graph = sparse_graph
@@ -272,7 +279,7 @@ def write_nx_graph_to_edge_list_df(args):
     edge_df.to_csv(f"{args.directory_map['edge_lists']}/{args.edge_list_title}", index=False)
     return args
 
-def check_edge_list_columns(edge_list_df):
+def check_edge_list_columns(args, edge_list_df):
     # Define allowed columns
     allowed_columns = {'source', 'target', 'weight', 'source (seq)', 'target (seq)'}
     mandatory_columns = {'source', 'target'}
@@ -287,18 +294,19 @@ def check_edge_list_columns(edge_list_df):
         missing_columns = mandatory_columns - set(edge_list_df.columns)
         raise ValueError(f"Mandatory columns missing: {missing_columns}")
 
-    # Check if 'weight' column exists
-    if 'weight' in edge_list_df.columns:
-        print("Column 'weight' exists. Threshold filtering will be performed with minimum weight...")
-    else:
-        print("Unweighted graph")
+    if args.verbose:
+        if 'weight' in edge_list_df.columns:
+            print("Column 'weight' exists. Threshold filtering will be performed with minimum weight...")
+        else:
+            print("Unweighted graph")
 
     if 'source (seq)' in edge_list_df.columns:
         edge_list_df = edge_list_df.drop('source (seq)', axis=1)
     if 'target (seq)' in edge_list_df.columns:
         edge_list_df = edge_list_df.drop('target (seq)', axis=1)
 
-    print("Edge list columns are valid.")
+    if args.verbose:
+        print("Edge list columns are valid.")
     return edge_list_df
 def load_graph(args, load_mode='igraph'):
     """
@@ -349,7 +357,7 @@ def load_graph(args, load_mode='igraph'):
     df = pd.read_csv(file_path)  # edge list
 
 
-    df = check_edge_list_columns(edge_list_df=df)
+    df = check_edge_list_columns(args=args, edge_list_df=df)
 
     if args.original_title is None:
         args.original_title = args.args_title
@@ -459,8 +467,9 @@ def load_graph(args, load_mode='igraph'):
         average_degree = np.mean(degrees)
         args.average_degree = average_degree
         args.num_points = largest_component.vcount()    # TODO: calling args.num_points changes the edge list title
-        print("average degree igraph", average_degree)
-        print("num points", args.num_points)
+        if args.verbose:
+            print("average degree igraph", average_degree)
+            print("num points", args.num_points)
 
 
         # Check bipartitedness
@@ -637,7 +646,8 @@ def load_graph_sparse_weighted(args, df):
 def convert_graph_type(args, graph, desired_type="igraph"):
     if desired_type == "igraph":
         if not isinstance(graph, ig.Graph):
-            print("Graph is not an igraph instance. Converting to igraph...")
+            if args.verbose:
+                print("Graph is not an igraph instance. Converting to igraph...")
             if args.igraph_graph is None:
                 igraph_graph = load_graph(args, load_mode="igraph")
             else:
@@ -649,8 +659,9 @@ def convert_graph_type(args, graph, desired_type="igraph"):
     elif desired_type == "sparse":
         # Check if the graph is already a sparse matrix (csgraph)
         if not isspmatrix(graph):
-            print("Original graph format/type:", type(graph).__name__)
-            print("Graph is not a csrgraph instance. Converting to csrgraph...")
+            if args.verbose:
+                print("Original graph format/type:", type(graph).__name__)
+                print("Graph is not a csrgraph instance. Converting to csrgraph...")
             if hasattr(args, 'sparse_graph') and args.sparse_graph is not None:
                 return args.sparse_graph
             else:

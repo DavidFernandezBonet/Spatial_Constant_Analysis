@@ -465,7 +465,8 @@ class GraphArgs:
             self._proximity_mode = self._base_proximity_mode
         if self.proximity_mode == "experimental":
             self.dim = 2          # TODO: change this if we ever have 3D experiments
-            print("Setting dimension to 2 for experimental settings...")
+            if self.verbose:
+                print("Setting dimension to 2 for experimental settings...")
 
         self.update_args_title()
 

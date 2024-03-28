@@ -4,12 +4,12 @@ base = {
     "dim": 2,
     "false_edges_count": 0,
     "colorfile": None,  # For coloring reconstruction. Alternatives: colorful_spiral.jpeg, colored_squares.png, dna.jpg, dna_cool2.png, None
-    "plot_graph_properties": False,
+    "plot_graph_properties": True,
     "show_plots": False,
 
     "large_graph_subsampling": True,   # If the graph is large, subsample it to save time and memory. Cap at 3000 nodes  #TODO: implement this
     "max_subgraph_size": 500,
-    "reconstruct": False,
+    "reconstruct": True,
     "reconstruction_mode": "STRND",  # STNRD, ggvec, landmark_isomap, PyMDE, MDS
 
     "spatial_coherence_validation": {"spatial_constant": True, "network_dimension": True, "gram_matrix": True},

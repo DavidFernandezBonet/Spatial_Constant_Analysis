@@ -974,9 +974,10 @@ def plot_spectral_gap_and_analyze_negatives(args, eigenvalues):
     else:
         negative_proportion = np.inf
 
-    print(f"Proportion of the sum of negative eigenvalues to positive eigenvalues: {negative_proportion:.4f}")
+    if args.verbose:
+        print(f"Proportion of the sum of negative eigenvalues to positive eigenvalues: {negative_proportion:.4f}")
 
-    print("Spectral gap score:", spectral_gaps[args.dim - 1])
+        print("Spectral gap score:", spectral_gaps[args.dim - 1])
 
     plot_folder2 = args.directory_map['spatial_coherence']
     plt.savefig(f"{plot_folder2}/gram_matrix_spectral_gap_{args.args_title}.svg")
@@ -1019,7 +1020,8 @@ def plot_gram_matrix_eigenvalues(args, shortest_path_matrix):
 
     # # this plots the contribution of the first 5 eigenvalues
     first_d_values_contribution_5_eigen, spectral_gap = plot_gram_matrix_first_eigenvalues_contribution(args, eigenvalues=eigenvalues_sp_matrix)
-    print("First d values contribution", first_d_values_contribution)
+    if args.verbose:
+        print("First d values contribution", first_d_values_contribution)
 
     # 2 - Spectral Gap
     spectral_gap_between_d_and_d1 = plot_spectral_gap_and_analyze_negatives(args, eigenvalues=eigenvalues_sp_matrix)
@@ -1124,24 +1126,23 @@ def plot_gram_matrix_first_eigenvalues_contribution(args, eigenvalues):
         gap_score_normalized = (mean_d_eigenvalues_normalized - d_plus_one_eigenvalue_normalized) / mean_d_eigenvalues_normalized
 
         # Custom legend handle for the arrow
-
-        arrow_handle = Line2D([0], [0], color='purple', marker='>', markersize=10, label='Spectral Gap Score',
-                              linestyle='None')
-        ax.annotate('', xy=(dim + 0.5, d_plus_one_eigenvalue_normalized), xytext=(dim + 0.5, mean_d_eigenvalues_normalized),
-                    arrowprops=dict(arrowstyle="<->", color='purple'), label="Spectral Gap Score")
-        ax.text(dim + 0.5, (mean_d_eigenvalues_normalized + d_plus_one_eigenvalue_normalized) / 2, f'{gap_score_normalized:.2f}',
-                ha='left', va='center', color='purple', fontsize=9, label='Spectral Gap Score')
-
-        ax.axhline(y=mean_d_eigenvalues_normalized, color='purple', linestyle='--', label="Mean Eigenvalue")
+        arrow_handle = Line2D([0], [0], color='purple', marker='>', markersize=10,
+                              label='Spectral Gap Score', linestyle='None')
+        ax.annotate('', xy=(dim + 0.5, d_plus_one_eigenvalue_normalized),
+                    xytext=(dim + 0.5, mean_d_eigenvalues_normalized),
+                    arrowprops=dict(arrowstyle="<->", color='purple'))
+        ax.text(dim + 0.5, (mean_d_eigenvalues_normalized + d_plus_one_eigenvalue_normalized) / 2,
+                f'{gap_score_normalized:.2f}', ha='left', va='center', color='purple', fontsize=9)
+        ax.axhline(y=mean_d_eigenvalues_normalized, color='purple', linestyle='--')
+        legend_handles, legend_labels = ax.get_legend_handles_labels()
+        legend_handles.append(arrow_handle)
+        legend_labels.append('Spectral Gap Score')
+        ax.legend(handles=legend_handles, labels=legend_labels)
 
     ax.set_xlabel('Eigenvalue Rank')
     ax.set_ylabel('Eigenvalue Contribution (%)')
     ax.set_xticks(range(1, 6))  # Ensure x-axis labels go from 1 to 5
 
-    # Add custom legend handle
-    legend_handles, legend_labels = ax.get_legend_handles_labels()
-    legend_handles.append(arrow_handle)  # Add the custom handle for the arrow
-    ax.legend(handles=legend_handles, labels=legend_labels + ['Spectral Gap Score'])
 
     # ax.legend()
 

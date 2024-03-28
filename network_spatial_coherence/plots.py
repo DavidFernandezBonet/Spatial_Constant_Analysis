@@ -470,7 +470,8 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
     if edges_df is None:
         edge_list_folder = args.directory_map["edge_lists"]
         edges_df = pd.read_csv(f"{edge_list_folder}/{args.edge_list_title}")
-        print(f"retrieving edges from {args.edge_list_title}")
+        if args.verbose:
+            print(f"retrieving edges from {args.edge_list_title}")
 
     # Get the positions
     if image_type == "original" or image_type == "mst":
@@ -627,7 +628,8 @@ def plot_shortest_path_heatmap(args, shortest_path_matrix, ax, vmin, vmax, posit
     if edges_df is None:
         edge_list_folder = args.directory_map["edge_lists"]
         edges_df = pd.read_csv(f"{edge_list_folder}/{args.edge_list_title}")
-        print(f"retrieving edges from {args.edge_list_title}")
+        if args.verbose:
+            print(f"retrieving edges from {args.edge_list_title}")
 
     central_node_ID = find_geometric_central_node(positions_df=positions_df)
     node_ID_to_shortest_path_mapping = (

@@ -813,7 +813,7 @@ def compute_dimension_prediction_fits(args, central_nodes, num_central_nodes, di
 
         # fit_dict = find_most_linear_part(log_x_data, log_y_data)
         fit_dict = linear_part_and_stats(log_x_data, log_y_data)  # with breakpoints
-        print("fit dict", fit_dict)
+
         # print("Best fit r2",  fit_dict['best_r2'], "Best slope", fit_dict['best_slope'], "Best p_value", fit_dict['best_p_value'],
         #       "Best std_err", fit_dict['best_std_err'])
 
@@ -846,7 +846,7 @@ def compute_dimension_prediction_fits(args, central_nodes, num_central_nodes, di
     results_dimension_prediction['std_predicted_dimension_list'] = std_errors
     results_dimension_prediction['fit_dict_list'] = fit_dict_list
     results_dimension_prediction['fit_data_list'] = fit_data_list
-    print("RESULTS DIMENSION PREDICTION FOR SEVERAL CENTRAL NODES", results_dimension_prediction)
+
     # TODO: this works only if we have more than 1 central node
     plot_main_predicted_dimension_1series(args, results_dimension_prediction, title=args.args_title)
     plot_main_predicted_dimension_multiple_fits(args, results_dimension_prediction, title=args.args_title)
