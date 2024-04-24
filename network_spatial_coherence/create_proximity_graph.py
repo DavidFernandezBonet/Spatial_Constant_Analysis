@@ -68,7 +68,6 @@ def generate_random_points_in_circle_or_sphere(num_points, R, dim):
     """
     if dim not in [2, 3]:
         raise ValueError("Dimension must be 2 or 3.")
-
     points = []
     while len(points) < num_points:
         # Generate points in a square/cube of side length 2R, centered at origin
@@ -106,11 +105,18 @@ def compute_epsilon_ball_graph(positions, radius):
 
 
 
-def epsilon_bipartite(positions, radius):
+def epsilon_bipartite(positions, radius, ratio=2):
+    """
+    ratio controls which proportion there is between the two types.
+    ratio = 2 --> 1:1
+    ratio = 3 --> 1:2
+    ratio = 4 --> 1:3
+    """
+
     positions = np.array(positions)
     total_len = len(positions)
     indices = np.arange(len(positions))
-    half = len(indices) // 2
+    half = len(indices) // ratio
     bottom_indices, top_indices = indices[:half], indices[half:]
 
     # Extract positions for bottom and top sets
@@ -156,13 +162,20 @@ def epsilon_bipartite(positions, radius):
 
     return distances, indices_combined
 
-def knn_bipartite(positions, k):
+def knn_bipartite(positions, k, ratio=2):
+    """
+    ratio controls which proportion there is between the two types.
+    ratio = 2 --> 1:1
+    ratio = 3 --> 1:2
+    ratio = 4 --> 1:3
+    """
 
     positions = np.array(positions)
     total_len = len(positions)
     indices = np.arange(len(positions))
 
-    half = len(indices) // 2
+    ## This partitions 50-50 (if ratio=2) the bipartite types. It could also be 66/33 if ratio =3 for example
+    half = len(indices) // ratio
     bottom_indices, top_indices = indices[:half], indices[half:]
 
     # Extract positions for bottom and top sets
@@ -313,8 +326,18 @@ def compute_proximity_graph(args, positions):
 
 
     if base_proximity_mode == "epsilon-ball" or base_proximity_mode == "epsilon_bipartite":
-        radius = compute_epsilon_ball_radius(density=args.num_points, intended_degree=args.intended_av_degree,
-                                             dim=args.dim, base_proximity_mode=base_proximity_mode)
+        point_mode = args.point_mode
+        if point_mode == "square":
+            density = args.num_points
+        elif point_mode == "circle":
+            if args.dim == 2:
+                density = args.num_points / np.pi
+            elif args.dim == 3:
+                density = args.num_points / (4 / 3 * np.pi)
+        else:
+            raise ValueError("Please input a valid point mode")
+        radius = compute_epsilon_ball_radius(density=density, intended_degree=args.intended_av_degree,
+                                             dim=args.dim, base_proximity_mode=base_proximity_mode, )
         print(f"Radius:{radius} for intended degree: {args.intended_av_degree}")
 
     if base_proximity_mode== "knn":
@@ -409,6 +432,7 @@ def write_positions(args, np_positions, output_path):
     output_file_path = f"{output_path}/positions_{title}.csv"
 
     # Write the DataFrame to a CSV file
+    args.positions_path = output_file_path
     positions_df.to_csv(output_file_path, index=False)
 
 
@@ -425,7 +449,6 @@ def sort_points_for_heatmap(points):
     # Calculate the Euclidean distance matrix
     points = np.array(points)
     dist_matrix = ssd.pdist(points, 'euclidean')
-    dist_square_matrix = ssd.squareform(dist_matrix)
     linkage_matrix = sch.linkage(dist_matrix, method='average')
     dendro = sch.dendrogram(linkage_matrix, no_plot=True)
     order = dendro['leaves']

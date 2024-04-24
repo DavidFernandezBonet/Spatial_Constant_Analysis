@@ -15,7 +15,7 @@ from scipy.interpolate import griddata
 
 from algorithms import find_geometric_central_node, compute_shortest_path_mapping_from_central_node
 from map_image_to_colors import map_points_to_colors
-
+import matplotlib.lines as mlines
 
 
 
@@ -513,9 +513,10 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
     if (args.colorfile is not None) and args.proximity_mode == "experimental":
         # Change the position ID for weinstein case also
         if args.colorfile[:4] == "wein" and image_type == 'original':  # mapping should only be applied when we have original image
-            positions_df['node_ID'] = positions_df['node_ID'].map(args.node_ids_map_old_to_new)
-            positions_df = positions_df.dropna()
-            positions_df['node_ID'] = positions_df['node_ID'].astype(int)
+            if args.node_ids_map_old_to_new is not None:
+                positions_df['node_ID'] = positions_df['node_ID'].map(args.node_ids_map_old_to_new)
+                positions_df = positions_df.dropna()
+                positions_df['node_ID'] = positions_df['node_ID'].astype(int)
 
         ### Plot from color ID file
         color_folder = args.directory_map["colorfolder"]
@@ -552,6 +553,11 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
 
     # Draw edges
     for _, row in edges_df.iterrows():
+        filtered_df = positions_df[positions_df['node_ID'] == row['source']]
+        if not filtered_df.empty:
+            source = filtered_df.iloc[0]
+        else:
+            continue
 
         source = positions_df[positions_df['node_ID'] == row['source']].iloc[0]     # TODO: is this the most efficient?
         target = positions_df[positions_df['node_ID'] == row['target']].iloc[0]
@@ -578,9 +584,11 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
             weights.append(row['weight'])
 
 
+
+
     if image_type == "original":
         plot_folder = args.directory_map["plots_original_image"]
-        plt.savefig(f"{plot_folder}/original_image_{args.args_title}", format='png')
+        plt.savefig(f"{plot_folder}/original_image_{args.args_title}", format='svg')
 
         plot_folder2 = args.directory_map['spatial_coherence']
         plt.savefig(f"{plot_folder2}/original_image_{args.args_title}.png", format='png')
@@ -602,6 +610,36 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
 
 
     if plot_weights_against_distance:
+        #### Create new dataframe
+        # Merge edges with positions for source nodes
+        merged_df = edges_df.merge(positions_df, how='left', left_on='source', right_on='node_ID',
+                                   suffixes=('', '_source'))
+        merged_df.rename(columns={'x': 'x_source', 'y': 'y_source', 'z': 'z_source'}, inplace=True)
+
+        # Merge edges with positions for target nodes
+        merged_df = merged_df.merge(positions_df, how='left', left_on='target', right_on='node_ID',
+                                    suffixes=('', '_target'))
+        merged_df.rename(columns={'x': 'x_target', 'y': 'y_target', 'z': 'z_target'}, inplace=True)
+
+        # Calculate Euclidean distance
+        if 'z_source' in merged_df.columns:  # Check if 3D data is available
+            merged_df['distance'] = np.sqrt(
+                (merged_df['x_source'] - merged_df['x_target']) ** 2 +
+                (merged_df['y_source'] - merged_df['y_target']) ** 2 +
+                (merged_df['z_source'] - merged_df['z_target']) ** 2
+            )
+        else:  # For 2D data
+            merged_df['distance'] = np.sqrt(
+                (merged_df['x_source'] - merged_df['x_target']) ** 2 +
+                (merged_df['y_source'] - merged_df['y_target']) ** 2
+            )
+
+        # Create the improved edge list
+        improved_edge_list = merged_df[['source', 'target', 'weight', 'distance']]
+        plot_folder = args.directory_map["plots_original_image"]
+        improved_edge_list.to_csv(f'{plot_folder}/improved_edge_list_{args.args_title}.csv', index=False)
+
+        print("esta passant...")
         plt.figure(figsize=(10, 6))
         plt.scatter(distances, weights, color='blue', edgecolor='k')
         plt.title('Euclidean Distance vs. Weight')
@@ -611,6 +649,41 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
         plt.yscale('log')
         plt.xscale('log')
         plt.savefig(f"{plot_folder}/weight_distance_{args.args_title}_log")
+
+        from scipy.stats import gaussian_kde
+        # Logarithmic transformation with a small shift to handle zero weights
+        log_weights = np.log10(np.array(weights) + 1)
+        log_distances = np.log10(np.array(distances) + 1)
+
+        # Calculate the point density
+        xy = np.vstack([log_distances, log_weights])
+        z = gaussian_kde(xy)(xy)
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sc = ax.scatter(log_distances, log_weights, c=z, s=50, edgecolor='none', cmap='viridis')
+        fig.colorbar(sc, ax=ax, label='Density')
+
+        ax.set_title('Log-Transformed Weights vs. Distances with Density Coloring')
+        ax.set_xlabel('Log of Euclidean Distance')
+        ax.set_ylabel('Log of Weight')
+        plt.savefig(f"{plot_folder}/weight_distance_{args.args_title}_log_with_density")
+
+
+        # ### Boxplot
+        # bins = np.linspace(min(distances), max(distances), num=10)  # Adjust num for more or fewer bins
+        # binned_distances = np.digitize(distances, bins)
+        #
+        # fig, ax = plt.subplots(figsize=(10, 6))
+        # for i in range(1, len(bins)):
+        #     data = [weights[binned_distances == j] for j in range(1, len(bins))]
+        #     ax.boxplot(data, positions=[(bins[j - 1] + bins[j]) / 2 for j in range(1, len(bins))],
+        #                widths=np.diff(bins) * 0.6)
+        #
+        # ax.set_title('Binned Euclidean Distance vs. Weight')
+        # ax.set_xlabel('Euclidean Distance')
+        # ax.set_ylabel('Weight')
+        # plt.xticks(ticks=bins, labels=[f"{bins[i]:.2f}" for i in range(len(bins))], rotation=45)
+        # plt.savefig(f"{plot_folder}/binned_weight_distance_boxplot.png")
+
 
     if args.show_plots:
         plt.show()
@@ -1118,3 +1191,280 @@ def validate_edge_list_numbers(edge_list, reconstructed_positions):
     return False, "; ".join(mismatch_info)
 
     return edge_values == expected_set
+
+
+def visualize_communities_positions(args, communities, modularity, edges_within_communities, edges_between_communities):
+    import networkx as nx
+    """
+    Visualize the network with community colors, false edges, and modularity score.
+
+    :param df: DataFrame with columns ['node_id', 'x', 'y'] for node positions.
+    :param communities: Array or list of community labels corresponding to df['node_id'].
+    :param false_edges: List of tuples (node_id_start, node_id_end) representing false edges.
+    :param modularity: Modularity score of the community partition.
+    """
+
+    plt.close()
+    plt.rcdefaults()
+
+    def read_position_df(args, return_df=False):
+        if hasattr(args, 'reconstruction_mode') and args.reconstruction_mode in args.args_title:
+            old_args_title = args.args_title.replace(f"_{args.reconstruction_mode}",
+                                                     "")
+        else:
+            old_args_title = args.args_title
+
+        if args.proximity_mode == "experimental" and args.original_positions_available:
+            filename = args.original_edge_list_title
+            print("FILENAME", filename)
+            match = re.search(r"edge_list_(.*?)\.csv", filename)
+            if match:
+                extracted_part = match.group(1)
+                old_args_title = extracted_part
+            else:
+                old_args_title = filename[:-4]
+
+
+        original_points_path = f"{args.directory_map['original_positions']}/positions_{old_args_title}.csv"
+        original_points_df = pd.read_csv(original_points_path)
+        # Choose columns based on the dimension specified in args.dim
+        if args.dim == 2:
+            columns_to_read = ['x', 'y']
+        elif args.dim == 3:
+            columns_to_read = ['x', 'y', 'z']
+        else:
+            raise ValueError("Invalid dimension specified. Choose '2D' or '3D'.")
+
+        # Read the specified columns from the DataFrame
+        original_points_array = np.array(original_points_df[columns_to_read])
+
+        if return_df:
+            return original_points_df
+        else:
+            return original_points_array
+
+    if args.node_ids_map_old_to_new is not None:
+        original_points = read_position_df(args, return_df=True)
+        original_points['node_ID'] = original_points['node_ID'].map(args.node_ids_map_old_to_new)
+        original_points = original_points.dropna()
+        original_points['node_ID'] = original_points['node_ID'].astype(int)
+        original_points_df = original_points.sort_values(by='node_ID')
+        original_points = original_points_df[['x', 'y']].to_numpy()
+    else:
+        original_points_df = read_position_df(args, return_df=True)
+
+
+    # ### Plotting
+    # Load positions DataFrame
+    positions_df = original_points_df
+    # node_ids_map_new_to_old = {v: k for k, v in args.node_ids_map_old_to_new.items()}
+    # Load edges DataFrame
+    edge_list_folder = args.directory_map["edge_lists"]
+    edges_df = pd.read_csv(f"{edge_list_folder}/{args.edge_list_title}")
+
+    # TODO: this plots everything to do with community detection and false edges
+    plot_edge_communities_and_distances(edges_within_communities, edges_between_communities, original_positions_df=positions_df)
+    plot_false_true_edges_percentages(args, edges_within_communities, edges_between_communities)
+    plot_edge_categories_and_distances(edges_within_communities, edges_between_communities, args.false_edge_ids,
+                                       original_positions_df=positions_df)
+    # Convert positions_df to a dictionary for efficient access
+    positions_dict = positions_df.set_index('node_ID')[['x', 'y']].T.to_dict('list')
+
+    # Map communities to colors
+    if isinstance(communities[0], (np.ndarray, np.generic)):
+        communities = communities[0]
+
+    print(communities)
+    communities_dict = {i: community for i, community in enumerate(communities)}
+    unique_communities = set(communities_dict.values())
+    # # community_colors = plt.cm.tab20(np.linspace(0, 1, len(unique_communities)))  # Adjust color map as needed
+    # # community_to_color = {community: color for community, color in zip(unique_communities, community_colors)}
+    community_colors = plt.cm.rainbow(np.linspace(0, 1, len(unique_communities)))
+    community_to_color = {community: color for community, color in zip(unique_communities, community_colors)}
+
+
+
+
+    plt.figure(figsize=(20, 30))
+
+    # Plot original points with community colors
+    for node_ID, (x, y) in positions_dict.items():
+        community_id = communities_dict[node_ID]
+        plt.plot(x, y, 'o', color=community_to_color[community_id])
+
+    # Plot edges
+    for _, row in edges_df.iterrows():
+        source_new_id = row['source']
+        target_new_id = row['target']
+
+        if source_new_id in positions_dict and target_new_id in positions_dict:
+            source_pos = positions_dict[source_new_id]
+            target_pos = positions_dict[target_new_id]
+
+            # Check if the edge is a false edge
+            is_false_edge = (row['source'], row['target']) in args.false_edge_ids or (
+            row['target'], row['source']) in args.false_edge_ids
+
+            edge_linewidth = 0.5
+            edge = (row['source'], row['target'])
+            if edge in edges_within_communities:
+                edge_color = "blue"
+            elif edge in edges_between_communities:
+                edge_color = "green"
+                edge_linewidth = 3
+            if is_false_edge:
+                edge_color = "red"
+                edge_linewidth = 1
+            edge_alpha = 0.1 if is_false_edge else 1
+
+            # distance = np.sqrt((source_pos[0] - target_pos[0]) ** 2 + (source_pos[1] - target_pos[1]) ** 2)
+            # if distance > 0.5:
+            #     if (row['source'], row['target']) in edges_within_communities:
+            #         edge_linewidth += 2  # Increase by 0.5 or any other value you see fit
+
+
+
+            plt.plot([source_pos[0], target_pos[0]], [source_pos[1], target_pos[1]], color=edge_color, alpha=edge_alpha,
+                     linewidth=edge_linewidth)
+
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.title(f'Modularity: {modularity}')
+
+
+
+
+    # Assuming the rest of your plotting code is in place and you've already created 'community_to_color'
+
+    # Create a list of proxy artists for the legend
+    legend_handles = [mlines.Line2D([], [], color=community_to_color[community], marker='o', linestyle='None',
+                                    markersize=10, label=f'Community {community}') for community in unique_communities]
+
+    plt.legend(handles=legend_handles, bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    # Make sure the plot is displayed properly with the legend outside
+    plt.tight_layout()
+
+    print("Modularity: ", modularity)
+    plt.show()
+
+
+def plot_edge_communities_and_distances(edges_within_communities, edges_between_communities, original_positions_df):
+    # Function to compute Euclidean distance between two points
+    def euclidean_distance(x1, y1, x2, y2):
+        return np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+
+    # Initialize lists to store distances
+    distances_within = []
+    distances_between = []
+
+    # Create a dictionary for quick node ID to position lookup
+    positions_dict = original_positions_df.set_index('node_ID').to_dict('index')
+
+    # Compute distances for edges within communities
+    for edge in edges_within_communities:
+        node1, node2 = edge
+        pos1 = positions_dict[node1]
+        pos2 = positions_dict[node2]
+        distance = euclidean_distance(pos1['x'], pos1['y'], pos2['x'], pos2['y'])
+        distances_within.append(distance)
+
+    # Compute distances for edges between communities
+    for edge in edges_between_communities:
+        node1, node2 = edge
+        pos1 = positions_dict[node1]
+        pos2 = positions_dict[node2]
+        distance = euclidean_distance(pos1['x'], pos1['y'], pos2['x'], pos2['y'])
+        distances_between.append(distance)
+
+    # Plotting the histograms
+    plt.figure(figsize=(10, 6))
+    plt.hist(distances_within, bins=20, alpha=0.5, label='Within Communities')
+    plt.hist(distances_between, bins=20, alpha=0.5, label='Between Communities')
+    plt.xlabel('Distance')
+    plt.ylabel('Frequency')
+    plt.title('Histogram of Distances')
+    plt.legend(loc='upper right')
+    plt.show()
+
+
+def plot_false_true_edges_percentages(args, edges_within_communities, edges_between_communities):
+    false_edges = set(args.false_edge_ids)  # Assuming this is already in the form of tuples (node1, node2)
+
+    false_within = sum(edge in false_edges for edge in edges_within_communities)
+    true_within = len(edges_within_communities) - false_within
+    false_between = sum(edge in false_edges for edge in edges_between_communities)
+    true_between = len(edges_between_communities) - false_between
+
+    total_false_edges = len(false_edges)
+
+    # Calculate the percentages for the main plot
+    total_within = len(edges_within_communities)
+    total_between = len(edges_between_communities)
+    percentages_within = [false_within / total_within * 100, true_within / total_within * 100]
+    percentages_between = [false_between / total_between * 100, true_between / total_between * 100]
+
+    # Calculate the percentages of false edges that are 'within' and 'between'
+    false_within_percentage = (false_within / total_false_edges) * 100 if total_false_edges > 0 else 0
+    false_between_percentage = (false_between / total_false_edges) * 100 if total_false_edges > 0 else 0
+
+    # Setup for subplots
+    fig, axs = plt.subplots(1, 2, figsize=(14, 5))
+
+    # Main plot with stacked bars
+    categories = ['Within Communities', 'Between Communities']
+    axs[0].bar(categories, [percentages_within[0], percentages_between[0]], label='False Edges', color='r')
+    axs[0].bar(categories, [percentages_within[1], percentages_between[1]],
+               bottom=[percentages_within[0], percentages_between[0]], label='True Edges', color='g')
+    axs[0].set_ylabel('Percentage')
+    axs[0].set_title('Percentage of False and True Edges')
+    axs[0].legend()
+
+    # Subplot for percentage of false edges that are within/between
+    axs[1].bar(['False Edges Distribution'], [false_within_percentage], label='Within', color='blue')
+    axs[1].bar(['False Edges Distribution'], [false_between_percentage], bottom=[false_within_percentage],
+               label='Between', color='orange')
+    axs[1].set_ylabel('Percentage')
+    axs[1].set_title('Distribution of False Edges')
+    axs[1].legend()
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_edge_categories_and_distances(edges_within_communities, edges_between_communities,
+                                                         false_edges, original_positions_df):
+    def euclidean_distance(x1, y1, x2, y2):
+        return np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+
+    positions_dict = original_positions_df.set_index('node_ID').to_dict('index')
+    categories = ['False Within', 'True Within', 'False Between', 'True Between']
+    distances = {category: [] for category in categories}
+
+    for edge in edges_within_communities.union(edges_between_communities):
+        node1, node2 = edge
+        pos1, pos2 = positions_dict[node1], positions_dict[node2]
+        distance = euclidean_distance(pos1['x'], pos1['y'], pos2['x'], pos2['y'])
+        if edge in edges_within_communities:
+            if edge in false_edges:
+                distances['False Within'].append(distance)
+            else:
+                distances['True Within'].append(distance)
+        else:
+            if edge in false_edges:
+                distances['False Between'].append(distance)
+            else:
+                distances['True Between'].append(distance)
+
+    fig, axs = plt.subplots(2, 2, figsize=(16, 12))
+    axs = axs.flatten()
+
+    for i, category in enumerate(categories):
+        axs[i].hist(distances[category], bins=20, alpha=0.7, label=category)
+        axs[i].set_title(category)
+        axs[i].set_xlabel('Distance')
+        axs[i].set_ylabel('Frequency')
+        axs[i].legend()
+
+    plt.tight_layout()
+    plt.show()

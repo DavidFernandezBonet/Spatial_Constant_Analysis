@@ -1,3 +1,4 @@
+import copy
 import sys
 from pathlib import Path
 
@@ -24,6 +25,11 @@ from functools import wraps
 from memory_profiler import memory_usage
 from check_latex_installation import check_latex_installed
 import scienceplots
+from datetime import datetime
+
+from algorithms import (detect_communities_and_compute_modularity, count_false_edges_within_communities,
+                        edge_list_to_sparse_graph, compute_largeworldness, randomly_delete_edges)
+from plots import visualize_communities_positions
 
 
 is_latex_in_os = check_latex_installed()
@@ -127,15 +133,16 @@ def plot_profiling_results(args):
 
 
 @profile
-def load_and_initialize_graph(args=None):
+def load_and_initialize_graph(args=None, point_mode='circle'):
     """
     Step 1: Load the graph with provided arguments and perform initial checks.
     """
     if args is None:
         args = GraphArgs()
-
+    # TODO: when adding false edges to experimental networks this fails, because it changes the proximity mode
     if args.proximity_mode != "experimental":
-        write_proximity_graph(args)
+        args.point_mode = point_mode
+        write_proximity_graph(args, point_mode=point_mode)
         if args.verbose:
             print("Number Nodes", args.num_points)
             print("Average Degree", args.average_degree)
@@ -168,17 +175,21 @@ def plot_and_analyze_graph(graph, args):
 
         else:
             positions_file = None
-
         plot_original_or_reconstructed_image(args, image_type='original', position_filename=positions_file)
+
+    elif args.proximity_mode != "experimental":
+        if args.plot_original_image:
+            plot_original_or_reconstructed_image(args, image_type='original')
+
 
     if args.plot_graph_properties:
         plot_graph_properties(args, igraph_graph=graph)
 @profile
-def compute_shortest_paths(graph, args):
+def compute_shortest_paths(graph, args, force_recompute=False):
     """
     Step 1.5: Compute shortest paths and store it in args. This is done only once.
     """
-    compute_shortest_path_matrix_sparse_graph(args=args, sparse_graph=graph)
+    compute_shortest_path_matrix_sparse_graph(args=args, sparse_graph=graph, force_recompute=force_recompute)
     return args
 
 
@@ -216,26 +227,33 @@ def network_dimension(args):
     """
     if args.proximity_mode != 'experimental':
         plot_all_heatmap_nodes = True
-    else:
-        plot_all_heatmap_nodes = False
-    results_dimension_prediction = run_dimension_prediction(args, distance_matrix=args.shortest_path_matrix,
+        results_dimension_prediction, fig_data, max_central_node = \
+            run_dimension_prediction(args, distance_matrix=args.shortest_path_matrix,
                                                       dist_threshold=int(args.mean_shortest_path),
                                                       num_central_nodes=12,
                                                       local_dimension=False, plot_heatmap_all_nodes=plot_all_heatmap_nodes,
                                                       msp_central_node=False, plot_centered_average_sp_distance=False)
+    else:
+        if args.original_positions_available:
+            plot_all_heatmap_nodes = True
+        else:
+            plot_all_heatmap_nodes = False
+        results_dimension_prediction = run_dimension_prediction(args, distance_matrix=args.shortest_path_matrix,
+                                                          dist_threshold=int(args.mean_shortest_path),
+                                                          num_central_nodes=12,
+                                                          local_dimension=False, plot_heatmap_all_nodes=plot_all_heatmap_nodes,
+                                                          msp_central_node=False, plot_centered_average_sp_distance=False)
     if args.verbose:
         print("Results predicted dimension", results_dimension_prediction)
 
-    if results_dimension_prediction is not None:
-        predicted_dimension = results_dimension_prediction['predicted_dimension']
-        std_predicted_dimension = results_dimension_prediction['std_predicted_dimension']
-        args.spatial_coherence_quantiative_dict.update({
-            'network_dim': predicted_dimension,
-            'network_dim_std': std_predicted_dimension
-        })
-        return args, results_dimension_prediction
-    else:
-        return
+    predicted_dimension = results_dimension_prediction['predicted_dimension']
+    std_predicted_dimension = results_dimension_prediction['std_predicted_dimension']
+    args.spatial_coherence_quantiative_dict.update({
+        'network_dim': predicted_dimension,
+        'network_dim_std': std_predicted_dimension
+    })
+    return args, results_dimension_prediction
+
 @profile
 def rank_matrix_analysis(args):
     """
@@ -244,7 +262,7 @@ def rank_matrix_analysis(args):
     first_d_values_contribution,\
     first_d_values_contribution_5_eigen,\
     spectral_gap, \
-        = plot_gram_matrix_eigenvalues(args=args, shortest_path_matrix=args.shortest_path_matrix)
+        last_spectral_gap = plot_gram_matrix_eigenvalues(args=args, shortest_path_matrix=args.shortest_path_matrix)
 
     # results_dict = {"first_d_values_contribution": first_d_values_contribution, "first_d_values_contribution_5_eigen":
     #     first_d_values_contribution_5_eigen, "spectral_gap": spectral_gap}
@@ -254,12 +272,40 @@ def rank_matrix_analysis(args):
     # return results_dict
     args.spatial_coherence_quantiative_dict.update( {
         'gram_total_contribution': first_d_values_contribution_5_eigen,
-        'gram_spectral_gap': spectral_gap
+        'gram_spectral_gap': spectral_gap,
+        'gram_last_spectral_gap': last_spectral_gap
     })
 
     return args, first_d_values_contribution
 
 
+def community_detection(graph, args):
+    n_runs = 100
+    communities, modularity = detect_communities_and_compute_modularity(graph, n_runs=n_runs)
+    if n_runs == 1:
+        edges_within_communities, edges_between_communities =\
+            count_false_edges_within_communities(args, communities)
+    else:
+        all_communities = communities  # several runs of the algorithm
+        edges_within_communities, edges_between_communities = (
+            identify_consistent_edge_classifications(args, all_communities))
+
+    false_edges_within_communities = set(args.false_edge_ids) & set(edges_within_communities)
+    print("Number of false edges inside communities:", len(false_edges_within_communities))
+    visualize_communities_positions(args, communities, modularity, edges_within_communities, edges_between_communities)
+    denoised_graph = edge_list_to_sparse_graph(edges_within_communities)
+
+    # Check if it is disconnected
+    n_components, labels = connected_components(csgraph=denoised_graph, directed=False, return_labels=True)
+    if n_components > 1:  # If not connected
+        print("Disconnected (or disordered) graph! Finding largest component...")
+
+    args.sparse_graph = denoised_graph
+    args = compute_shortest_paths(denoised_graph, args, force_recompute=True)
+
+    if args.mean_shortest_path == np.inf:
+        raise ValueError("Community detection deleted key edges: disconnected graph, mean shortest path is infinite")
+    return denoised_graph, args
 
 
 @profile
@@ -292,11 +338,7 @@ def reconstruct_graph(graph, args):
         mode of reconstruction and whether ground truth is considered available.
     """
 
-
-    # ground_truth_available = not (args.proximity_mode == "experimental" or args.large_graph_subsampling)
-    # TODO: is large_graph_-subsampling messinge up the indices or something? Why did exclude it
-
-    ground_truth_available = args.proximity_mode == "experimental" and args.original_positions_available
+    ground_truth_available = (args.proximity_mode == "experimental" and args.original_positions_available) or args.proximity_mode != "experimental"
 
     if args.verbose:
         print("running reconstruction...")
@@ -316,17 +358,29 @@ def reconstruct_graph(graph, args):
 def collect_graph_properties(args):
     # Create a dictionary with the graph properties
     args.num_edges = args.sparse_graph.nnz // 2
+    if args.false_edges_count:
+        false_edges_ratio = args.false_edges_count / (args.num_edges - args.false_edges_count)
+        args.false_edges_ratio = false_edges_ratio
+    else:
+        args.false_edges_ratio = 0
+
+    args.average_degree = (2 * args.num_edges) / args.num_points
+
     properties_dict = {
         'Property': ['Number of Points', 'Number of Edges', 'Average Degree', 'Clustering Coefficient',
-                     'Mean Shortest Path'],
+                     'Mean Shortest Path', 'Proximity Mode', 'Dimension'],
         'Value': [
             args.num_points,
-            args.num_edges ,
-            args.average_degree ,
+            args.num_edges,
+            args.average_degree,
             args.mean_clustering_coefficient,
-            args.mean_shortest_path
+            args.mean_shortest_path,
+            args.proximity_mode,
+            args.dim
         ]
     }
+
+    large_world_score = compute_largeworldness(args, sparse_graph=args.sparse_graph)
 
     # Create DataFrame
     graph_properties_df = pd.DataFrame(properties_dict)
@@ -341,6 +395,9 @@ def collect_graph_properties(args):
         args.spatial_coherence_quantiative_dict['clustering_coefficient'] = args.mean_clustering_coefficient
     if args.mean_shortest_path:
         args.spatial_coherence_quantiative_dict['mean_shortest_path'] = args.mean_shortest_path
+    args.spatial_coherence_quantiative_dict['largeworldness'] = large_world_score
+    args.spatial_coherence_quantiative_dict['proximity_mode'] = args.proximity_mode
+    args.spatial_coherence_quantiative_dict['dimension'] = args.dim
     return args, graph_properties_df
 
 def output_df_category_mapping():
@@ -359,10 +416,14 @@ def output_df_category_mapping():
         'network_dim_std': 'Network Dimension',
         'gram_total_contribution': 'Gram Matrix',
         'gram_spectral_gap': 'Gram Matrix',
+        'gram_last_spectral_gap': 'Gram Matrix',
         'KNN': 'Reconstruction',
         'CPD': 'Reconstruction',
         'GTA_KNN': 'Reconstruction',
-        'GTA_CPD': 'Reconstruction'
+        'GTA_CPD': 'Reconstruction',
+        'largeworldness': 'Graph Property',
+        'proximity_mode': 'Parameter',
+        'dimension': 'Parameter'
     }
     return category_mapping
 
@@ -377,6 +438,7 @@ def write_output_data(args):
 
     df_folder = args.directory_map['output_dataframe']
     output_df.to_csv(f"{df_folder}/quantitative_metrics_{args.args_title}.csv", index=False)
+    return output_df
 def run_pipeline(graph, args):
     """
     Main function: graph loading, processing, and analysis.
@@ -385,11 +447,18 @@ def run_pipeline(graph, args):
     # Assuming subsample_graph_if_necessary, plot_and_analyze_graph, compute_shortest_paths
     # don't return DataFrames and are just part of the processing
     # graph = subsample_graph_if_necessary(graph, args)  # this is done with the load function now
+    if args.true_edges_deletion_ratio:
+        args, graph = randomly_delete_edges(args, graph, delete_ratio=args.true_edges_deletion_ratio)
+
     plot_and_analyze_graph(graph, args)
     args = compute_shortest_paths(graph, args)
 
     # Collect graph properties into DataFrame
     args, graph_properties_df = collect_graph_properties(args)
+    if args.community_detection:
+        graph, args = community_detection(graph, args)
+
+
     # Conditional analysis based on args
     if args.spatial_coherence_validation['spatial_constant']:
         args, spatial_constant_df = spatial_constant_analysis(graph, args)
@@ -402,46 +471,63 @@ def run_pipeline(graph, args):
     if args.reconstruct:
         args, reconstruction_metrics_df = reconstruct_graph(graph, args)
 
-    write_output_data(args)
-    return args
+    output_df = write_output_data(args)
+    return args, output_df
+
+
+def run_pipeline_for_several_parameters(parameter_ranges):
+    args = GraphArgs()
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    param_keys = '_'.join(parameter_ranges.keys())  # Use keys to describe the folder
+    base_output_dir = args.directory_map['output_dataframe']
+    run_directory = f"{base_output_dir}/{timestamp}_{param_keys}"
+    os.makedirs(run_directory, exist_ok=True)
+
+    keys, values = zip(*parameter_ranges.items())
+    for value_combination in product(*values):
+        param_dict = dict(zip(keys, value_combination))
+        args = GraphArgs()
+        args.update_args(**param_dict)
+        graph, args = load_and_initialize_graph(args)
+
+        print("param dict", param_dict)
+        args, output_df = run_pipeline(graph, args)
+
+        new_rows = []
+        for key, value in param_dict.items():
+            new_rows.append({"Property": key, "Value": value, "Category": "Parameter"})
+            if key == "false_edges_count":
+                new_rows.append({"Property": "false_edges_ratio", "Value": getattr(args, 'false_edges_ratio', None),
+                                 "Category": "Parameter"})
+
+        new_df = pd.DataFrame(new_rows)
+        modified_output_df = output_df._append(new_df, ignore_index=True)
+        modified_output_df.to_csv(f"{run_directory}/quantitative_metrics_{args.args_title}.csv", index=False)
+        print("--------------------------------------------------")
+
 
 if __name__ == "__main__":
-    # create_project_structure()  # Create structure if not done before
-    # Load and process the graph
 
-    print("hel1")
-    graph, args = load_and_initialize_graph()
+    ### Multiple runs
+    parameter_ranges = {
+        "false_edges_count": [0, 10, 100, 500],
+        "true_edges_deletion_ratio": [0.0, 0.2, 0.4, 0.6],
+    }
+    run_pipeline_for_several_parameters(parameter_ranges=parameter_ranges)
 
-    if args.handle_all_subgraphs and type(graph) is list:
-        graph_args_list = graph
-        for i, graph_args in enumerate(graph_args_list):
-            print("iteration:", i, "graph size:", graph_args.num_points)
-            if graph_args.num_points > 30:  # only reconstruct big enough graphs
-                single_graph_args = run_pipeline(graph=graph_args.sparse_graph, args=graph_args)
-                # optionally profile every time
-                # plot_profiling_results(single_graph_args)  # Plot the results at the end
-
-    else:
-        single_graph_args = run_pipeline(graph, args)
-        plot_profiling_results(single_graph_args)  # Plot the results at the end
-
-    # # Modify individual parameters
-    # args = GraphArgs()
-    # args.show_plots = True
-    # args.dim = 2
-    # args.plot_graph_properties = False
-    # args.colorfile = 'dna_cool2.png'
-    # args.proximity_mode = 'delaunay_corrected'
-    # args.num_points = 1000
-    # args.large_graph_subsampling = True
+    #### Single run
+    # graph, args = load_and_initialize_graph(point_mode='circle')
     #
-    #
-    # # TODO: solve how it is updated, solve random plots popping up, solve graph with false edges after running spatial constant
-    #
-    # # Load and process the graph
-    # graph, args = load_and_initialize_graph(args=args)
-    #
-    # # Run the pipeline and plot the results
-    # single_graph_args = run_pipeline(graph, args)
-    # plot_profiling_results(single_graph_args)
+    # if args.handle_all_subgraphs and type(graph) is list:
+    #     graph_args_list = graph
+    #     for i, graph_args in enumerate(graph_args_list):
+    #         print("iteration:", i, "graph size:", graph_args.num_points)
+    #         if graph_args.num_points > 30:  # only reconstruct big enough graphs
+    #             single_graph_args = run_pipeline(graph=graph_args.sparse_graph, args=graph_args)
+    #             # optionally profile every time
+    #             # plot_profiling_results(single_graph_args)  # Plot the results at the end
+    # else:
+    #     single_graph_args = run_pipeline(graph, args)
+    #     plot_profiling_results(single_graph_args)  # Plot the results at the end
 

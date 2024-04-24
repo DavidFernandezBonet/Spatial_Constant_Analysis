@@ -315,7 +315,7 @@ def run_simulation_graph_growth(args, start_n_nodes=100, n_graphs=10, num_random
 
 def run_simulation_subgraph_sampling(args, graph, size_interval=100, n_subgraphs=10, add_false_edges=False,
                                      add_mst=False, parallel=True, false_edge_list=[0,1,2,3,4],
-                                     plot_spatial_constant_against_false_edges=False):
+                                     plot_spatial_constant_against_false_edges=False, return_simple_output=True):
     """
      Runs a simulation that samples subgraphs from a given graph (using BFS) to analyze various properties,
      optionally adding minimum spanning trees (MST) and/or false edges to the graph before sampling.
@@ -456,7 +456,8 @@ def run_simulation_subgraph_sampling(args, graph, size_interval=100, n_subgraphs
 
     else:   # If we don't add false edges
         #     # Generate subgraphs with BFS
-        print("running normal bfs")
+        if args.verbose:
+            print("running normal bfs")
         igraph_graph_copy = igraph_graph.copy()
         pool = multiprocessing.Pool(multiprocessing.cpu_count())
         tasks = [(size_subgraphs, args, igraph_graph_copy, n_subgraphs) for size_subgraphs in size_subgraph_list]
@@ -472,9 +473,13 @@ def run_simulation_subgraph_sampling(args, graph, size_interval=100, n_subgraphs
         csv_filename = f"spatial_constant_subgraph_sampling_{args.args_title}.csv"
         results_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}", index=False)
         # plot_sample_spatial_constant(args, results_df)  # This is an old barplot
-        processed_spatial_constant = process_spatial_constant_false_edge_df(combined_df=results_df,
-                                                                            false_edge_list=false_edge_list)
-        combined_df = processed_spatial_constant
+
+        processed_spatial_constant = process_spatial_constant_false_edge_df(combined_df=[results_df],
+                                                                            false_edge_list=[1])
+        if return_simple_output:
+            combined_df = processed_spatial_constant
+        else:
+            combined_df = results_df
 
         csv_filename = f"spatial_constant_subgraph_sampling_processed_{args.args_title}.csv"
         combined_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}",
@@ -493,7 +498,7 @@ def run_simulation_subgraph_sampling(args, graph, size_interval=100, n_subgraphs
 
 def process_spatial_constant_false_edge_df(combined_df, false_edge_list):
     # Initialize an empty DataFrame to store results
-    results_df = pd.DataFrame()
+    results_df_stored = pd.DataFrame()
 
     for dataframe, false_edge_count in zip(combined_df, false_edge_list):
         unique_sizes = dataframe['intended_size'].unique()
@@ -553,9 +558,9 @@ def process_spatial_constant_false_edge_df(combined_df, false_edge_list):
         })
 
         # Append the temporary DataFrame to the results DataFrame
-        results_df = pd.concat([results_df, temp_df], ignore_index=True)
+        results_df_stored = pd.concat([results_df_stored, temp_df], ignore_index=True)
 
-    spatial_constant_df = results_df
+    spatial_constant_df = results_df_stored
     return spatial_constant_df
 
 

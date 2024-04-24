@@ -42,6 +42,7 @@ def create_project_structure(target_dir=None):
         'slidetag_data': f'{project_root}/data/slidetag_data',
         'colorfolder': f'{project_root}/data/colorcode',
         'us_counties': f'{project_root}/data/us_counties',
+        'weinstein': f'{project_root}/data/weinstein',
 
         's_constant_results': f'{project_root}/results/individual_spatial_constant_results',
         'output_dataframe': f'{project_root}/results/output_dataframe',
@@ -57,6 +58,7 @@ def create_project_structure(target_dir=None):
         'plots_mst_image': f'{project_root}/results/plots/mst_image',
         'plots_euclidean_sp': f'{project_root}/results/plots/correlation_euclidean_sp',
         'spatial_coherence': f'{project_root}/results/plots/main_spatial_coherence_results',
+        'dataframes': f'{project_root}/results/plots/multiple_runs_dataframes',
 
 
         'plots_spatial_constant': f'{project_root}/results/plots/spatial_constant',
@@ -184,7 +186,8 @@ class GraphArgs:
         # Loading Args from configuration file
         self.code_folder = os.getcwd()
 
-
+        self.override_config_path = override_config_path
+        self.data_dir = data_dir
         self.unsorted_config = self.load_config(override_config_path)
         config = self.get_config(config_module=self.unsorted_config)
         self.config = config
@@ -198,6 +201,8 @@ class GraphArgs:
         self._dim = config.get('dim', 2)
         self._base_proximity_mode = config.get('proximity_mode', "knn")
         self._false_edges_count = config.get('false_edges_count', 0)  # TODO: is this simulation specific?
+        self.true_edges_deletion_ratio = config.get('true_edges_deletion_ratio', 0)
+        self.point_mode = None  # circle or square
         self.colorfile = config.get('colorfile')
         self.plot_graph_properties = config.get('plot_graph_properties', False)
         self.large_graph_subsampling = config.get('large_graph_subsampling', False)
@@ -206,6 +211,7 @@ class GraphArgs:
 
         self.handle_all_subgraphs = config.get('handle_all_subgraphs', False)
         self.spatial_coherence_validation = config.get('spatial_coherence_validation', False)
+        self.community_detection = config.get('comunity_detection', False)
         self.reconstruct = config.get('reconstruct', False)
         self.original_positions_available = config.get('original_positions_available', False)
         self.plot_original_image = config.get('plot_original_image', False)
@@ -246,10 +252,6 @@ class GraphArgs:
 
         # self.update_proximity_mode()
         self.update_args_title()
-
-
-
-
 
 
 
@@ -373,6 +375,12 @@ class GraphArgs:
         else:
             # Merge base with simulation settings
             return {**base, **simulation}
+
+
+    def update_args(self, **kwargs):
+        """updates attributes of GraphArgs objects given a dictionary"""
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def set_edge_list_title(self, title):
         if self.original_edge_list_title is None:  # Only set the original title once or when explicitly needed

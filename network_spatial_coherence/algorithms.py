@@ -19,8 +19,10 @@ from scipy.sparse.csgraph import connected_components
 from scipy.sparse.csgraph import breadth_first_order
 import networkx as nx
 from sklearn.manifold import MDS
-
-
+from community import community_louvain
+from scipy.sparse import coo_matrix, csr_matrix
+from collections import Counter
+from scipy.spatial import KDTree
 
 
 
@@ -874,7 +876,7 @@ def compute_shortest_path_mapping_from_central_node(central_node_ID, positions_d
     node_ID_to_shortest_path_mapping = dict(zip(positions_df['node_ID'], central_node_distances))
     return node_ID_to_shortest_path_mapping
 
-def compute_shortest_path_matrix_sparse_graph(sparse_graph, args=None):
+def compute_shortest_path_matrix_sparse_graph(sparse_graph, args=None, force_recompute=False):
     """
     Computes the shortest path matrix for a given sparse graph. If `args` is provided and contains a precomputed
     shortest path matrix, that matrix is returned instead of recomputing it. Otherwise, the shortest path matrix
@@ -904,12 +906,14 @@ def compute_shortest_path_matrix_sparse_graph(sparse_graph, args=None):
         - The shortest path computation is performed using the `shortest_path` function from scipy's csgraph module,
           assuming an undirected graph.
     """
+    # TODO: this doesn't force to recompute the shortest path matrix
     from utils import convert_graph_type
     sparse_graph = convert_graph_type(args, graph=sparse_graph, desired_type="sparse")
+
     if args is None:
         sp_matrix = np.array(shortest_path(csgraph=sparse_graph, directed=False))
         return sp_matrix
-    elif args is not None and args.shortest_path_matrix is not None:
+    elif (args is not None) and (args.shortest_path_matrix is not None) and (not force_recompute):
         return args.shortest_path_matrix
     else:
         sp_matrix = np.array(shortest_path(csgraph=sparse_graph, directed=False))
@@ -1045,3 +1049,306 @@ def sample_csgraph_subgraph(args, csgraph, min_nodes=3000):
     args.node_ids_map_old_to_new = {original: idx for idx, original in enumerate(original_indices)}
 
     return subgraph
+
+
+def detect_communities_and_compute_modularity(csgraph, n_runs=1):
+    all_communities = []
+    all_modularities = []
+    G = nx.from_scipy_sparse_array(csgraph)
+    for _ in range(n_runs):
+        partition = community_louvain.best_partition(G)
+        communities = np.zeros(G.number_of_nodes())
+        node_label_to_position = {node: i for i, node in enumerate(G.nodes())}
+        for node, community in partition.items():
+            node_position = node_label_to_position[node]
+            communities[node_position] = community
+        modularity = community_louvain.modularity(partition, G)
+        all_communities.append(communities)
+        all_modularities.append(modularity)
+    if n_runs == 1:
+        return all_communities[0], all_modularities[0]
+    else:
+        return all_communities, all_modularities
+
+
+def count_false_edges_within_communities(args, communities):
+    # Convert sparse graph to NetworkX graph
+    G = nx.from_scipy_sparse_array(args.sparse_graph)
+    node_to_community = {node: int(communities[i]) for i, node in enumerate(G.nodes())}
+
+    false_edges_within_communities_count = 0
+    edges_within_communities = set()
+    edges_between_communities = set()
+
+    # Iterate over all edges to categorize them
+    for i, (node1, node2) in enumerate(G.edges()):
+        # Check if both nodes are in the same community
+        if node_to_community[node1] == node_to_community[node2]:
+            edges_within_communities.add((node1, node2))
+            # If this edge is also listed as a false edge, increase the count
+            if (node1, node2) in args.false_edge_ids:
+                false_edges_within_communities_count += 1
+        else:
+            edges_between_communities.add((node1, node2))
+    print("false edges within communities", false_edges_within_communities_count)
+    return edges_within_communities, edges_between_communities
+
+
+def identify_consistent_edge_classifications(args, all_communities, within_threshold_ratio=0.4):
+    # within_threshold_ratio = 0.4 by default
+    G = nx.from_scipy_sparse_array(args.sparse_graph)
+
+    # Initialize containers for tracking edge classifications across runs
+    edges_within_communities_runs = [set() for _ in range(len(all_communities))]
+    edges_between_communities_runs = [set() for _ in range(len(all_communities))]
+
+    for run_idx, communities in enumerate(all_communities):
+        node_to_community = {node: int(communities[i]) for i, node in enumerate(G.nodes())}
+
+        # Classify edges for this run
+        for edge in G.edges():
+            node1, node2 = edge
+            if node_to_community[node1] == node_to_community[node2]:
+                edges_within_communities_runs[run_idx].add(edge)
+            else:
+                edges_between_communities_runs[run_idx].add(edge)
+
+    ### Old part where we don't weight it by  number of appearances in the run
+
+    # # Aggregate edge classifications across runs
+    # consistently_within = set.intersection(*edges_within_communities_runs)
+    # consistently_between = set.intersection(*edges_between_communities_runs)
+    #
+    # # Identify edges that were ever within communities across runs
+    # ever_within = set.union(*edges_within_communities_runs)
+    #
+    # # Edges that are likely true are those ever classified as within,
+    # # subtracting those consistently between gives edges that were at least once within but not always between
+    #
+    # ### There is a distinction between "ever within" and "consistently within".
+    # # likely_true_edges = ever_within - consistently_between
+    #
+    # likely_true_edges = consistently_within
+    # if ever_within != likely_true_edges:
+    #     print(f"Warning! {len(likely_true_edges)} out of {len(ever_within)} edges were likely true")
+    #
+    # # Consistently between communities edges are more likely to be false
+    # likely_false_edges = consistently_between
+
+    ### End of old part
+
+
+    ## This sets the edges that are more than 50% inside a community as probably true edges
+    within_counter = Counter(edge for run in edges_within_communities_runs for edge in run)
+    between_counter = Counter(edge for run in edges_between_communities_runs for edge in run)
+
+    # Determine the predominant classification for each edge
+    total_runs = len(edges_within_communities_runs)  # Assuming equal number of runs for both classifications
+    consistently_within = set()
+    consistently_between = set()
+
+    for edge in set(within_counter) | set(between_counter):  # Union of all edges seen
+        within_count = within_counter.get(edge, 0)
+        between_count = between_counter.get(edge, 0)
+
+        total_count = within_count + between_count
+
+        # Adjust the condition to use the within_threshold_ratio
+        if within_count / total_count > within_threshold_ratio:
+            consistently_within.add(edge)
+        elif within_count / total_count <= within_threshold_ratio and between_count > 0:
+            consistently_between.add(edge)
+
+    likely_true_edges = consistently_within
+    likely_false_edges = consistently_between
+    return likely_true_edges, likely_false_edges
+
+
+
+def edge_list_to_sparse_graph(edge_list):
+    # Flatten the edge list and get unique nodes
+    nodes = np.unique(np.array(list(edge_list)).flatten())
+    # Map node IDs to matrix indices
+    node_index = {node: i for i, node in enumerate(nodes)}
+
+    # Prepare data for the COO format matrix
+    row_indices = [node_index[edge[0]] for edge in edge_list]
+    col_indices = [node_index[edge[1]] for edge in edge_list]
+    data = np.ones(len(edge_list), dtype=int)
+
+    # Create a symmetric matrix by doubling the edge list (for undirected graph)
+    # and ensuring (i, j) and (j, i) entries are both filled
+    row_indices += col_indices
+    col_indices += [node_index[edge[0]] for edge in edge_list]  # Original row_indices
+    data = np.concatenate([data, data])  # Double the data
+
+    # Number of nodes
+    n = len(nodes)
+
+    # Create the COO-format matrix and convert to CSR
+    adjacency_matrix_coo = coo_matrix((data, (row_indices, col_indices)), shape=(n, n))
+    adjacency_matrix_csr = adjacency_matrix_coo.tocsr()
+
+    # Ensure the matrix is symmetric
+    adjacency_matrix_csr = (adjacency_matrix_csr + adjacency_matrix_csr.T) / 2
+
+    return adjacency_matrix_csr
+
+
+def generate_lattice_graph(N, k, dim=2):
+    # Step 1: Generate N points uniformly distributed in a square [0,1] x [0,1]
+
+    points = np.random.rand(N, dim)  # N points in 2 dimensions
+
+    # Step 2: Create a graph using KNN
+    tree = KDTree(points)  # Create a KD-tree for fast k-nearest neighbor lookup
+    edges = []
+    for i in range(N):
+        distances, indices = tree.query(points[i], k=k + 1)  # Query includes the point itself
+        for j in range(1, k + 1):  # Start from 1 to skip the point itself
+            edges.append((i, indices[j]))
+
+    # Step 3: Create and return the graph object using igraph
+    g = ig.Graph(edges=edges, directed=False)
+    g.vs['x'], g.vs['y'] = points[:, 0], points[:, 1]  # Store coordinates for plotting or further use
+
+    return g
+
+def compute_largeworldness(args, sparse_graph):
+    # Convert CSR matrix to igraph
+
+    N = sparse_graph.shape[0]
+    num_edges = sparse_graph.nnz // 2
+    k_avg = 2 * num_edges / N if N != 0 else 0
+
+    # Analytical mean shortest path for a random graph
+    mean_shortest_path_random = (np.log(N) - 0.5772) / np.log(k_avg) + 0.5
+    lattice_graph = generate_lattice_graph(N, int(k_avg), dim=args.dim)
+
+    mean_shortest_path_lattice_1d = lattice_graph.average_path_length()
+
+    mean_shortest_path_score = (args.mean_shortest_path - mean_shortest_path_random) / (mean_shortest_path_lattice_1d - mean_shortest_path_random)
+    print(f"Mean shortest path score: {mean_shortest_path_score}")
+    return mean_shortest_path_score
+
+
+def ensure_connected(csr_graph):
+    """ Check if the graph is fully connected """
+    n_components, labels = connected_components(csgraph=csr_graph, directed=False, return_labels=True)
+    # print(f"Number of connected components: {n_components}")
+    return n_components == 1
+
+
+
+def randomly_delete_edges(args, csr_graph, delete_ratio=0.1):
+    """
+    Randomly delete edges from a sparse CSR matrix graph, ensuring the graph remains fully connected.
+    Keeps the graph symmetric throughout the process.
+
+    Parameters:
+    args (object): Object that carries various properties and configurations.
+    csr_graph (sp.csr_matrix): The input graph in CSR format.
+    delete_ratio (float): The fraction of existing edges to attempt to delete.
+
+    Returns:
+    object, sp.csr_matrix: Updated args and the modified CSR graph.
+    """
+    # Ensure the graph is initially connected and symmetric
+    if not ensure_connected(csr_graph):
+        raise ValueError("Initial graph must be connected")
+
+    # Work with the upper triangle to avoid redundant operations
+    # csr_graph = sp.triu(csr_graph, format='csr')
+    rows, cols = csr_graph.nonzero()
+    if args.false_edge_ids:
+        # Create a set of tuples from the edges not to be deleted
+        protected_edges = set(tuple(edge) for edge in args.false_edge_ids)
+    else:
+        protected_edges = set()
+
+    # Gather all edge indices, excluding protected edges
+    all_edges = [(i, j) for i, j in zip(rows, cols) if (i, j) not in protected_edges and (j, i) not in protected_edges]
+
+    # Number of edges to attempt to delete
+    num_deletable_edges = len(all_edges)
+    edges_to_delete = int(num_deletable_edges * delete_ratio)
+
+    # Randomly select edges to delete
+    indices = list(range(num_deletable_edges))
+    random.shuffle(indices)
+
+    # Randomly select edges to delete
+    random.shuffle(all_edges)  # Shuffle the list of deletable edges
+
+    deletions = 0
+    for (row, col) in all_edges:
+        if deletions >= edges_to_delete:
+            break
+
+        # row = rows[idx]
+        # col = cols[idx]
+
+        # rows, cols = csr_graph.nonzero()
+        # csr_graph[cols, rows] = csr_graph[rows, cols]
+
+        # Temporarily remove the edge
+        original_value = csr_graph[row, col]
+        csr_graph[row, col] = 0
+        csr_graph[col, row] = 0  # Ensure symmetry
+        csr_graph = csr_graph + csr_graph.T - sp.diags(csr_graph.diagonal())
+
+        # Check if the graph is still connected
+        if not ensure_connected(csr_graph) or csr_graph[row, :].nnz == 0 or csr_graph[:, col].nnz == 0:
+            # If not connected, revert the deletion
+            csr_graph[row, col] = original_value
+            csr_graph[col, row] = original_value
+        else:
+            deletions += 1
+
+    # # Reinforce symmetry and correct diagonals if necessary
+    # csr_graph = csr_graph + csr_graph.T - sp.diags(csr_graph.diagonal())
+
+
+    csr_graph = replace_infinities_sparse(csr_graph)
+    # Logging and diagnostics
+    isolated_nodes = [i for i in range(csr_graph.shape[0]) if csr_graph.indptr[i] == csr_graph.indptr[i + 1]]
+    print("Isolated nodes:", isolated_nodes)
+    print("Is the graph still connected:", ensure_connected(csr_graph))
+    print("Number of points:", csr_graph.shape[0])
+    print("Number of deletions:", deletions)
+
+    # Extract and store the updated edge list
+    rows, cols = csr_graph.nonzero()
+    filtered_edges = [(i, j) for i, j in zip(rows, cols) if i < j]
+    edge_df = pd.DataFrame(filtered_edges, columns=['source', 'target'])
+    edge_list_folder = args.directory_map["edge_lists"]
+    args.args_title = args.args_title + f"_edge_del_ratio_{delete_ratio}"
+    edge_list_title = f"edge_list_{args.args_title}.csv"
+    edge_df.to_csv(f"{edge_list_folder}/{edge_list_title}", index=False)
+
+
+
+
+
+    args.edge_list_title = edge_list_title
+    args.sparse_graph = csr_graph
+    args.shortest_path_matrix = compute_shortest_path_matrix_sparse_graph(csr_graph, None)
+    args.mean_shortest_path = args.shortest_path_matrix.mean()
+    print("Mean shortest path:", args.mean_shortest_path)
+    print("Is the graph still connected 2:", ensure_connected(csr_graph))
+
+    return args, csr_graph
+
+
+def replace_infinities_sparse(sparse_matrix):
+    """
+    Replace all infinity values in a sparse matrix with 1.
+    """
+    coo_matrix = sparse_matrix.tocoo()
+    coo_matrix.data[np.isinf(coo_matrix.data)] = 1
+    if isinstance(sparse_matrix, sp.csr_matrix):
+        return sp.csr_matrix((coo_matrix.data, (coo_matrix.row, coo_matrix.col)), shape=sparse_matrix.shape)
+    elif isinstance(sparse_matrix, sp.csc_matrix):
+        return sp.csc_matrix((coo_matrix.data, (coo_matrix.row, coo_matrix.col)), shape=sparse_matrix.shape)
+    else:
+        raise ValueError("Unsupported sparse matrix format")

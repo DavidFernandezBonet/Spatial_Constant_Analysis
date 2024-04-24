@@ -9,6 +9,7 @@ from data_analysis import run_simulation_subgraph_sampling
 import matplotlib.colors as mcolors
 import pandas as pd
 from algorithms import compute_shortest_path_matrix_sparse_graph, select_false_edges_csr
+from gram_matrix_analysis import plot_gram_matrix_eigenvalues
 from utils import add_specific_random_edges_to_csrgraph, write_edge_list_sparse_graph
 from check_latex_installation import check_latex_installed
 from dimension_prediction import run_dimension_prediction
@@ -16,6 +17,7 @@ from gram_matrix_analysis import compute_gram_matrix_eigenvalues
 import copy
 import random
 import matplotlib
+import matplotlib.patches as mpatches
 matplotlib.use('Agg')  # Use a non-GUI backend, it was throwing errors otherwise when running the experimental setting
 
 # is_latex_in_os = check_latex_installed()
@@ -246,7 +248,7 @@ def make_spatial_constant_comparative_plot(args_list, title=""):
 
         net_results_df = run_simulation_subgraph_sampling(args, size_interval=size_interval, n_subgraphs=n_samples,
                                                           graph=igraph_graph,
-                                                          add_false_edges=False, add_mst=False)
+                                                          add_false_edges=False, add_mst=False, return_simple_output=False)
         net_results_df_list.append(net_results_df)
 
 
@@ -321,9 +323,14 @@ def make_gram_matrix_analysis_comparative_plot(args_list, title=""):
 
         eigenvalues_sp_matrix = compute_gram_matrix_eigenvalues(distance_matrix=args.shortest_path_matrix)
         eigenvalues_list.append(eigenvalues_sp_matrix)
+
+        first_d_values_contribution,\
+        first_d_values_contribution_5_eigen,\
+        spectral_gap, \
+            = plot_gram_matrix_eigenvalues(args=args, shortest_path_matrix=args.shortest_path_matrix)
     plot_eigenvalue_contributions_comparative(eigenvalues_list, args_list, title=title)
     plot_eigenvalue_contributions_comparative(eigenvalues_list, args_list, consider_first_eigenvalues_only=True, title=title)
-    plot_spectral_gap_comparative(args_list, eigenvalues_list, score_method='i', title=title)
+    plot_spectral_gap_comparative(args_list, eigenvalues_list, score_method='f', title=title)
     plot_pos_neg_eigenvalue_proportions_comparative(args_list, eigenvalues_list)
 
 
@@ -341,6 +348,9 @@ def plot_eigenvalue_contributions_comparative(eigenvalues_list, args_list, title
 
     colors = get_maximally_separated_colors(len(args_list))
 
+    # unicolor (uncomment if you want rainbow color)
+    colors = ['#009ADE'] * len(colors)
+
     cumulative_variances = []
 
     for i, (S, args) in enumerate(zip(eigenvalues_list, args_list)):
@@ -353,13 +363,20 @@ def plot_eigenvalue_contributions_comparative(eigenvalues_list, args_list, title
         cumulative_variance = np.cumsum(variance_proportion)
         cumulative_variance_first_d_eigenvalues = cumulative_variance[args.dim - 1]
 
+        selected_cumulative_variances = cumulative_variance[:args.dim]
+
+
+
+
         color = colors[i]
 
         # Plot on the first subplot
         axs[0].plot(range(1, len(S) + 1), cumulative_variance, '-o' , color=color)
         axs[0].axvline(x=args.dim, linestyle='--')
 
-        cumulative_variances.append((cumulative_variance_first_d_eigenvalues, color))
+        # Append the list of selected cumulative variances instead of a single value
+        cumulative_variances.append((selected_cumulative_variances, color))
+        # cumulative_variances.append((cumulative_variance_first_d_eigenvalues, color))
 
     # Setting for the first plot
     axs[0].set_xlabel('Eigenvalue Rank')
@@ -367,13 +384,44 @@ def plot_eigenvalue_contributions_comparative(eigenvalues_list, args_list, title
     axs[0].set_xscale('log')
     # axs[0].legend()
 
-    # Bar chart for cumulative variance comparison, using the same colors
-    for i, (cumulative_variance, color) in enumerate(cumulative_variances):
-        axs[1].bar(i, cumulative_variance, color=color)
+    # # Bar chart for cumulative variance comparison, using the same colors
+    # for i, (cumulative_variance, color) in enumerate(cumulative_variances):
+    #     axs[1].bar(i, cumulative_variance, color=color)
 
-    axs[1].set_ylabel('Contribution at Dim=%d' % args_list[0].dim)
+    for i, (variances, base_color) in enumerate(cumulative_variances):
+        # Bottom of the bar stack
+        bottom = 0
+        color_gradient = [mcolors.to_rgba(base_color, alpha=0.5 + 0.5 * (1 - j / (len(variances) - 1))) if len(
+            variances) > 1 else base_color for j in range(len(variances))]
+        # Iterate over each cumulative variance up to args.dim
+        for j in range(len(variances)):
+            # Plot the segment of the stacked bar
+            if j == 0:
+                height = variances[j]
+            else:
+                height = variances[j] - variances[j - 1]
+
+            color = color_gradient[j]
+            axs[1].bar(i, height,  bottom=bottom, color=color)
+            # Update the bottom to the top of the last bar
+            bottom = variances[j]
+
+    # Create custom legend
+    if args.dim == 3:
+        legend_labels = ['1st eigenvalue', '2nd eigenvalue', '3rd eigenvalue']
+
+    elif args.dim == 2:
+        legend_labels = ['1st eigenvalue', '2nd eigenvalue']
+
+    color = '#009ADE'  #TODO: change this if there is multicolor, maybe change it to black
+    legend_patches = [mpatches.Patch(color=color, alpha=0.5 + 0.5 * (1 - i / (args.dim - 1)), label=label) for i, label in
+                      enumerate(legend_labels)]
+    axs[1].legend(handles=legend_patches)
+
+    axs[1].set_ylabel('Variance Contribution')
     axs[1].set_xticks(range(len(args_list)))
     axs[1].set_xticklabels([args.network_name for args in args_list], rotation=0, ha="center")
+    axs[1].set_ylim(0, 1)
 
     plt.tight_layout()
     plot_folder = f"{args_list[0].directory_map['mds_dim']}"
@@ -444,10 +492,15 @@ def calculate_spectral_score(eigenvalues, args, method):
 
 
 def plot_spectral_gap_comparative(args_list, eigenvalues_list, score_method='i', title=''):
+
+    # score method chosen: i or f (i is using mean of all first eigenvalues, f just the last relevant one)
     fig, axs = plt.subplots(1, 2, figsize=(12, 4.5), gridspec_kw={'width_ratios': [1, 1]})
     # Retrieve the default color cycle
     # color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
     colors = get_maximally_separated_colors(len(args_list))
+
+    # unicolor (uncomment if you want different colors)
+    colors = ['#AF58BA'] * len(colors)
     spectral_gap_scores = []
 
     # Iterate over each network's eigenvalues and args
@@ -482,11 +535,11 @@ def plot_spectral_gap_comparative(args_list, eigenvalues_list, score_method='i',
     for j, spectral_gap_score in enumerate(spectral_gap_scores):
         color = colors[j]
         axs[1].bar(j, spectral_gap_score, color=color)
-    axs[1].set_xlabel('Network')
+
     axs[1].set_ylabel('Spectral Gap Score')
     axs[1].set_xticks(range(len(args_list)))
     axs[1].set_xticklabels([args.network_name for args in args_list], rotation=0, ha="center")
-
+    axs[1].set_ylim(0, 1)
     plt.tight_layout()
     plot_folder = f"{args_list[0].directory_map['mds_dim']}"
     plt.savefig(f"{plot_folder}/comparative_spectral_gap_{title}.svg")
@@ -494,6 +547,7 @@ def plot_spectral_gap_comparative(args_list, eigenvalues_list, score_method='i',
     plt.savefig(f"{plot_folder2}/comparative_spectral_gap_{title}.svg")
     if args.show_plots:
         plt.show()
+
 
 
 def plot_pos_neg_eigenvalue_proportions_comparative(args_list, eigenvalues_list):
@@ -558,13 +612,16 @@ if __name__ == "__main__":
         ### Experimental
         # pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv
         # pixelgen_example_graph.csv
-        edge_list_titles_dict = {"weinstein_data_corrected_february.csv": ('W', [5, 10, 15]),
-                            "pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv": ('PXL', None),
-                            "subgraph_8_nodes_160_edges_179_degree_2.24.pickle": ('HL-S', None),
-                            "subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle": ('HL-E', None)}
-        # edge_list_titles_dict = {"weinstein_data_corrected_february.csv": [5,10,15],
-        #                     "subgraph_8_nodes_160_edges_179_degree_2.24.pickle": None,
-        #                          }
+
+        ### All experimental data
+        # edge_list_titles_dict = {"weinstein_data_corrected_february.csv": ('W', [5, 10, 15]),
+        #                     "pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv": ('PXL', None),
+        #                     "subgraph_8_nodes_160_edges_179_degree_2.24.pickle": ('HL-S', None),
+        #                     "subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle": ('HL-E', None)}
+
+        ### Just Weinstein's
+        edge_list_titles_dict = {"weinstein_data_corrected_february.csv": [5, 10, 15],
+                                 }
         title = "Experimental Comparison"
         args_list = generate_experimental_graphs(edge_list_titles_dict=edge_list_titles_dict)
     else:

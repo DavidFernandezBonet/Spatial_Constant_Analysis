@@ -16,6 +16,7 @@ import os
 
 from algorithms import *
 from plots import plot_weight_distribution
+from plots import plot_original_or_reconstructed_image
 from structure_and_args import GraphArgs
 import warnings
 import re
@@ -79,7 +80,7 @@ def get_largest_component_sparse(args, sparse_graph, original_node_ids):
             for component_label in range(n_components):
 
                 ### Have a graph args for every subgraph
-                args_subgraph = GraphArgs()
+                args_subgraph = GraphArgs(override_config_path=args.override_config_path, data_dir=args.data_dir)
                 component_node_indices = np.where(labels == component_label)[0]
                 component_node_ids = original_node_ids[component_node_indices]
                 component_sparse = sparse_graph[component_node_indices][:, component_node_indices]
@@ -194,11 +195,7 @@ def read_edge_list(args):
 
 
 def read_position_df(args, return_df=False):
-    if hasattr(args, 'reconstruction_mode') and args.reconstruction_mode in args.args_title:
-        old_args_title = args.args_title.replace(f"_{args.reconstruction_mode}",
-                                                 "")
-    else:
-        old_args_title = args.args_title
+
 
     if args.proximity_mode == "experimental" and args.original_positions_available:
         filename = args.original_edge_list_title
@@ -207,8 +204,16 @@ def read_position_df(args, return_df=False):
             extracted_part = match.group(1)
 
         old_args_title = extracted_part
+        original_points_path = f"{args.directory_map['original_positions']}/positions_{old_args_title}.csv"
+    else:
+        original_points_path = args.positions_path
+        # if hasattr(args, 'reconstruction_mode') and args.reconstruction_mode in args.args_title:
+        #     old_args_title = args.args_title.replace(f"_{args.reconstruction_mode}",
+        #                                              "")
+        # else:
+        #     old_args_title = args.args_title
 
-    original_points_path = f"{args.directory_map['original_positions']}/positions_{old_args_title}.csv"
+
     original_points_df = pd.read_csv(original_points_path)
     # Choose columns based on the dimension specified in args.dim
     if args.dim == 2:
@@ -397,6 +402,12 @@ def load_graph(args, load_mode='igraph'):
 
             if args.plot_graph_properties:
                 plot_weight_distribution(args, edge_list_with_weight_df=df)
+                if args.original_positions_available:
+                    positions_file = f"positions_{args.network_name}.csv"
+                    if "weinstein" in args.network_name:
+                        args.colorfile = 'weinstein_colorcode_february_corrected.csv'
+                    plot_original_or_reconstructed_image(args, image_type='original', edges_df=df,  position_filename=positions_file,
+                                                         plot_weights_against_distance=True)
             df = df[df["weight"] > args.weight_threshold]
 
 

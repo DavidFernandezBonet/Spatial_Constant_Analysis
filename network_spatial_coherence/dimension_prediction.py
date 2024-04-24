@@ -1098,7 +1098,12 @@ def compute_and_plot_predicted_dimensions_for_all_nodes(args, distance_count_mat
 
     # Load original positions
     original_position_folder = args.directory_map["original_positions"]
-    positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.original_title}.csv")
+
+    if args.proximity_mode == "experimental" and args.original_positions_available:
+        positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.network_name}.csv")
+    else:
+        positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.original_title}.csv")
+
 
     if args.node_ids_map_old_to_new:
         positions_df['node_ID'] = positions_df['node_ID'].map(args.node_ids_map_old_to_new)
@@ -1152,6 +1157,18 @@ def compute_and_plot_predicted_dimensions_for_all_nodes(args, distance_count_mat
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
     plt.colorbar(scatter, label='Predicted Dimension')
+
+
+    if args.false_edge_ids:
+        for false_edge in args.false_edge_ids:
+            source_new_id = false_edge[0]
+            target_new_id = false_edge[1]
+            # Draw line between the source and target
+            ax.plot([positions_df.loc[source_new_id, 'x'], positions_df.loc[target_new_id, 'x']],
+                    [positions_df.loc[source_new_id, 'y'], positions_df.loc[target_new_id, 'y']],
+                    color='red',  # Different color for false edges
+                    linewidth=2)  # Thicker line for emphasis
+
     plt.savefig(f'{plot_folder}/heatmap_predicted_dimension_{args.args_title}_{title}', format=form)
     if args.show_plots:
         plt.show()

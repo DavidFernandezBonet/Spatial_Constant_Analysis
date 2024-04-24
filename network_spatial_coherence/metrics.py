@@ -14,6 +14,10 @@ from utils import validate_edge_list_numbers
 
 
 class QualityMetrics:
+    """usage:
+            qm = QualityMetrics(original_points, reconstructed_points)
+            og_metrics_dict = qm.evaluate_metrics()
+    """
     def __init__(self, original_points, reconstructed_points, k=15, threshold=1000, compute_distortion=False):
         """
         :param k: the "k" of the knn metric
