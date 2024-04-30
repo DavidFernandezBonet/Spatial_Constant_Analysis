@@ -6,7 +6,7 @@ from curve_fitting import CurveFitting
 import seaborn as sns
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
-
+from sklearn.metrics import roc_curve, auc, precision_recall_curve, confusion_matrix
 
 
 import scienceplots
@@ -363,7 +363,7 @@ def plot_spatial_constant_variation(args, spatial_constant_variation_results_df)
 
 
 def plot_original_or_reconstructed_image(args, image_type="original", edges_df=None, position_filename=None,
-                                         plot_weights_against_distance=False):
+                                         plot_weights_against_distance=False, positions_df=None):
     """Plots the original or reconstructed image based on the provided arguments.
 
     This function handles the plotting of either the original or reconstructed graph images,
@@ -476,12 +476,13 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
     # Get the positions
     if image_type == "original" or image_type == "mst":
 
-        original_position_folder = args.directory_map["original_positions"]
-        if position_filename is None:
-            positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.original_title}.csv")
-            # positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.args_title}.csv")
-        else:
-            positions_df = pd.read_csv(f"{original_position_folder}/{position_filename}")
+        if positions_df is None:
+            original_position_folder = args.directory_map["original_positions"]
+            if position_filename is None:
+                positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.original_title}.csv")
+                # positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.args_title}.csv")
+            else:
+                positions_df = pd.read_csv(f"{original_position_folder}/{position_filename}")
 
         if args.colorfile is not None:
             # Check if the colorfile is an image
@@ -585,27 +586,27 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
 
 
 
-
+    format_extension = '.svg' if args.num_points < 1000 else '.png'
     if image_type == "original":
         plot_folder = args.directory_map["plots_original_image"]
-        plt.savefig(f"{plot_folder}/original_image_{args.args_title}", format='svg')
+        plt.savefig(f"{plot_folder}/original_image_{args.args_title}{format_extension}")
 
         plot_folder2 = args.directory_map['spatial_coherence']
-        plt.savefig(f"{plot_folder2}/original_image_{args.args_title}.png", format='png')
+        plt.savefig(f"{plot_folder2}/original_image_{args.args_title}{format_extension}")
         # plt.savefig(f"{plot_folder}/original_image_{args.args_title}", format='svg')
     elif image_type == "mst":
         plot_folder = args.directory_map["plots_mst_image"]
-        plt.savefig(f"{plot_folder}/mst_image_{args.args_title}", format='png')
+        plt.savefig(f"{plot_folder}/mst_image_{args.args_title}{format_extension}")
         # plt.savefig(f"{plot_folder}/mst_image_{args.args_title}", format='svg')
         plot_folder2 = args.directory_map['spatial_coherence']
-        plt.savefig(f"{plot_folder2}/mst_image_{args.args_title}", format='png')
+        plt.savefig(f"{plot_folder2}/mst_image_{args.args_title}{format_extension}")
     else:
         plot_folder = args.directory_map["plots_reconstructed_image"]
         plot_folder2 = args.directory_map['spatial_coherence']
         plot_folder3 = args.directory_map['rec_images_subgraphs']
-        plt.savefig(f"{plot_folder}/reconstructed_image_{args.args_title}", format='png')
-        plt.savefig(f"{plot_folder2}/reconstructed_image_{args.args_title}", format='png')
-        plt.savefig(f"{plot_folder3}/reconstructed_image_{args.args_title}", format='png')
+        plt.savefig(f"{plot_folder}/reconstructed_image_{args.args_title}{format_extension}")
+        plt.savefig(f"{plot_folder2}/reconstructed_image_{args.args_title}{format_extension}")
+        plt.savefig(f"{plot_folder3}/reconstructed_image_{args.args_title}{format_extension}")
         # plt.savefig(f"{plot_folder}/reconstructed_image_{args.args_title}", format='svg')
 
 
@@ -1193,7 +1194,8 @@ def validate_edge_list_numbers(edge_list, reconstructed_positions):
     return edge_values == expected_set
 
 
-def visualize_communities_positions(args, communities, modularity, edges_within_communities, edges_between_communities):
+def visualize_communities_positions(args, communities, modularity, edges_within_communities, edges_between_communities,
+                                    edge_score_dict=None, betweenness_dict=None, rank_score_dict=None):
     import networkx as nx
     """
     Visualize the network with community colors, false edges, and modularity score.
@@ -1251,7 +1253,10 @@ def visualize_communities_positions(args, communities, modularity, edges_within_
         original_points_df = original_points.sort_values(by='node_ID')
         original_points = original_points_df[['x', 'y']].to_numpy()
     else:
-        original_points_df = read_position_df(args, return_df=True)
+        original_position_folder = args.directory_map["original_positions"]
+        original_points_df = pd.read_csv(f"{original_position_folder}/positions_{args.original_title}.csv")
+
+        # original_points_df = read_position_df(args, return_df=True)
 
 
     # ### Plotting
@@ -1264,6 +1269,15 @@ def visualize_communities_positions(args, communities, modularity, edges_within_
 
     # TODO: this plots everything to do with community detection and false edges
     plot_edge_communities_and_distances(edges_within_communities, edges_between_communities, original_positions_df=positions_df)
+    if edge_score_dict is not None:
+        plot_edge_scores_vs_distances(args, edge_score_dict, original_positions_df=positions_df, score_interpretation='negative')
+
+    if betweenness_dict is not None:
+        plot_edge_scores_vs_distances(args, betweenness_dict, original_positions_df=positions_df, score_interpretation='positive')
+
+    if rank_score_dict is not None:
+        plot_edge_scores_vs_distances(args, rank_score_dict, original_positions_df=positions_df, score_interpretation='negative')
+
     plot_false_true_edges_percentages(args, edges_within_communities, edges_between_communities)
     plot_edge_categories_and_distances(edges_within_communities, edges_between_communities, args.false_edge_ids,
                                        original_positions_df=positions_df)
@@ -1386,6 +1400,108 @@ def plot_edge_communities_and_distances(edges_within_communities, edges_between_
     plt.title('Histogram of Distances')
     plt.legend(loc='upper right')
     plt.show()
+
+
+def plot_edge_scores_vs_distances(args, edge_score_dict, original_positions_df, score_interpretation='positive'):
+    # Function to compute Euclidean distance between two points
+    def euclidean_distance(x1, y1, x2, y2):
+        return np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+
+    # Create a dictionary for quick node ID to position lookup
+    positions_dict = original_positions_df.set_index('node_ID').to_dict('index')
+
+    # Initialize lists to store scores and distances
+    scores = []
+    distances = []
+    colors = []
+    labels = []  # This will hold the binary labels needed for ROC computation
+
+
+    # Compute distances and retrieve scores for edges
+    for edge, score in edge_score_dict.items():
+        node1, node2 = edge
+        pos1 = positions_dict[node1]
+        pos2 = positions_dict[node2]
+        distance = euclidean_distance(pos1['x'], pos1['y'], pos2['x'], pos2['y'])
+
+        if edge in args.false_edge_ids:
+            colors.append('red')
+            labels.append(1)  # False edge
+        else:
+            colors.append('blue')
+            labels.append(0)  # True edge
+
+        distances.append(distance)
+        if score_interpretation == 'negative':
+            # Transform score if higher scores indicate a false edge
+            score = max(edge_score_dict.values()) + 1 - score
+        scores.append(score)
+
+    # Set up the figure and the subplots
+    fig, axs = plt.subplots(1, 3, figsize=(18, 6))  # Now three subplots
+
+    # Scatter plot of scores vs distances
+    axs[0].scatter(distances, scores, alpha=0.5, color=colors)
+    axs[0].set_xlabel('Distance')
+    axs[0].set_ylabel('Score')
+    axs[0].set_title('Plot of Score vs. Distance for Edges')
+
+    # ROC curve and AUC
+    fpr, tpr, _ = roc_curve(labels, scores)
+    roc_auc = auc(fpr, tpr)
+    axs[1].plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
+    axs[1].plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    axs[1].set_xlim([0.0, 1.0])
+    axs[1].set_ylim([0.0, 1.05])
+    axs[1].set_xlabel('False Positive Rate')
+    axs[1].set_ylabel('True Positive Rate')
+    axs[1].set_title('Receiver Operating Characteristic')
+    axs[1].legend(loc="lower right")
+
+    # Precision-Recall curve
+    precision, recall, thresholds = precision_recall_curve(labels, scores)
+    pr_auc = auc(recall, precision)
+    axs[2].plot(recall, precision, color='blue', lw=2, label='Precision-Recall curve (area = %0.2f)' % pr_auc)
+    axs[2].set_xlabel('Recall')
+    axs[2].set_ylabel('Precision')
+    axs[2].set_title('Precision-Recall Curve')
+    axs[2].legend(loc="best")
+
+    # Display the plot
+    plt.tight_layout()
+    plt.show()
+
+    f_scores = (2 * precision * recall) / (np.maximum(precision + recall, 1e-8))
+    optimal_idx = np.argmax(f_scores)
+    optimal_threshold = thresholds[optimal_idx] if optimal_idx < len(thresholds) else thresholds[-1]
+
+
+    #### Additional plotting for a specific threshold of the PR curve
+    # Plotting the Precision-Recall curve
+    plt.figure(figsize=(10, 6))
+    plt.plot(recall, precision, label=f'Precision-Recall curve (AUC = {auc(recall, precision):.2f})')
+    plt.scatter(recall[optimal_idx], precision[optimal_idx], color='red', s=100, edgecolor='k', zorder=5)
+    plt.text(recall[optimal_idx], precision[optimal_idx], f'  Threshold={optimal_threshold:.2f}',
+             verticalalignment='bottom', horizontalalignment='right')
+
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.title('Precision-Recall Curve with Optimal Threshold Highlighted')
+    plt.legend()
+    plt.show()
+
+    predictions = [1 if x >= optimal_threshold else 0 for x in scores]
+    conf_matrix = confusion_matrix(labels, predictions)
+
+    plt.figure(figsize=(6, 6))
+    sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues', cbar=False, square=True)
+    plt.xlabel('Predicted Label')
+    plt.ylabel('True Label')
+    plt.title('Confusion Matrix at Optimal Threshold: {:.2f}'.format(optimal_threshold))
+    plt.xticks([0.5, 1.5], ['True Edge', 'False Edge'], rotation=0)
+    plt.yticks([0.5, 1.5], ['True Edge', 'False Edge'], rotation=0)
+    plt.show()
+
 
 
 def plot_false_true_edges_percentages(args, edges_within_communities, edges_between_communities):

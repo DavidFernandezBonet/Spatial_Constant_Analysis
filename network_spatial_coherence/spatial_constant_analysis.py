@@ -1,3 +1,4 @@
+import copy
 import sys
 import os
 import matplotlib.pyplot as plt
@@ -89,13 +90,15 @@ def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild
     if ground_truth_available:
         # Case where we had some index change: e.g. disconnected graph, subsampled graph
         if args.node_ids_map_old_to_new is not None:
-            original_points = read_position_df(args, return_df=True)
+            original_df = read_position_df(args, return_df=True)
+            original_points = copy.copy(original_df)
             original_points['node_ID'] = original_points['node_ID'].map(args.node_ids_map_old_to_new)
             original_points = original_points.dropna()
             original_points['node_ID'] = original_points['node_ID'].astype(int)
             original_points_df = original_points.sort_values(by='node_ID')
             original_points = original_points_df[['x', 'y']].to_numpy()
 
+            plot_original_or_reconstructed_image(args, image_type='original', positions_df=original_df)
 
 
 
@@ -144,8 +147,10 @@ def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild
             # plt.title('Original Points and Edges')
             # plt.show()
 
+
         else:
             original_points = read_position_df(args)
+            plot_original_or_reconstructed_image(args, image_type='original')
         qm = QualityMetrics(original_points, reconstructed_points)
         og_metrics_dict = qm.evaluate_metrics()
         metrics["ground_truth"] = og_metrics_dict

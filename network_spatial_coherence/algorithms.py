@@ -1094,7 +1094,7 @@ def count_false_edges_within_communities(args, communities):
     return edges_within_communities, edges_between_communities
 
 
-def identify_consistent_edge_classifications(args, all_communities, within_threshold_ratio=0.4):
+def identify_consistent_edge_classifications(args, all_communities, within_threshold_ratio=0.3):
     # within_threshold_ratio = 0.4 by default
     G = nx.from_scipy_sparse_array(args.sparse_graph)
 
@@ -1147,23 +1147,30 @@ def identify_consistent_edge_classifications(args, all_communities, within_thres
     consistently_within = set()
     consistently_between = set()
 
+    edge_score_dict = {}
     for edge in set(within_counter) | set(between_counter):  # Union of all edges seen
         within_count = within_counter.get(edge, 0)
         between_count = between_counter.get(edge, 0)
 
         total_count = within_count + between_count
+        score = within_count / total_count  # confidence we have on the edge
+        edge_score_dict[edge] = score
 
         # Adjust the condition to use the within_threshold_ratio
-        if within_count / total_count > within_threshold_ratio:
+        if score > within_threshold_ratio:
             consistently_within.add(edge)
-        elif within_count / total_count <= within_threshold_ratio and between_count > 0:
+        elif score <= within_threshold_ratio and between_count > 0:
             consistently_between.add(edge)
 
     likely_true_edges = consistently_within
     likely_false_edges = consistently_between
-    return likely_true_edges, likely_false_edges
+    return likely_true_edges, likely_false_edges, edge_score_dict
 
 
+def compute_edge_betweenness_centrality(sparse_matrix):
+    G = nx.from_scipy_sparse_array(sparse_matrix)
+    centrality = nx.edge_betweenness_centrality(G, normalized=True)
+    return centrality
 
 def edge_list_to_sparse_graph(edge_list):
     # Flatten the edge list and get unique nodes
@@ -1352,3 +1359,19 @@ def replace_infinities_sparse(sparse_matrix):
         return sp.csc_matrix((coo_matrix.data, (coo_matrix.row, coo_matrix.col)), shape=sparse_matrix.shape)
     else:
         raise ValueError("Unsupported sparse matrix format")
+
+def rank_based_combination(community_scores, betweenness_scores):
+    """
+    Takes as input 2 score dictionaries and returns a combined score dictionary based on ranks (relative rather than absolute numbers)
+    """
+    edges = list(community_scores.keys())
+    community_values = np.array([community_scores[edge] for edge in edges])
+    betweenness_values = np.array([betweenness_scores[edge] for edge in edges])
+    community_ranks = np.argsort(-community_values)
+    betweenness_ranks = np.argsort(betweenness_values)
+    community_ranks = community_ranks + 1
+    betweenness_ranks = betweenness_ranks + 1
+    combined_ranks = (community_ranks + betweenness_ranks) / 2.0
+
+    combined_scores = {edge: rank for edge, rank in zip(edges, combined_ranks)}
+    return combined_scores

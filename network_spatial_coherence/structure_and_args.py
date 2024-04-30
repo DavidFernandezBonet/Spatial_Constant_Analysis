@@ -57,7 +57,7 @@ def create_project_structure(target_dir=None):
         'plots_shortest_path_heatmap': f'{project_root}/results/plots/shortest_path_heatmap',
         'plots_mst_image': f'{project_root}/results/plots/mst_image',
         'plots_euclidean_sp': f'{project_root}/results/plots/correlation_euclidean_sp',
-        'spatial_coherence': f'{project_root}/results/plots/main_spatial_coherence_results',
+        'spatial_coherence': f'{project_root}/results/plots/main_spatial_coherence_results',  #TODO: Main folder
         'dataframes': f'{project_root}/results/plots/multiple_runs_dataframes',
 
 
@@ -211,7 +211,7 @@ class GraphArgs:
 
         self.handle_all_subgraphs = config.get('handle_all_subgraphs', False)
         self.spatial_coherence_validation = config.get('spatial_coherence_validation', False)
-        self.community_detection = config.get('comunity_detection', False)
+        self.community_detection = config.get('community_detection', False)
         self.reconstruct = config.get('reconstruct', False)
         self.original_positions_available = config.get('original_positions_available', False)
         self.plot_original_image = config.get('plot_original_image', False)
@@ -388,6 +388,8 @@ class GraphArgs:
             self.network_name = os.path.splitext(title)[0]   # TODO: make sure this doesn't conflict with custom network names
         self.edge_list_title = title
 
+    def manual_change_edge_list_title(self, new_title):
+        self.set_edge_list_title(new_title)
     def update_args_title(self):
         if self.original_edge_list_title is None:
             self.original_edge_list_title = self.edge_list_title

@@ -235,7 +235,7 @@ def network_dimension(args):
                                                       msp_central_node=False, plot_centered_average_sp_distance=False)
     else:
         if args.original_positions_available:
-            plot_all_heatmap_nodes = True
+            plot_all_heatmap_nodes = False  # change to true if you want the dimension prediction heatmap
         else:
             plot_all_heatmap_nodes = False
         results_dimension_prediction = run_dimension_prediction(args, distance_matrix=args.shortest_path_matrix,
@@ -279,21 +279,66 @@ def rank_matrix_analysis(args):
     return args, first_d_values_contribution
 
 
+def rank_based_combination(community_scores, betweenness_scores):
+    """
+    Takes as input 2 score dictionaries and returns a combined score dictionary based on ranks (relative rather than absolute numbers)
+    Careful because while community scores are good in increasing order, betweenness scores are good in decreasing order
+    """
+    edges = list(community_scores.keys())
+    community_values = np.array([community_scores[edge] for edge in edges])
+    betweenness_values = np.array([betweenness_scores[edge] for edge in edges])
+    sorted_community = np.argsort(community_values)
+    sorted_betweenness = np.argsort(-betweenness_values)
+
+    # Create a rank array initialized with zeros
+    community_ranks = np.zeros_like(community_values)
+    betweenness_ranks = np.zeros_like(betweenness_values)
+
+    community_ranks[sorted_community] = np.arange(len(community_values)) + 1
+    betweenness_ranks[sorted_betweenness] = np.arange(len(betweenness_values)) + 1
+
+
+    community_ranks = community_ranks + 1
+    betweenness_ranks = betweenness_ranks + 1
+    combined_ranks = community_ranks * (50/100) + betweenness_ranks * (50/100)
+
+    combined_scores = {edge: rank for edge, rank in zip(edges, combined_ranks)}
+    return combined_scores
+
+
 def community_detection(graph, args):
+
     n_runs = 100
     communities, modularity = detect_communities_and_compute_modularity(graph, n_runs=n_runs)
     if n_runs == 1:
         edges_within_communities, edges_between_communities =\
             count_false_edges_within_communities(args, communities)
+        community_score_dict = None
     else:
         all_communities = communities  # several runs of the algorithm
-        edges_within_communities, edges_between_communities = (
+        edges_within_communities, edges_between_communities, community_score_dict = (
             identify_consistent_edge_classifications(args, all_communities))
 
     false_edges_within_communities = set(args.false_edge_ids) & set(edges_within_communities)
     print("Number of false edges inside communities:", len(false_edges_within_communities))
-    visualize_communities_positions(args, communities, modularity, edges_within_communities, edges_between_communities)
+
+    betweenness_score_dict = compute_edge_betweenness_centrality(graph)
+    rank_score_dict = rank_based_combination(community_score_dict, betweenness_score_dict)
+
+
+    visualize_communities_positions(args, communities, modularity, edges_within_communities, edges_between_communities,
+                                    community_score_dict, betweenness_score_dict, rank_score_dict)
+
+
+
     denoised_graph = edge_list_to_sparse_graph(edges_within_communities)
+    args.sparse_graph = denoised_graph
+
+    # TODO: one could iterate the algorithm again to delete even more false edges
+    # TODO: there are some loading shenanigans with the args object, I think I should make a function that fully recomputes the args graph after changing the graph
+    # TODO: just load a new graph from an edge list? --> The problem is keeping track of the IDs: the map function should change accordingly (if there is an existing map function use that to change it)
+    # TODO: also we should be able to load a graph with an edge list df not necessarily the filename in args
+
 
     # Check if it is disconnected
     n_components, labels = connected_components(csgraph=denoised_graph, directed=False, return_labels=True)
@@ -357,12 +402,7 @@ def reconstruct_graph(graph, args):
 
 def collect_graph_properties(args):
     # Create a dictionary with the graph properties
-    args.num_edges = args.sparse_graph.nnz // 2
-    if args.false_edges_count:
-        false_edges_ratio = args.false_edges_count / (args.num_edges - args.false_edges_count)
-        args.false_edges_ratio = false_edges_ratio
-    else:
-        args.false_edges_ratio = 0
+
 
     args.average_degree = (2 * args.num_edges) / args.num_points
 
@@ -398,6 +438,7 @@ def collect_graph_properties(args):
     args.spatial_coherence_quantiative_dict['largeworldness'] = large_world_score
     args.spatial_coherence_quantiative_dict['proximity_mode'] = args.proximity_mode
     args.spatial_coherence_quantiative_dict['dimension'] = args.dim
+    args.spatial_coherence_quantiative_dict['edge_list_title'] = args.edge_list_title
     return args, graph_properties_df
 
 def output_df_category_mapping():
@@ -423,7 +464,8 @@ def output_df_category_mapping():
         'GTA_CPD': 'Reconstruction',
         'largeworldness': 'Graph Property',
         'proximity_mode': 'Parameter',
-        'dimension': 'Parameter'
+        'dimension': 'Parameter',
+        'edge_list_title': 'Parameter',
     }
     return category_mapping
 
@@ -447,6 +489,14 @@ def run_pipeline(graph, args):
     # Assuming subsample_graph_if_necessary, plot_and_analyze_graph, compute_shortest_paths
     # don't return DataFrames and are just part of the processing
     # graph = subsample_graph_if_necessary(graph, args)  # this is done with the load function now
+    args.num_edges = args.sparse_graph.nnz // 2
+    if args.false_edges_count:
+        false_edges_ratio = args.false_edges_count / (args.num_edges - args.false_edges_count)
+        false_edges_ratio = round(false_edges_ratio, 4)
+        args.false_edges_ratio = false_edges_ratio
+    else:
+        args.false_edges_ratio = 0
+
     if args.true_edges_deletion_ratio:
         args, graph = randomly_delete_edges(args, graph, delete_ratio=args.true_edges_deletion_ratio)
 
@@ -455,6 +505,7 @@ def run_pipeline(graph, args):
 
     # Collect graph properties into DataFrame
     args, graph_properties_df = collect_graph_properties(args)
+
     if args.community_detection:
         graph, args = community_detection(graph, args)
 
@@ -477,7 +528,6 @@ def run_pipeline(graph, args):
 
 def run_pipeline_for_several_parameters(parameter_ranges):
     args = GraphArgs()
-
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     param_keys = '_'.join(parameter_ranges.keys())  # Use keys to describe the folder
     base_output_dir = args.directory_map['output_dataframe']
@@ -485,10 +535,12 @@ def run_pipeline_for_several_parameters(parameter_ranges):
     os.makedirs(run_directory, exist_ok=True)
 
     keys, values = zip(*parameter_ranges.items())
+
     for value_combination in product(*values):
         param_dict = dict(zip(keys, value_combination))
         args = GraphArgs()
         args.update_args(**param_dict)
+        print("proximity mode", args.proximity_mode)
         graph, args = load_and_initialize_graph(args)
 
         print("param dict", param_dict)
@@ -508,26 +560,60 @@ def run_pipeline_for_several_parameters(parameter_ranges):
 
 
 if __name__ == "__main__":
-
     ### Multiple runs
-    parameter_ranges = {
-        "false_edges_count": [0, 10, 100, 500],
-        "true_edges_deletion_ratio": [0.0, 0.2, 0.4, 0.6],
-    }
+    # parameter_ranges = {
+    #     "false_edges_count": [0, 10, 100, 500],
+    #     "true_edges_deletion_ratio": [0.0, 0.2, 0.4, 0.6],
+    # }
+
+    edge_lists_005 = [
+    "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.05.png_197_subgraph_5.csv",
+    "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.05.png_203_subgraph_4.csv",
+    "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.05.png_381_subgraph_3.csv",
+    "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.05.png_634_subgraph_2.csv",
+    "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.05.png_1112_subgraph_1.csv"
+    ]
+
+    edge_lists_02 = [
+    "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.2.png_423_subgraph_5.csv",
+    "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.2.png_1157_subgraph_4.csv",
+    "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.2.png_2152_subgraph_3.csv",
+    "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.2.png_2563_subgraph_2.csv",
+    "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.2.png_24803_subgraph_1.csv"
+    ]
+
+    edge_lists_01 = [
+    "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.1.png_746_subgraph_5.csv",
+    "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.1.png_918_subgraph_4.csv",
+    "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.1.png_1105_subgraph_3.csv",
+    "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.1.png_1149_subgraph_2.csv",
+    "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.1.png_1151_subgraph_1.csv"
+    ]
+
+    edge_lists_015 = [
+        "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_1156_subgraph_5.csv",
+        "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_1880_subgraph_4.csv",
+        "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_2211_subgraph_3.csv",
+        "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_3796_subgraph_2.csv",
+        "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_12893_subgraph_1.csv"
+    ]
+    parameter_ranges = {"proximity_mode": ['experimental'],
+                        "edge_list_title": edge_lists_015,}
     run_pipeline_for_several_parameters(parameter_ranges=parameter_ranges)
 
-    #### Single run
+    # ### Single run
     # graph, args = load_and_initialize_graph(point_mode='circle')
+    #
     #
     # if args.handle_all_subgraphs and type(graph) is list:
     #     graph_args_list = graph
     #     for i, graph_args in enumerate(graph_args_list):
     #         print("iteration:", i, "graph size:", graph_args.num_points)
     #         if graph_args.num_points > 30:  # only reconstruct big enough graphs
-    #             single_graph_args = run_pipeline(graph=graph_args.sparse_graph, args=graph_args)
+    #             single_graph_args, output_df = run_pipeline(graph=graph_args.sparse_graph, args=graph_args)
     #             # optionally profile every time
     #             # plot_profiling_results(single_graph_args)  # Plot the results at the end
     # else:
-    #     single_graph_args = run_pipeline(graph, args)
+    #     single_graph_args, output_df = run_pipeline(graph, args)
     #     plot_profiling_results(single_graph_args)  # Plot the results at the end
 

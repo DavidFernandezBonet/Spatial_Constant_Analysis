@@ -509,6 +509,15 @@ def write_proximity_graph(args, order_indices=False, point_mode="square"):
                 if edge not in edges:
                     edges.add(edge)
                     args.false_edge_ids.append(edge)
+                else:
+                    while edge in edges:
+                        j = random.randint(half, args.num_points - 1)
+                        edge = tuple(sorted((i, j)))
+                        if edge not in edges:
+                            edges.add(edge)
+                            args.false_edge_ids.append(edge)
+                            break
+
     else:
         ### Add false edges
         if args.false_edges_count:

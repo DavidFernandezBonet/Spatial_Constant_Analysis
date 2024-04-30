@@ -199,12 +199,17 @@ def read_position_df(args, return_df=False):
 
     if args.proximity_mode == "experimental" and args.original_positions_available:
         filename = args.original_edge_list_title
-        match = re.search(r"edge_list_(.*?)\.csv", filename)
-        if match:
-            extracted_part = match.group(1)
+        print(f"Original edge list: {filename}")
+        if "weinstein" in filename:
+            old_args_title = filename[:-4]
+            original_points_path = f"{args.directory_map['original_positions']}/positions_weinstein_data_corrected_february.csv"
+        else:
+            match = re.search(r"edge_list_(.*?)\.csv", filename)
+            if match:
+                extracted_part = match.group(1)
 
-        old_args_title = extracted_part
-        original_points_path = f"{args.directory_map['original_positions']}/positions_{old_args_title}.csv"
+            old_args_title = extracted_part
+            original_points_path = f"{args.directory_map['original_positions']}/positions_{old_args_title}.csv"
     else:
         original_points_path = args.positions_path
         # if hasattr(args, 'reconstruction_mode') and args.reconstruction_mode in args.args_title:
@@ -212,6 +217,10 @@ def read_position_df(args, return_df=False):
         #                                              "")
         # else:
         #     old_args_title = args.args_title
+
+
+
+
 
 
     original_points_df = pd.read_csv(original_points_path)
@@ -292,7 +301,7 @@ def check_edge_list_columns(args, edge_list_df):
     # Check for extra columns
     extra_columns = set(edge_list_df.columns) - allowed_columns
     if extra_columns:
-        raise ValueError(f"Extra columns found: {extra_columns}")
+        warnings.warn(f"Extra columns found: {extra_columns}")
 
     # Check for mandatory columns
     if not mandatory_columns.issubset(edge_list_df.columns):
@@ -344,7 +353,6 @@ def load_graph(args, load_mode='igraph'):
         - The 'args' object is updated with 'average_degree' and 'num_points' attributes.
         """
 
-
     # TODO: implement different input files, e.g. edge list, pickle networkx... (csv and pickle compatible now)
     # TODO: update edge list if graph is disconnected! Done for igraph and sparse
     # TODO: false edge implementation for other types apart from igraph? Is it necessary¿
@@ -360,13 +368,13 @@ def load_graph(args, load_mode='igraph'):
 
     file_path = f"{args.directory_map['edge_lists']}/{args.edge_list_title}"
     df = pd.read_csv(file_path)  # edge list
-
-
     df = check_edge_list_columns(args=args, edge_list_df=df)
 
     if args.original_title is None:
-        args.original_title = args.args_title
-
+        if hasattr(args, 'args_title'):
+            args.original_title = args.args_title
+        else:
+            args.original_title = None  # Example: Assigning a default value of None
 
     # # TODO: check that source is not contained in target and viceversa
     # # Convert columns to sets
@@ -414,12 +422,14 @@ def load_graph(args, load_mode='igraph'):
     if load_mode == 'sparse':
         # TODO: bipartite stuff
         # TODO: this returns also the node_ids as sparse matrices do not keep track of them. If it is used be aware you  need the IDs
-        n_nodes = df.max().max() + 1  # Assuming the nodes start from 0
+        n_nodes = int(df[['source', 'target']].max().max()) + 1  # Assuming the nodes start from 0
+
         # Create symmetric edge list: add both (source, target) and (target, source)
         edges = np.vstack([df[['source', 'target']].values, df[['target', 'source']].values])
         data = np.ones(len(edges))  # Edge weights (1 for each edge)
 
         # Create sparse matrix
+
         sparse_graph_coo = coo_matrix((data, (edges[:, 0], edges[:, 1])), shape=(n_nodes, n_nodes))
         # Convert COO matrix to CSR format
         sparse_graph = sparse_graph_coo.tocsr()
