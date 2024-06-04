@@ -48,21 +48,21 @@ np.random.seed(42)
 random.seed(42)
 
 
-# # # Euclidean and Shortest Path correlation plot
-make_euclidean_sp_correlation_plot(single_series=True, multiple_series=False, useful_plot_folder=plot_folder)
-make_euclidean_sp_correlation_plot(single_series=False, multiple_series=True, useful_plot_folder=plot_folder)
-
-# TODO: add shortest path from central node visualization with false edges (hetmap from central node)
-
-# # # Gram Matrix
-make_comparative_gram_matrix_plot_euc_sp(useful_plot_folder=plot_folder)
-
-## Dimension Prediction
-# # (Euc vs network)
-make_euclidean_network_dim_pred_comparison_plot(useful_plot_folder=plot_folder)
-
-# # (False edges)
-# make_dimension_prediction_plot(num_central_nodes=1)   # num central nodes averages the prediction between several central nodes
+# # # # Euclidean and Shortest Path correlation plot
+# make_euclidean_sp_correlation_plot(single_series=True, multiple_series=False, useful_plot_folder=plot_folder)
+# make_euclidean_sp_correlation_plot(single_series=False, multiple_series=True, useful_plot_folder=plot_folder)
+#
+# # TODO: add shortest path from central node visualization with false edges (hetmap from central node)
+#
+# # # # Gram Matrix
+# make_comparative_gram_matrix_plot_euc_sp(useful_plot_folder=plot_folder)
+#
+# ## Dimension Prediction
+# # # (Euc vs network)
+# make_euclidean_network_dim_pred_comparison_plot(useful_plot_folder=plot_folder)
+#
+# # # (False edges)
+# # make_dimension_prediction_plot(num_central_nodes=1)   # num central nodes averages the prediction between several central nodes
 
 
 # ## Spatial Constant

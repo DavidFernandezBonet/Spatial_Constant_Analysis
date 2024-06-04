@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from structure_and_args import GraphArgs
 from create_proximity_graph import write_proximity_graph
 from utils import load_graph
-from data_analysis import run_simulation_subgraph_sampling
+from data_analysis import run_simulation_subgraph_sampling, run_simulation_subgraph_sampling_by_bfs_depth
 import matplotlib.colors as mcolors
 import pandas as pd
 from algorithms import compute_shortest_path_matrix_sparse_graph, select_false_edges_csr
@@ -74,7 +74,8 @@ def generate_several_graphs(from_one_graph=False, proximity_mode="knn"):
     args_list = []
     # false_edge_list = [0, 20, 40, 60, 80, 100]
     false_edge_list = [0, 2, 5, 10, 20, 1000]
-    # false_edge_list = [0, 10, 100, 500, 1000]
+
+
 
     if not from_one_graph:
         for idx, false_edge_count in enumerate(false_edge_list):
@@ -112,6 +113,7 @@ def generate_several_graphs(from_one_graph=False, proximity_mode="knn"):
             modified_graph = add_specific_random_edges_to_csrgraph(args.sparse_graph, all_random_false_edges,
                                                                    num_edges)
             args_i.sparse_graph = modified_graph
+            args.shortest_path_matrix = compute_shortest_path_matrix_sparse_graph(args=args_i, sparse_graph=args_i.sparse_graph)
             args_i.false_edges_count = num_edges
             edge_list_title = f"edge_list_{args_i.args_title}_graph_{idx}.csv"
             args_i.edge_list_title = edge_list_title  # update the edge list title
@@ -147,7 +149,10 @@ def generate_experimental_graphs(edge_list_titles_dict):
             if args.num_points > 3000:
                 args.large_graph_subsampling = True
                 args.max_subgraph_size = 3000
-            load_graph(args, load_mode='sparse')
+            sparse_graph = load_graph(args, load_mode='sparse')
+            args.sparse_graph = sparse_graph
+            args.shortest_path_matrix = compute_shortest_path_matrix_sparse_graph(args=args,
+                                                                                  sparse_graph=args.sparse_graph)
             args.network_name = weight_list[0]
 
             args_list.append(args)
@@ -164,7 +169,9 @@ def generate_experimental_graphs(edge_list_titles_dict):
                 if args.num_points > 3000:
                     args.large_graph_subsampling = True
                     args.max_subgraph_size = 3000
-                load_graph(args, load_mode='sparse')
+                sparse_graph = load_graph(args, load_mode='sparse')
+                args.sparse_graph = sparse_graph
+                args.shortest_path_matrix = compute_shortest_path_matrix_sparse_graph(args=args, sparse_graph=args.sparse_graph)
                 args.edge_list_title = f"{os.path.splitext(edge_list)[0]}_weight_threshold_{args.weight_threshold}.csv"
                 args.network_name = weight_list[0] + f"{args.weight_threshold}"
                 write_edge_list_sparse_graph(args, args.sparse_graph)
@@ -176,12 +183,13 @@ def generate_experimental_graphs(edge_list_titles_dict):
     ## add simulated graph for compariosn
     args = GraphArgs()
     args.num_points = 1000
-    args.proximity_mode = "delaunay_corrected"
+    args.proximity_mode = "knn"
     args.dim = 2
     args.intended_av_degree = 10
     args.verbose = False
     write_proximity_graph(args, point_mode="square", order_indices=False)
     args.sparse_graph = load_graph(args, load_mode='sparse')
+    args.shortest_path_matrix = compute_shortest_path_matrix_sparse_graph(args=args, sparse_graph=args.sparse_graph)
     args.network_name = "KNN"
     args_list.append(args)
     return args_list
@@ -194,19 +202,31 @@ def get_maximally_separated_colors(num_colors):
     colors = [mcolors.to_hex(color) for color in colors]
     return colors
 
-def plot_comparative_spatial_constant(results_dfs, args_list, title=""):
-    plt.figure(figsize=(12, 4.5))
+def plot_comparative_spatial_constant(results_dfs, args_list, title="", use_depth=False):
+    from matplotlib.ticker import MaxNLocator
+
+    ax = plt.figure(figsize=(12, 4.5)).gca()
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+
     num_colors = len(args_list)
     colors = get_maximally_separated_colors(num_colors)
 
+    if use_depth:
+        size_magnitude = 'depth'
+        # s_constant = 'S_depth'
+        s_constant = 'S_general'
+    else:
+        size_magnitude = 'intended_size'
+        s_constant = 'S_general'
+
     for i, (results_df_net, args) in enumerate(zip(results_dfs, args_list)):
-        unique_sizes = results_df_net['intended_size'].unique()
+        unique_sizes = results_df_net[size_magnitude].unique()
         means = []
         std_devs = []
         sizes = []
 
         for size in unique_sizes:
-            subset = results_df_net[results_df_net['intended_size'] == size]
+            subset = results_df_net[results_df_net[size_magnitude] == size]
             mean = subset['S_general'].mean()
             std = subset['S_general'].std()
             means.append(mean)
@@ -226,7 +246,10 @@ def plot_comparative_spatial_constant(results_dfs, args_list, title=""):
                           color=color)
 
 
-    plt.xlabel('Subgraph Size')
+    if use_depth:
+        plt.xlabel('BFS Depth')
+    else:
+        plt.xlabel('Size')
     plt.ylabel('Mean Spatial Constant')
     plt.legend()
 
@@ -244,15 +267,27 @@ def make_spatial_constant_comparative_plot(args_list, title=""):
         size_interval = int(args.num_points / 10)  # collect 10 data points
 
         ## Network Spatial Constant
-        igraph_graph = load_graph(args, load_mode='igraph')
+        igraph_graph = load_graph(args, load_mode='igraph')  #TODO: make sure igraph is what you need
+        # igraph_graph = load_graph(args, load_mode='sparse')
 
-        net_results_df = run_simulation_subgraph_sampling(args, size_interval=size_interval, n_subgraphs=n_samples,
-                                                          graph=igraph_graph,
-                                                          add_false_edges=False, add_mst=False, return_simple_output=False)
+        # ### Run with size
+        # net_results_df = run_simulation_subgraph_sampling(args, size_interval=size_interval, n_subgraphs=n_samples,
+        #                                                   graph=igraph_graph,
+        #                                                   add_false_edges=False, add_mst=False, return_simple_output=False)
+
+        ### Run with depth  #TODO: check that this work
+        shortest_path_matrix = args.shortest_path_matrix
+        print("NETWORK NAME", args.network_name)
+
+        net_results_df = run_simulation_subgraph_sampling_by_bfs_depth(args, shortest_path_matrix=shortest_path_matrix,
+                                                                    n_subgraphs=n_samples, graph=igraph_graph,
+                                                                    add_false_edges=False, return_simple_output=False,
+                                                                       all_depths=True)
+
         net_results_df_list.append(net_results_df)
 
 
-    plot_comparative_spatial_constant(net_results_df_list, args_list, title=title)
+    plot_comparative_spatial_constant(net_results_df_list, args_list, title=title, use_depth=True)
 
 
 def make_dimension_prediction_comparative_plot(args_list, title=""):
@@ -326,7 +361,8 @@ def make_gram_matrix_analysis_comparative_plot(args_list, title=""):
 
         first_d_values_contribution,\
         first_d_values_contribution_5_eigen,\
-        spectral_gap, \
+        spectral_gap,\
+        last_spectral_gap \
             = plot_gram_matrix_eigenvalues(args=args, shortest_path_matrix=args.shortest_path_matrix)
     plot_eigenvalue_contributions_comparative(eigenvalues_list, args_list, title=title)
     plot_eigenvalue_contributions_comparative(eigenvalues_list, args_list, consider_first_eigenvalues_only=True, title=title)
@@ -526,7 +562,7 @@ def plot_spectral_gap_comparative(args_list, eigenvalues_list, score_method='i',
         spectral_gap_scores.append(spectral_gap_score)
 
     # Setting for the first plot (Spectral Gap Analysis)
-    axs[0].set_title('Spectral Gap Analysis')
+
     axs[0].set_xlabel('Eigenvalue Rank')
     axs[0].set_ylabel('Spectral Gap Ratio')
     axs[0].legend()
@@ -601,13 +637,15 @@ def plot_pos_neg_eigenvalue_proportions_comparative(args_list, eigenvalues_list)
     plt.tight_layout()
     plt.show()
 if __name__ == "__main__":
-    what_to_run = "simulation"  # simulation or experimental
+    what_to_run = "experimental"  # simulation or experimental
+    title_experimental = "MPX" # "Experimental Comparison"
 
     if what_to_run == "simulation":
         ## Simulation with False Edges
         proximity_mode = "knn_bipartite"
         args_list = generate_several_graphs(from_one_graph=True, proximity_mode=proximity_mode)
-        title = f"False Edge Comparison {proximity_mode}"
+        title = f"False Edge Comparison v2 {proximity_mode}"
+
     elif what_to_run == "experimental":
         ### Experimental
         # pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv
@@ -619,10 +657,26 @@ if __name__ == "__main__":
         #                     "subgraph_8_nodes_160_edges_179_degree_2.24.pickle": ('HL-S', None),
         #                     "subgraph_0_nodes_2053_edges_2646_degree_2.58.pickle": ('HL-E', None)}
 
-        ### Just Weinstein's
-        edge_list_titles_dict = {"weinstein_data_corrected_february.csv": [5, 10, 15],
-                                 }
-        title = "Experimental Comparison"
+        # ### Just Weinstein's
+        # edge_list_titles_dict = {"weinstein_data_corrected_february.csv": [5, 10, 15],
+        #                          }
+
+        # # Weinstein subgraphs with quantile 0.15
+        # edge_list_titles_dict = {
+        # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_12893_subgraph_1.csv": ('S1', None),
+        # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_3796_subgraph_2.csv": ('S2', None),
+        # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_2211_subgraph_3.csv": ('S3', None),
+        # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_1880_subgraph_4.csv": ('S4', None),
+        # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_1156_subgraph_5.csv": ('S5', None),
+        # }
+        #
+        edge_list_titles_dict = {
+            "pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv": ('Raji', None),
+            "pixelgen_processed_edgelist_Sample07_pbmc_CD3_capped_cell_3_RCVCMP0000344.csv": ('CD3', None),
+            "pixelgen_example_graph.csv": ('Uro', None)
+
+        }
+        title = title_experimental
         args_list = generate_experimental_graphs(edge_list_titles_dict=edge_list_titles_dict)
     else:
         raise ValueError("what_to_run must be 'simulation' or 'experimental'")

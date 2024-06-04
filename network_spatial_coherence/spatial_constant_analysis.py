@@ -63,15 +63,19 @@ def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild
         The function modifies the `args` object by appending the `node_embedding_mode` to `args_title`
         for identification.
     """
+
     sparse_graph = convert_graph_type(graph=sparse_graph, args=args, desired_type='sparse')
     metrics = {}
     args.args_title = args.args_title + '_' + node_embedding_mode
 
-
-
-    reconstruction = ImageReconstruction(graph=sparse_graph, dim=args.dim, node_embedding_mode=node_embedding_mode,
+    reconstruction = ImageReconstruction(graph=sparse_graph, shortest_path_matrix=args.shortest_path_matrix,
+                                         dim=args.dim, node_embedding_mode=node_embedding_mode,
                                          manifold_learning_mode=manifild_learning_mode)
     reconstructed_points = reconstruction.reconstruct(do_write_positions=True, args=args)
+    print("reconstruction done!")
+
+
+
 
     # # Assessing Weinstein reconstruction algo # TODO: it is not working well I think
     # position_filename = 'reconstructed_positions_weinstein_febraury_corrected.csv'
@@ -83,7 +87,8 @@ def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild
     # reconstructed_points = positions_df[['x', 'y']].to_numpy()
 
 
-    plot_original_or_reconstructed_image(args, image_type='reconstructed')
+    if args.plot_reconstructed_image:
+        plot_original_or_reconstructed_image(args, image_type='reconstructed')
     edge_list = read_edge_list(args)
 
     # Ground Truth-based quality metrics
@@ -99,9 +104,6 @@ def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild
             original_points = original_points_df[['x', 'y']].to_numpy()
 
             plot_original_or_reconstructed_image(args, image_type='original', positions_df=original_df)
-
-
-
 
 
             # ### Plotting
@@ -150,10 +152,24 @@ def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild
 
         else:
             original_points = read_position_df(args)
-            plot_original_or_reconstructed_image(args, image_type='original')
+            original_df = read_position_df(args, return_df=True)
+            # plot_original_or_reconstructed_image(args, image_type='original')
+        write_network_in_json_format(positions_df=original_df, args=args, edges_df=edge_list, network_type='original')
+
+
         qm = QualityMetrics(original_points, reconstructed_points)
         og_metrics_dict = qm.evaluate_metrics()
         metrics["ground_truth"] = og_metrics_dict
+
+
+    # Write in JSON format for visualization
+    edge_list_folder = args.directory_map["edge_lists"]
+    edges_df_rec = pd.read_csv(f"{edge_list_folder}/{args.edge_list_title}")
+    reconstructed_position_folder = args.directory_map["reconstructed_positions"]
+    reconstructed_df = pd.read_csv(f"{reconstructed_position_folder}/positions_{args.args_title}.csv")
+    write_network_in_json_format(positions_df=reconstructed_df, args=args, edges_df=edges_df_rec,
+                                 network_type='reconstructed')
+
     # GTA metrics
     gta_qm = GTA_Quality_Metrics(edge_list=edge_list, reconstructed_points=reconstructed_points)
     gta_metrics_dict = gta_qm.evaluate_metrics()
@@ -165,29 +181,53 @@ def run_reconstruction(args, sparse_graph, node_embedding_mode='ggvec', manifild
 def make_spatial_constant_euc_vs_network(useful_plot_folder):
     args = GraphArgs()
     args.proximity_mode = "knn"
-    args.dim = 3
+    args.dim = 2
     args.intended_av_degree = 10
-    args.num_points = 1000
+    args.num_points = 2000
     create_proximity_graph.write_proximity_graph(args, point_mode="circle", order_indices=False)
     # Parameters for the particular plot
-    size_interval = int(args.num_points / 10)  # collect 10 data points
+    num_data_points = 20
+    size_interval = int(args.num_points / num_data_points)  # collect 10 data points
     n_samples = 5
+    use_depth = True
 
     ## Euclidean Spatial Constant
     euclidean_positions = read_position_df(args=args)
-    euc_results_df = get_spatial_constant_euclidean_df(args, positions_array=euclidean_positions, size_interval=size_interval,
-                                                       num_samples=n_samples)
+
+    if use_depth:
+        ## by depth
+        euc_results_df = get_spatial_constant_euclidean_df_by_depth(args, positions_array=euclidean_positions,
+                                                                    num_intervals=num_data_points,
+                                                                    num_samples=n_samples)
+    else:
+        # by size
+        euc_results_df = get_spatial_constant_euclidean_df(args, positions_array=euclidean_positions, size_interval=size_interval,
+                                                           num_samples=n_samples)
     # plot_euc_spatial_constant_against_size_threshold(args, results_df=euc_results_df)
     ## Network Spatial Constant
     igraph_graph = load_graph(args, load_mode='igraph')
+    args.shortest_path_matrix = compute_shortest_path_matrix_sparse_graph(args=args, sparse_graph=igraph_graph)
 
-    net_results_df = run_simulation_subgraph_sampling(args, size_interval=size_interval, n_subgraphs=n_samples,
-                                                      graph=igraph_graph,
-                                     add_false_edges=False, add_mst=False)
+
+
+    ### Using DEPTH
+
+    if use_depth:
+        net_results_df = run_simulation_subgraph_sampling_by_bfs_depth(args, shortest_path_matrix=args.shortest_path_matrix,
+                                                                       n_subgraphs=n_samples, graph=igraph_graph,
+                                                                       add_false_edges=False, return_simple_output=False,
+                                                                       all_depths=True, maximum_depth=num_data_points)
+    else:
+        ### Using SIZE
+        net_results_df = run_simulation_subgraph_sampling(args, size_interval=size_interval, n_subgraphs=n_samples,
+                                                          graph=igraph_graph,
+                                         add_false_edges=False, add_mst=False)
+
+    print(net_results_df.columns)
 
     ### Plotting function that encompasses both of them
     plot_spatial_constant_euc_vs_network(args, results_df_euc=euc_results_df, results_df_net=net_results_df,
-                                         useful_plot_folder=useful_plot_folder)
+                                         useful_plot_folder=useful_plot_folder, use_depth=use_depth)
 
 
 

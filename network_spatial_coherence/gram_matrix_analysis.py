@@ -560,7 +560,7 @@ def plot_cumulative_eigenvalue_contribution(args, eigenvalues, original, first_1
     plt.savefig(f'{plot_folder}/mds_cumulative_singular_values_{args.args_title}_{title}.svg')
 
     plot_folder2 = args.directory_map['spatial_coherence']
-    plt.savefig(f"{plot_folder2}/gram_matrix_rank_analysis_{args.args_title}_{title}.svg")
+    plt.savefig(f"{plot_folder2}/gram_matrix_rank_analysis_{args.args_title}_{title}.{args.format_plots}")
     if args.show_plots:
         plt.show()
     plt.close()
@@ -980,7 +980,8 @@ def plot_spectral_gap_and_analyze_negatives(args, eigenvalues):
         print("Spectral gap score:", spectral_gaps[args.dim - 1])
 
     plot_folder2 = args.directory_map['spatial_coherence']
-    plt.savefig(f"{plot_folder2}/gram_matrix_spectral_gap_{args.args_title}.svg")
+    plt.savefig(f"{plot_folder2}/gram_matrix_spectral_gap_{args.args_title}.{args.format_plots}")
+
     if args.show_plots:
         plt.show()
     plt.close()
@@ -1027,12 +1028,54 @@ def plot_gram_matrix_eigenvalues(args, shortest_path_matrix):
         plot_gram_matrix_first_eigenvalues_contribution_clean(args, eigenvalues=eigenvalues_sp_matrix))
     if args.verbose:
         print("First d values contribution", first_d_values_contribution)
+        print("First d values contribution 5 eigen", first_d_values_contribution_5_eigen)
 
     # 2 - Spectral Gap
     spectral_gap_between_d_and_d1 = plot_spectral_gap_and_analyze_negatives(args, eigenvalues=eigenvalues_sp_matrix)
 
 
     # 3 - Negative eigenvalues contribution
+
+
+    ### Temporary plotting to see the relation between euc distance and weighted sp distance
+
+
+    # original_positions = read_position_df(args=args)
+    # # plot_original_or_reconstructed_image(args, image_type="original", edges_df=edge_list)
+    # original_dist_matrix = compute_distance_matrix(original_positions)
+    # original_dist_flat = original_dist_matrix.flatten()
+    # shortest_path_flat = shortest_path_matrix.flatten()
+
+    # # Calculate the best fit line
+    # slope, intercept, r_value, p_value, std_err = linregress(original_dist_flat, shortest_path_flat)
+    # line = slope * original_dist_flat + intercept
+    #
+    # # Create scatter plot
+    # plt.figure(figsize=(10, 6))
+    # plt.scatter(original_dist_flat, shortest_path_flat, alpha=0.5, label='Data points')
+    # plt.plot(original_dist_flat, line, 'r', label=f'Best fit line: y={slope:.2f}x+{intercept:.2f}')
+    #
+    # # Add labels and title
+    # plt.xlabel('Original Distance')
+    # plt.ylabel('Shortest Path Distance')
+    # plt.title('R = {}'.format(r_value))
+    # plt.legend()
+    # # Show the plot
+    # plt.show()
+    #
+    # ### difference
+    # difference_matrix = original_dist_matrix - shortest_path_matrix
+    #
+    # # Plotting the heatmap
+    # plt.figure(figsize=(10, 8))
+    # sns.heatmap(difference_matrix, annot=False, cmap='coolwarm', center=0)
+    # plt.title('Heatmap of Distance Differences')
+    # plt.xlabel('Index in Matrix')
+    # plt.ylabel('Index in Matrix')
+    # plt.show()
+
+    # args.shortest_path_matrix = original_dist_matrix
+
     return first_d_values_contribution, first_d_values_contribution_5_eigen, spectral_gap, last_spectral_gap
 
 
@@ -1089,7 +1132,7 @@ def plot_gram_matrix_euclidean_and_shortest_path_comparative(args, eigenvalues_e
     plt.tight_layout()
 
     plot_folder2 = args.directory_map['spatial_coherence']
-    plt.savefig(f"{plot_folder2}/gram_matrix_comparative_eucl_and_sp_{args.args_title}.svg", format="svg",
+    plt.savefig(f"{plot_folder2}/gram_matrix_comparative_eucl_and_sp_{args.args_title}.{args.format_plots}",
                 bbox_inches="tight")
     plt.savefig(f"{useful_plot_folder}/gram_matrix_comparative_eucl_and_sp_{args.args_title}.svg", format="svg",
                 bbox_inches="tight")
@@ -1101,10 +1144,12 @@ def plot_gram_matrix_first_eigenvalues_contribution(args, eigenvalues):
     dim = args.dim
     color = '#009ADE'
     # Consider only positive eigenvalues, up to the first 5
-    eigenvalues = eigenvalues[eigenvalues > 0][:5]
+    first_x_eigenvalues = 5
+    eigenvalues = eigenvalues[eigenvalues > 0][:first_x_eigenvalues]
     total_variance = np.sum(eigenvalues)
     variance_proportion = eigenvalues / total_variance
     cumulative_variance = np.cumsum(variance_proportion)
+    print("cumulative variance", cumulative_variance)
     cumulative_variance_first_d_eigenvalues = cumulative_variance[dim - 1]
 
 
@@ -1128,11 +1173,18 @@ def plot_gram_matrix_first_eigenvalues_contribution(args, eigenvalues):
         raise ValueError("The number of eigenvalues must be greater than the dimension. "
                          "Dim={} and len(eigenvalues)={}".format(dim, len(eigenvalues)))
     else:
-        mean_d_eigenvalues_normalized = np.mean(variance_proportion[:dim]) * 100
-        last_eigenvalue_normalized = variance_proportion[dim-1]*100
-        d_plus_one_eigenvalue_normalized = variance_proportion[dim] * 100
+        mean_d_eigenvalues_normalized = np.mean(variance_proportion[:dim])
+        last_eigenvalue_normalized = variance_proportion[dim-1]
+        d_plus_one_eigenvalue_normalized = variance_proportion[dim]
         gap_score_normalized = (mean_d_eigenvalues_normalized - d_plus_one_eigenvalue_normalized) / mean_d_eigenvalues_normalized
         last_spectral_gap = (last_eigenvalue_normalized - d_plus_one_eigenvalue_normalized) / (last_eigenvalue_normalized)
+
+        last_eigenvalue_normalized = last_eigenvalue_normalized * 100
+        d_plus_one_eigenvalue_normalized = d_plus_one_eigenvalue_normalized * 100
+
+
+
+
 
         # Custom legend handle for the arrow
         arrow_handle = Line2D([0], [0], color='purple', marker='>', markersize=10,
@@ -1140,12 +1192,15 @@ def plot_gram_matrix_first_eigenvalues_contribution(args, eigenvalues):
         ax.annotate('', xy=(dim + 0.5, d_plus_one_eigenvalue_normalized),
                     xytext=(dim + 0.5, last_eigenvalue_normalized),
                     arrowprops=dict(arrowstyle="<->", color='purple'))
-        ax.text(dim + 0.5, (last_eigenvalue_normalized + d_plus_one_eigenvalue_normalized) / 2,
-                f'{gap_score_normalized:.2f}', ha='left', va='center', color='purple', fontsize=9)
+
+        # ax.text(dim + 0.5, (last_eigenvalue_normalized + d_plus_one_eigenvalue_normalized) / 2,
+        #         f'{last_spectral_gap:.2f}', ha='left', va='center', color='purple', fontsize=9)
+
+
         # ax.axhline(y=mean_d_eigenvalues_normalized, color='purple', linestyle='--')
         legend_handles, legend_labels = ax.get_legend_handles_labels()
         legend_handles.append(arrow_handle)
-        legend_labels.append('Spectral Gap Score')
+        legend_labels.append(f'Spectral Gap Score = {last_spectral_gap:.2f}')
         ax.legend(handles=legend_handles, labels=legend_labels)
 
     ax.set_xlabel('Eigenvalue Rank')
@@ -1158,7 +1213,7 @@ def plot_gram_matrix_first_eigenvalues_contribution(args, eigenvalues):
     plt.tight_layout()
 
     plot_folder2 = args.directory_map['spatial_coherence']
-    plt.savefig(f"{plot_folder2}/gram_matrix_first_eigenvalues_contribution{args.args_title}.svg", format="svg",
+    plt.savefig(f"{plot_folder2}/gram_matrix_first_eigenvalues_contribution{args.args_title}.{args.format_plots}",
                 bbox_inches="tight")
     if args.show_plots:
         plt.show()
@@ -1170,7 +1225,8 @@ def plot_gram_matrix_first_eigenvalues_contribution_clean(args, eigenvalues):
     dim = args.dim
     color = '#009ADE'
     # Consider only positive eigenvalues, up to the first 5
-    eigenvalues = eigenvalues[eigenvalues > 0][:5]
+    first_x_eigenvalues = 5
+    eigenvalues = eigenvalues[eigenvalues > 0][:first_x_eigenvalues]
     total_variance = np.sum(eigenvalues)
     variance_proportion = eigenvalues / total_variance
     cumulative_variance = np.cumsum(variance_proportion)
@@ -1178,17 +1234,17 @@ def plot_gram_matrix_first_eigenvalues_contribution_clean(args, eigenvalues):
 
     fig, ax = plt.subplots(figsize=(6, 4.5))
     bars = ax.bar(range(1, len(eigenvalues) + 1), variance_proportion, alpha=0.7, color=color)
-    line, = ax.plot(range(1, len(eigenvalues) + 1), cumulative_variance, '-o', color='r', label=f'Contribution at '
-                                                                                                      f'Dim={args.dim}: '
-                                                                                                      f'{cumulative_variance_first_d_eigenvalues:.2f}')
+    # line, = ax.plot(range(1, len(eigenvalues) + 1), cumulative_variance, '-o', color='r', label=f'Contribution at '
+    #                                                                                                   f'Dim={args.dim}: '
+    #                                                                                                   f'{cumulative_variance_first_d_eigenvalues:.2f}')
 
-    # Annotate each bar with its percentage
-    for bar, proportion in zip(bars, variance_proportion):
-        ax.text(bar.get_x() + bar.get_width() / 2.0, bar.get_height(), f'{proportion:.2f}', ha='center', va='bottom')
-
-    # Annotate the plot with the total contribution at specified dimension
-    ax.text(dim, cumulative_variance_first_d_eigenvalues, f'{cumulative_variance_first_d_eigenvalues:.2f}',
-            ha='center', va='bottom', color='blue')
+    # # Annotate each bar with its percentage
+    # for bar, proportion in zip(bars, variance_proportion):
+    #     ax.text(bar.get_x() + bar.get_width() / 2.0, bar.get_height(), f'{proportion:.2f}', ha='center', va='bottom')
+    #
+    # # Annotate the plot with the total contribution at specified dimension
+    # ax.text(dim, cumulative_variance_first_d_eigenvalues, f'{cumulative_variance_first_d_eigenvalues:.2f}',
+    #         ha='center', va='bottom', color='blue')
 
     # Draw a vertical line for the spectral gap score and annotate
     if len(eigenvalues) < dim:
@@ -1200,6 +1256,7 @@ def plot_gram_matrix_first_eigenvalues_contribution_clean(args, eigenvalues):
         d_plus_one_eigenvalue_normalized = variance_proportion[dim]
         gap_score_normalized = (mean_d_eigenvalues_normalized - d_plus_one_eigenvalue_normalized) / mean_d_eigenvalues_normalized
         last_spectral_gap = (last_eigenvalue_normalized - d_plus_one_eigenvalue_normalized) / (last_eigenvalue_normalized)
+
 
         # Custom legend handle for the arrow
         arrow_handle = Line2D([0], [0], color='purple', marker='>', markersize=10,
@@ -1216,14 +1273,14 @@ def plot_gram_matrix_first_eigenvalues_contribution_clean(args, eigenvalues):
         ax.legend(handles=legend_handles, labels=legend_labels)
 
     ax.set_xlabel('Eigenvalue Rank')
-    ax.set_ylabel('Eigenvalue Contribution Ratio')
+    ax.set_ylabel('Eigenvalue Contribution')
     ax.set_xticks(range(1, 6))  # Ensure x-axis labels go from 1 to 5
     ax.set_ylim(0, 1)  # Adjust y-axis to range from 0 to 1
 
     plt.tight_layout()
 
     plot_folder2 = args.directory_map['spatial_coherence']
-    plt.savefig(f"{plot_folder2}/gram_matrix_first_eigenvalues_contribution_clean_{args.args_title}.svg", format="svg",
+    plt.savefig(f"{plot_folder2}/gram_matrix_first_eigenvalues_contribution_clean_{args.args_title}.{args.format_plots}",
                 bbox_inches="tight")
     if args.show_plots:
         plt.show()

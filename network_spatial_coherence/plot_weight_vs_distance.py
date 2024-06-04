@@ -6,6 +6,7 @@ from structure_and_args import GraphArgs
 import seaborn as sns
 import os
 import networkx as nx
+import matplotlib.colors as mcolors
 
 import scienceplots
 
@@ -366,6 +367,12 @@ def plot_network(position_dataframe, edge_dataframe, colorcode_dataframe=None, s
         plt.savefig(save_path)
     plt.show()
 
+def get_maximally_separated_colors(num_colors):
+    hues = np.linspace(0, 1, num_colors + 1)[:-1]  # Avoid repeating the first color
+    colors = [mcolors.hsv_to_rgb([h, 0.7, 0.7]) for h in hues]  # S and L fixed for aesthetic colors
+    # Convert to HEX format for broader compatibility
+    colors = [mcolors.to_hex(color) for color in colors]
+    return colors
 
 def plot_network_subgraphs(position_dataframe, edge_dataframe, save_path=None):
     """
@@ -393,14 +400,15 @@ def plot_network_subgraphs(position_dataframe, edge_dataframe, save_path=None):
 
     big_subgraphs = 5
     # Select a colormap and get colors for the five largest subgraphs
-    color_map = plt.cm.get_cmap('viridis', big_subgraphs)  # Only use 5 colors
+
+    colors = get_maximally_separated_colors(big_subgraphs+1)
 
     # Initialize node colors, default color for those not in top 5
     node_colors = {node: 'grey' for component in subgraphs[big_subgraphs:] for node in component}  # Assign grey to smaller subgraphs
 
     # Assign colors to only the top 5 largest subgraphs
     for i, component in enumerate(subgraphs[:big_subgraphs]):
-        color = color_map(i)  # Get color from colormap
+        color = colors[i]  # Get color from colormap
         size = len(component)
         print("size subgraph", size)
 
@@ -423,19 +431,17 @@ def plot_network_subgraphs(position_dataframe, edge_dataframe, save_path=None):
         # Draw the subgraph with surrounding nodes
         fig, ax = plt.subplots(figsize=(8, 6))
         pos = nx.get_node_attributes(subgraph, 'pos')
-        nx.draw_networkx_nodes(subgraph, pos, node_color=[node_colors[node] for node in subgraph.nodes()], ax=ax, node_size=0.1)
-        nx.draw_networkx_edges(subgraph, pos, ax=ax, alpha=0.5)
+        nx.draw_networkx_nodes(subgraph, pos, node_color=[node_colors[node] for node in subgraph.nodes()], ax=ax, node_size=0.5)
+        nx.draw_networkx_edges(subgraph, pos, ax=ax, alpha=0.3)
         # ax.set_xlim(min(pos[node][0] for node in surrounding_nodes) - 10, max(pos[node][0] for node in surrounding_nodes) + 10)
         # ax.set_ylim(min(pos[node][1] for node in surrounding_nodes) - 10, max(pos[node][1] for node in surrounding_nodes) + 10)
         ax.set_xlabel('X coordinate')
         ax.set_ylabel('Y coordinate')
-        ax.set_title(f'Subgraph {i+1} with Surrounding Nodes')
         plt.axis('off')  # Turn off the axis
 
-        # Optionally save to file
         if save_path:
             plt.savefig(f'{save_path}_subgraph_{i+1}.png')
-        plt.show()
+        plt.close(fig)
 
     # Draw the entire network
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -446,7 +452,6 @@ def plot_network_subgraphs(position_dataframe, edge_dataframe, save_path=None):
     # Set labels and grid
     ax.set_xlabel('X coordinate')
     ax.set_ylabel('Y coordinate')
-    ax.set_title('Network Graph with Subgraphs Colored')
     plt.axis('off')  # Turn off the axis
 
     # Optionally save to file

@@ -103,16 +103,11 @@ def plot_control_markers_ann_data_and_filter(data, plot_folder, threshold_contro
 
 def filter_pxl_data(pxl_data, threshold_edges=5000, threshold_control_markers=10):
     control_markers = ["ACTB", "mIgG1", "mIgG2a", "mIgG2b"]
-
-    # Find indices of control markers
     marker_indices = [pxl_data.adata.var.index.get_loc(marker) for marker in control_markers]
-    # Extract expression data for control markers and check if below threshold
     below_threshold_mask = (pxl_data.adata.X[:, marker_indices] < threshold_control_markers).all(axis=1)
-    # Combine with your existing conditions
     combined_mask = below_threshold_mask & \
                     (pxl_data.adata.obs["edges"] >= threshold_edges) & \
                     (pxl_data.adata.obs["tau_type"] == "normal")
-    # Filter components
     components_to_keep = pxl_data.adata.obs[combined_mask].index
     print(f"Kept {len(components_to_keep)} out of {len(pxl_data.adata)} components (cells)")
     pxl_data_filtered = pxl_data.filter(components=components_to_keep)

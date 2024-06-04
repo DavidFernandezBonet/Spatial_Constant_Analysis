@@ -85,7 +85,7 @@ def perform_simulation(num_points, proximity_mode, intended_av_degree, dim, fals
     return spatial_constant_results
 
 
-def get_spatial_constant_results(args, mean_shortest_path, average_degree, num_nodes):
+def get_spatial_constant_results(args, mean_shortest_path, average_degree, num_nodes, depth=None):
 
     proximity_mode = args.proximity_mode
     dim = args.dim
@@ -94,6 +94,11 @@ def get_spatial_constant_results(args, mean_shortest_path, average_degree, num_n
     S = mean_shortest_path / ((num_nodes)**(1/dim))  # spatial constant
     K_log = mean_shortest_path / (np.log(num_nodes) / np.log(average_degree))     # small-world constant
     S_general = mean_shortest_path / ((num_nodes ** (1 / dim)) * (average_degree ** (-1 / dim)))
+
+    if depth is not None:
+        S_depth = mean_shortest_path / depth
+    else:
+        S_depth = "Not Computed"
 
     if args.dim == 2:
         if args.is_bipartite:
@@ -120,6 +125,7 @@ def get_spatial_constant_results(args, mean_shortest_path, average_degree, num_n
         'S': S,
         'S_general': S_general,
         'S_smallworld_general': K_log,
+        'S_depth': S_depth,
         'mean_shortest_path_prediction': mean_shortest_path_prediction,
         'msp_prediction_error': msp_prediction_error,
         'relative_msp_prediction_error': relative_msp_prediction_error
@@ -495,22 +501,429 @@ def run_simulation_subgraph_sampling(args, graph, size_interval=100, n_subgraphs
 
     return combined_df
 
+def run_simulation_subgraph_sampling_by_bfs_depth(args, graph, shortest_path_matrix, n_subgraphs=10, add_false_edges=False,
+                                     false_edge_list=[0,1,2,3,4],
+                                     plot_spatial_constant_against_false_edges=False, return_simple_output=True, all_depths=False,
+                                                  maximum_depth=None):
 
-def process_spatial_constant_false_edge_df(combined_df, false_edge_list):
+    """
+     Runs a simulation that samples subgraphs from a given graph (using BFS) to analyze various properties,
+     optionally adding minimum spanning trees (MST) and/or false edges to the graph before sampling.
+     The function supports parallel processing to speed up computations.
+
+     Args:
+         args: An object containing configuration parameters and options for the graph analysis,
+               including directory mappings and proximity mode settings.
+         graph: An igraph graph object to be analyzed. The graph is converted to the igraph format
+                if not already in that format.
+         size_interval (int): The interval size for subgraph sampling, determining the range of subgraph
+                              sizes to analyze. Defaults to 100.
+         n_subgraphs (int): The number of subgraphs to sample at each size interval. Defaults to 10.
+         add_false_edges (bool): Whether to add false edges to the graph before sampling. Defaults to False.
+         add_mst (bool): Whether to compute and analyze the minimum spanning tree of the graph. Defaults to False.
+         false_edge_list (list of int): A list specifying the numbers of false edges to add for each simulation run.
+                                        Only relevant if `add_false_edges` is True. Defaults to [0,1,2,3,4].
+         plot_spatial_constant_against_false_edges (bool): Whether to plot the spatial constant against the number
+                                                           of false edges added. Only relevant if `add_false_edges`
+                                                           is True. Defaults to False.
+
+     Returns:
+         pandas.DataFrame: A DataFrame containing the aggregated results of the subgraph sampling simulation,
+                           including spatial constant calculations for various subgraph sizes and configurations.
+
+     Raises:
+         ValueError: If `args` does not contain the necessary configuration for the simulation.
+
+     Note:
+         This function modifies the `args` object by updating it with results from the simulation, such as
+         mean shortest path and clustering coefficients. Ensure that `args` is properly configured before
+         calling this function. It plots the spatial constant plot.
+
+     """
+
+    # TODO: introduce option to not parallelize (can run into memory problems)
+
+    # Needs to be an igraph
+    igraph_graph = convert_graph_type(args, graph, desired_type='igraph')
+
+
+    num_elements = 10
+    # TODO: add cap for big graphs
+    max_depth = np.max(shortest_path_matrix)
+    if all_depths:
+        if maximum_depth is not None:
+            max_depth = maximum_depth
+            depth_list = np.arange(2, max_depth+1, step=1)
+
+        else:
+            depth_list = np.arange(2, max_depth//2, step=1)
+    else:
+        depth_list = np.linspace(2, max_depth // 2, num_elements)
+    depth_list = np.unique(np.array(depth_list, dtype=int))
+    if args.verbose:
+        print("depth list", depth_list)
+        print("max shortest path", max_depth)
+
+
+
+    if add_false_edges:
+        max_false_edges = max(false_edge_list)  # Assume false_edge_list is defined
+        all_random_false_edges = select_false_edges(igraph_graph, max_false_edges)
+
+        all_results = []
+        # false_edge_list = [0, 5, 20, 100]   # now it is a default argument
+        for false_edge_number in false_edge_list:
+            args_copy = copy.deepcopy(args)
+            args_copy.false_edges_count = false_edge_number
+            igraph_graph_false = add_specific_random_edges_igraph(igraph_graph.copy(), all_random_false_edges,
+                                                                  false_edge_number)
+
+            pool = multiprocessing.Pool(multiprocessing.cpu_count())
+
+
+            tasks = [(depth, args_copy, igraph_graph_false, n_subgraphs) for depth in depth_list]
+            results = pool.starmap(process_subgraph__bfs_parallel_with_depth, tasks)
+            pool.close()
+            pool.join()
+            flat_results = [item for sublist in results for item in sublist]
+            results_df = pd.DataFrame(flat_results)
+            all_results.append(results_df)
+
+
+        else:
+
+            # Spatial constant against subgraph size
+            plot_spatial_constant_against_subgraph_size_with_false_edges(args, all_results, false_edge_list, use_depth=True)
+
+            if plot_spatial_constant_against_false_edges:
+                # Spatial constant against false edge count
+                processed_false_edge_series = aggregate_spatial_constant_by_size(all_results, false_edge_list)
+                plot_false_edges_against_spatial_constant(args, processed_false_edge_series)
+
+        csv_filename = f"spatial_constant_subgraph_sampling_{args.args_title}_with_false_edges.csv"
+        combined_df = pd.concat(all_results, ignore_index=True)
+        combined_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}", index=False)
+
+        processed_spatial_constant = process_spatial_constant_false_edge_df(combined_df=all_results,
+                                                                            false_edge_list=false_edge_list,
+                                                                            use_depth=True)
+        combined_df = processed_spatial_constant
+
+    else:   # If we don't add false edges
+        #     # Generate subgraphs with BFS
+        if args.verbose:
+            print("running normal bfs")
+        igraph_graph_copy = igraph_graph.copy()
+        pool = multiprocessing.Pool(multiprocessing.cpu_count())
+        tasks = [(depth, args, igraph_graph_copy, n_subgraphs) for depth in depth_list]
+        results = pool.starmap(process_subgraph__bfs_parallel_with_depth, tasks)
+        pool.close()
+        pool.join()
+        # Flatten the list of results
+        flat_results = [item for sublist in results for item in sublist]
+
+        # Create DataFrame from results
+        results_df = pd.DataFrame(flat_results)
+
+        csv_filename = f"spatial_constant_subgraph_sampling_{args.args_title}.csv"
+        results_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}", index=False)
+        # plot_sample_spatial_constant(args, results_df)  # This is an old barplot
+
+        processed_spatial_constant = process_spatial_constant_false_edge_df(combined_df=[results_df],
+                                                                            false_edge_list=[1], use_depth=True)
+        if return_simple_output:
+            combined_df = processed_spatial_constant
+        else:
+            combined_df = results_df
+
+        csv_filename = f"spatial_constant_subgraph_sampling_processed_{args.args_title}.csv"
+        combined_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}",
+                          index=False)
+
+        plot_spatial_constant_against_subgraph_size(args, results_df, use_depth=True)
+
+    return combined_df
+def process_spatial_constant_false_edge_df(combined_df, false_edge_list, use_depth=False):
     # Initialize an empty DataFrame to store results
     results_df_stored = pd.DataFrame()
 
+    if use_depth:
+        size_magnitude = 'depth'
+        s_constant = 'S_depth'
+    else:
+        size_magnitude = 'intended_size'
+        s_constant = 'S_general'
+
     for dataframe, false_edge_count in zip(combined_df, false_edge_list):
-        unique_sizes = dataframe['intended_size'].unique()
+        unique_sizes = dataframe[size_magnitude].unique()
         means = []
         std_devs = []
         sizes = []
 
         # Calculate mean and standard deviation for each size
         for size in unique_sizes:
-            subset = dataframe[dataframe['intended_size'] == size]
-            mean = subset['S_general'].mean()
-            std = subset['S_general'].std()
+            subset = dataframe[dataframe[size_magnitude] == size]
+            mean = subset[s_constant].mean()
+            std = subset[s_constant].std()
+            means.append(mean)
+            std_devs.append(std)
+            sizes.append(size)
+
+        sizes = np.array(sizes)
+        means = np.array(means)
+        std_devs = np.array(std_devs)
+
+        # Perform linear regression
+        slope, intercept, r_value, p_value, std_err = linregress(sizes, means)
+        r_squared = r_value ** 2  # Coefficient of determination
+
+        # # Plotting the data
+        # plt.figure(figsize=(10, 6))
+        # plt.scatter(sizes, means, label='Data Points')
+        # plt.errorbar(sizes, means, yerr=std_devs, fmt='o', ecolor='lightgray', elinewidth=3, capsize=0)
+        #
+        # # Plotting the linear fit
+        # fit_line = slope * sizes + intercept
+        # plt.plot(sizes, fit_line, color='red', label=f'Linear Fit: y={slope:.2f}x+{intercept:.2f}')
+        #
+        # plt.xlabel('Sizes')
+        # plt.ylabel('Means')
+        # plt.title('Linear Regression Fit')
+        # plt.legend()
+        # plt.show()
+
+
+        # Create a DataFrame for the current false_edge_count results
+        ### #TODO: here do we want to store also the sizes and means?
+        # temp_df = pd.DataFrame({
+        #     'False Edge Count': false_edge_count,
+        #     'Sizes': sizes,
+        #     'Means': means,
+        #     'Standard Deviation': std_devs,
+        #     'Slope': np.repeat(slope, len(sizes)),
+        #     'R_squared': np.repeat(r_squared, len(sizes))
+        # })
+
+        temp_df = pd.DataFrame({
+            'False Edge Count': [false_edge_count],  # Ensure this is a list so it's treated as a single row
+            'Slope': [slope],
+            'R_squared': [r_squared],
+            'Spatial_Constant_at_max_size': [means[-1]]
+        })
+
+        # Append the temporary DataFrame to the results DataFrame
+        results_df_stored = pd.concat([results_df_stored, temp_df], ignore_index=True)
+
+    spatial_constant_df = results_df_stored
+    return spatial_constant_df
+
+
+def run_spatial_constant_continuous(args, graph, shortest_path_matrix, n_subgraphs=10, n_intervals=10, add_false_edges=False,
+                                     plot_spatial_constant_against_false_edges=False, return_simple_output=True,
+                                    false_edge_list=[]):
+    all_distances = shortest_path_matrix.flatten()
+    start_distance = np.quantile(all_distances, 0.1)
+    stop_distance = np.quantile(all_distances, 0.5)
+    distance_intervals = np.linspace(start_distance, stop_distance, num=n_intervals)
+
+
+    characteristic_depth = np.quantile(all_distances, 0.3)
+    central_node = find_central_nodes(distance_matrix=shortest_path_matrix)
+    within_distance = np.where(shortest_path_matrix[central_node] <= characteristic_depth)[0]
+    subgraph = graph[within_distance, :][:, within_distance]
+    num_subgraph_nodes = subgraph.shape[0]
+    density = num_subgraph_nodes / ((characteristic_depth)**(args.dim))
+
+
+    # print("distance intervals", distance_intervals)
+    # print("TRUE", shortest_path_matrix[:3])
+    # print("mean shortest path distance all nodes", np.mean(all_distances))
+    # print("spatial constant", np.mean(all_distances)/args.L)
+    # print("max distance", np.max(all_distances))
+    if add_false_edges:
+        max_false_edges = max(false_edge_list)  # Assume false_edge_list is defined
+        all_random_false_edges = select_false_edges_csr(graph, max_false_edges)
+        all_results = []
+        # false_edge_list = [0, 5, 20, 100]   # now it is a default argument
+        for i, false_edge_number in enumerate(false_edge_list):
+            # print("POSITIONS PATH", args.positions_path)
+            print("graph", i, "false edge number", false_edge_number)
+            args_copy = copy.deepcopy(args)
+            args_copy.false_edges_count = false_edge_number
+
+            modified_graph = add_specific_random_edges_to_csrgraph(graph.copy(), all_random_false_edges,
+                                                                   false_edge_number, args=args_copy, weighted=True)
+            shortest_path_matrix = shortest_path(modified_graph, unweighted=False)
+            ## Parallel
+            pool = multiprocessing.Pool(multiprocessing.cpu_count())
+            tasks = [(args_copy, shortest_path_matrix, modified_graph, dist_threshold, n_subgraphs, density) for dist_threshold in
+                     distance_intervals]
+            results = pool.starmap(sample_subgraphs_continuous, tasks)
+            pool.close()
+            pool.join()
+            flat_results = [item for sublist in results for item in sublist]
+            results_df = pd.DataFrame(flat_results)
+            all_results.append(results_df)
+
+            # ### Unparallel
+            # results = []
+            # # Loop over each distance threshold sequentially
+            # for dist_threshold in distance_intervals:
+            #     # Call the sampling function for each distance threshold
+            #     subgraph_results = sample_subgraphs_continuous(args, shortest_path_matrix, modified_graph,
+            #                                                    dist_threshold, n_subgraphs, density)
+            #     results.extend(subgraph_results)  # Accumulate all results
+            #     # Flatten results if needed, in this case, each call to sample_subgraphs returns a list of dictionaries
+            #     flat_results = [item for sublist in results for item in sublist]
+            #
+            # results_df = pd.DataFrame(flat_results)
+            # all_results.append(results_df)
+
+
+            # Spatial constant against subgraph size
+        plot_spatial_constant_against_subgraph_size_with_false_edges(args, all_results, false_edge_list, use_depth=True)
+
+
+        csv_filename = f"spatial_constant_subgraph_sampling_{args.args_title}_with_false_edges_weighted.csv"
+        combined_df = pd.concat(all_results, ignore_index=True)
+        combined_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}", index=False)
+        processed_spatial_constant = process_spatial_constant_false_edge_df(combined_df=all_results,
+                                                                            false_edge_list=false_edge_list,
+                                                                            use_depth=True)
+        combined_df = processed_spatial_constant
+        results_df = combined_df
+    else:
+        # Case where no false edges are added
+        ## Parallel
+        pool = multiprocessing.Pool(multiprocessing.cpu_count())
+        tasks = [(args, shortest_path_matrix, graph, dist_threshold, n_subgraphs, density) for dist_threshold in distance_intervals]
+        results = pool.starmap(sample_subgraphs_continuous, tasks)
+        pool.close()
+        pool.join()
+        flat_results = [item for sublist in results for item in sublist]
+
+        # ### Unparallel
+        # results = []
+        # # Loop over each distance threshold sequentially
+        # for dist_threshold in distance_intervals:
+        #     # Call the sampling function for each distance threshold
+        #     subgraph_results = sample_subgraphs_continuous(args, shortest_path_matrix, graph, dist_threshold, n_subgraphs)
+        #     results.extend(subgraph_results)  # Accumulate all results
+
+        # Flatten results if needed, in this case, each call to sample_subgraphs returns a list of dictionaries
+        # flat_results = [item for sublist in results for item in sublist]
+
+        results_df = pd.DataFrame(flat_results)
+        ## all_results.append(results_df)  # this would be if we had false edges, but still unclear with weighted approach
+        plot_spatial_constant_against_subgraph_size(args, results_df, use_depth=True)
+        processed_spatial_constant = process_spatial_constant_false_edge_df(combined_df=[results_df],
+                                                                            false_edge_list=[1], use_depth=True)
+
+    if return_simple_output:
+        combined_df = processed_spatial_constant
+    else:
+        combined_df = results_df
+
+    csv_filename = f"spatial_constant_subgraph_sampling_processed_{args.args_title}.csv"
+    combined_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}",
+                       index=False)
+    return combined_df
+
+
+def plot_subgraph_positions(original_positions_array, within_distance, mean_distance, spatial_constant, max_distance,
+                            distance_depth,
+                            title_suffix=''):
+    """
+    """
+    plt.figure(figsize=(10, 8))
+    plt.scatter(original_positions_array[:, 0], original_positions_array[:, 1], c='gray', alpha=0.5,
+                label='Outside Subgraph')
+    plt.scatter(original_positions_array[within_distance, 0], original_positions_array[within_distance, 1], c='red',
+                label='Within Subgraph')
+
+    # Define the text for the annotation box
+    stats_text = (f"Mean Distance: {mean_distance:.2f}\n"
+                  f"Max Distance: {max_distance:.2f}\n"
+                  f"Distance Depth: {distance_depth:.2f}\n"
+                  f"Spatial Constant: {spatial_constant:.3f}")
+
+    # Place a text box in upper left in axes coords
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+    plt.gca().text(0.05, 0.95, stats_text, transform=plt.gca().transAxes, fontsize=10,
+                   verticalalignment='top', bbox=props)
+
+    # Annotations and labels
+    plt.title('Subgraph Nodes Visualization')
+    plt.xlabel('X Position')
+    plt.ylabel('Y Position')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+def sample_subgraphs_continuous(args, shortest_path_matrix, csr_graph, distance_depth, n_subgraphs, density):
+    num_nodes = shortest_path_matrix.shape[0]
+    results = []
+    # Select n_subgraphs random nodes as starting points for subgraphs
+    central_nodes = np.random.choice(num_nodes, size=n_subgraphs, replace=False)
+
+    # original_positions_array = read_position_df(args)
+    for node in central_nodes:
+        within_distance = np.where(shortest_path_matrix[node] <= distance_depth)[0]
+        subgraph = csr_graph[within_distance, :][:, within_distance]
+        # Use scipy's shortest_path function to compute all pairs shortest paths in the subgraph
+        if subgraph.shape[0] > 1:  # More than one node, can compute paths
+            num_subgraph_nodes = subgraph.shape[0]
+            subgraph_distances = shortest_path(subgraph, directed=False, method='D', unweighted=False)
+
+            finite_distances = subgraph_distances[np.isfinite(subgraph_distances)]
+            mean_distance = np.mean(finite_distances) if finite_distances.size > 0 else 0
+            # spatial_constant = mean_distance / distance_depth
+
+
+            spatial_constant = mean_distance / ((num_subgraph_nodes/density)**(1/args.dim))
+
+            # if distance_depth > 1.9:
+            #     print(subgraph_distances[:3])
+            #     print(mean_distance, spatial_constant, np.max(finite_distances), distance_depth)
+
+            spatial_constant_results = {
+                'proximity_mode': args.proximity_mode,
+                'mean_shortest_path': mean_distance,
+                'num_nodes': num_subgraph_nodes,
+                'dim': args.dim,
+                'depth': distance_depth,
+                'S_depth': spatial_constant,
+                'S_general': spatial_constant
+            }
+            results.append(spatial_constant_results)
+
+            # plot_subgraph_positions(original_positions_array, within_distance, mean_distance, spatial_constant,
+            #                         max_distance=np.max(finite_distances), distance_depth=distance_depth,
+            #                         title_suffix=f' - Central Node {node}')
+        else:
+            raise ValueError("Subgraph has 0 or 1 node'.")
+    return results
+def process_spatial_constant_false_edge_df(combined_df, false_edge_list, use_depth=False):
+    # Initialize an empty DataFrame to store results
+    results_df_stored = pd.DataFrame()
+
+    if use_depth:
+        size_magnitude = 'depth'
+        s_constant = 'S_depth'
+    else:
+        size_magnitude = 'intended_size'
+        s_constant = 'S_general'
+
+    for dataframe, false_edge_count in zip(combined_df, false_edge_list):
+        unique_sizes = dataframe[size_magnitude].unique()
+        means = []
+        std_devs = []
+        sizes = []
+
+        # Calculate mean and standard deviation for each size
+        for size in unique_sizes:
+            subset = dataframe[dataframe[size_magnitude] == size]
+            mean = subset[s_constant].mean()
+            std = subset[s_constant].std()
             means.append(mean)
             std_devs.append(std)
             sizes.append(size)
@@ -565,6 +978,10 @@ def process_spatial_constant_false_edge_df(combined_df, false_edge_list):
 
 
 
+
+
+
+
 def process_subgraph__bfs_parallel(size_subgraphs, args, igraph_graph, n_subgraphs):
     results = []
     if size_subgraphs > args.num_points:
@@ -586,6 +1003,31 @@ def process_subgraph__bfs_parallel(size_subgraphs, args, igraph_graph, n_subgrap
         spatial_constant_results = get_spatial_constant_results(args, mean_shortest_path, average_degree=avg_degree,
                                                                 num_nodes=num_nodes)
         spatial_constant_results["intended_size"] = size_subgraphs
+        spatial_constant_results["false_edge_number"] = args.false_edges_count
+        results.append(spatial_constant_results)
+
+    return results
+
+
+def process_subgraph__bfs_parallel_with_depth(depth, args, igraph_graph, n_subgraphs):
+    results = []
+
+    # closeness = igraph_graph.closeness()
+    # central_nodes = sorted(range(len(closeness)), key=lambda i: closeness[i], reverse=True)[:n_subgraphs]
+    print("depth:", depth)
+
+    subgraphs = get_bfs_samples_by_depth(igraph_graph, n_graphs=n_subgraphs, bfs_depth=depth, node_ids=None)
+
+    for subgraph in subgraphs:
+        num_nodes = subgraph.vcount()
+        degrees = subgraph.degree()
+        avg_degree = sum(degrees) / num_nodes
+
+        mean_shortest_path = get_mean_shortest_path(subgraph)
+        spatial_constant_results = get_spatial_constant_results(args, mean_shortest_path, average_degree=avg_degree,
+                                                                num_nodes=num_nodes, depth=depth)
+        spatial_constant_results["intended_size"] = "Not Computed"
+        spatial_constant_results["depth"] = depth
         spatial_constant_results["false_edge_number"] = args.false_edges_count
         results.append(spatial_constant_results)
 
@@ -865,12 +1307,74 @@ def get_spatial_constant_euclidean_df(args, positions_array, size_interval, num_
     results_df = pd.DataFrame(final_results)
     return results_df
 
+def get_spatial_constant_euclidean_df_by_depth(args, positions_array, num_intervals, num_samples=10):
+    final_results = []
+    # size_threshold_list = np.arange(50, args.num_points, size_interval)
 
-def plot_euc_spatial_constant_against_size_threshold(args, results_df):
+    max_distances = np.linalg.norm(positions_array[:, np.newaxis] - positions_array, axis=2)
+    max_distance = np.max(max_distances)
+
+    # Create distance thresholds evenly spaced between zero and max_distance
+    size_threshold_list = np.linspace(0.3, max_distance / 2, num_intervals)[1:]
+
+
+    for i, size_threshold in enumerate(size_threshold_list):
+        spatial_constants = []  # Collect spatial constants for current size_threshold
+
+        for _ in range(num_samples):
+            # Pick a random node
+            random_index = random.randint(0, positions_array.shape[0] - 1)
+            random_node = positions_array[random_index]
+
+            # Calculate distances to all other nodes from the randomly chosen node
+            distances = np.linalg.norm(positions_array - random_node, axis=1)
+
+            # Find the subset of nodes within the given distance threshold
+            subset_indices = np.where(distances <= size_threshold)[0]
+            subset = positions_array[subset_indices]
+
+            # Perform any computation on the subset (e.g., average distance, spatial constant)
+            avg_distance = compute_average_distance(subset)
+
+            print(f"Average distance: {avg_distance} at size_threshold: {size_threshold}")
+
+            # Compute spatial constant
+            number_points = len(subset)
+            spatial_constant = avg_distance * ((args.num_points ) / number_points) ** (1 / args.dim)
+            # spatial_constant = avg_distance * (((args.num_points)/(np.pi)) / number_points) ** (1 / args.dim)
+
+            print(f"Spatial constant: {spatial_constant} at size_threshold: {size_threshold}")
+
+            spatial_constants.append(spatial_constant)
+
+        # Calculate mean and standard deviation of spatial constants for the current size_threshold
+        mean_spatial_constant = np.mean(spatial_constants)
+        std_spatial_constant = np.std(spatial_constants)
+
+        # Store the mean and std for each size_threshold
+        final_results.append({
+            'depth': i+2,
+            'mean_spatial_constant': mean_spatial_constant,
+            'std_spatial_constant': std_spatial_constant
+        })
+
+    # Convert final results to DataFrame
+    results_df = pd.DataFrame(final_results)
+    return results_df
+
+
+def plot_euc_spatial_constant_against_size_threshold(args, results_df, use_depth=False):
     plt.figure(figsize=(10, 6))
+    if use_depth:
+        size_magnitude = 'depth'
+        # s_constant = 'S_depth'
+        s_constant = 'S_general'
+    else:
+        size_magnitude = 'intended_size'
+        s_constant = 'S_general'
 
     # Data from results_df
-    sizes = results_df['size_threshold'].values
+    sizes = results_df[size_magnitude].values
     means = results_df['mean_spatial_constant'].values
     std_devs = results_df['std_spatial_constant'].values
 
@@ -883,7 +1387,11 @@ def plot_euc_spatial_constant_against_size_threshold(args, results_df):
     plt.fill_between(sizes, means - std_devs, means + std_devs, color=ribbon_color, alpha=0.3,
                      edgecolor=contour_ribbon_color, linewidth=1, linestyle='--')
 
-    plt.xlabel('Subgraph Size')
+    if use_depth:
+        plt.xlabel('BFS Depth')
+    else:
+        plt.xlabel('Size')
+
     plt.ylabel('Mean Spatial Constant')
     plt.title('Mean Spatial Constant vs. Subgraph Size')
     plt.legend()
@@ -894,13 +1402,21 @@ def plot_euc_spatial_constant_against_size_threshold(args, results_df):
     plt.show()
 
 
-def plot_spatial_constant_euc_vs_network(args, results_df_euc, results_df_net, useful_plot_folder):
+def plot_spatial_constant_euc_vs_network(args, results_df_euc, results_df_net, useful_plot_folder, use_depth=False):
 
     plt.figure(figsize=(6, 4.5))
 
+    if use_depth:
+        size_magnitude = 'depth'
+        # s_constant = 'S_depth'
+        s_constant = 'S_general'
+    else:
+        size_magnitude = 'intended_size'
+        s_constant = 'S_general'
+
     ### Euclidean
     # Data from results_df_euc
-    sizes_euc = results_df_euc['size_threshold'].values
+    sizes_euc = results_df_euc[size_magnitude].values
     means_euc = results_df_euc['mean_spatial_constant'].values
     std_devs_euc = results_df_euc['std_spatial_constant'].values
 
@@ -914,14 +1430,14 @@ def plot_spatial_constant_euc_vs_network(args, results_df_euc, results_df_net, u
     ### Network
     # Data from results_df_net
 
-    unique_sizes = results_df_net['intended_size'].unique()
+    unique_sizes = results_df_net[size_magnitude].unique()
     means = []
     std_devs = []
     sizes = []
 
     # Calculate mean and standard deviation for each size
     for size in unique_sizes:
-        subset = results_df_net[results_df_net['intended_size'] == size]
+        subset = results_df_net[results_df_net[size_magnitude] == size]
         mean = subset['S_general'].mean()
         std = subset['S_general'].std()
         means.append(mean)
@@ -937,7 +1453,11 @@ def plot_spatial_constant_euc_vs_network(args, results_df_euc, results_df_net, u
     plt.plot(sizes_net, means_net, label='Network', color='#009ADE', marker='o')
     plt.fill_between(sizes_net, means_net - std_devs_net, means_net + std_devs_net, color='#009ADE', alpha=0.3)
 
-    plt.xlabel('Subgraph Size')
+    if use_depth:
+        plt.xlabel('Depth')
+    else:
+        plt.xlabel('Size')
+
     plt.ylabel('Mean Spatial Constant')
     plt.legend()
 

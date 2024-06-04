@@ -18,6 +18,10 @@ from data_analysis import calculate_figsize_n_subplots
 
 import statsmodels.api as sm
 from matplotlib.gridspec import GridSpec
+import plotly.graph_objects as go
+import json
+import plotly.io as pio
+import base64
 # font_size = 24
 # plt.style.use(['no-latex', 'nature'])
 #
@@ -72,7 +76,7 @@ def compute_correlation_between_distance_matrices(matrix1, matrix2):
     correlation, _ = stats.pearsonr(flat_matrix1, flat_matrix2)
     return correlation
 
-def run_dimension_prediction_continuous(args, distance_matrix, num_bins=10, plot_heatmap_all_nodes=True):
+def run_dimension_prediction_euclidean_discrete(args, distance_matrix, num_bins=10, plot_heatmap_all_nodes=True):
     # Determine the range and bin width
 
     max_distance = args.L * 2   # TODO: before this was args.L, careful because it changes bins size
@@ -194,6 +198,103 @@ def run_dimension_prediction_continuous(args, distance_matrix, num_bins=10, plot
         return max_sum_index, fig_data
     else:
         return max_sum_index
+
+
+def run_dimension_prediction_continuous(args, distance_matrix, num_central_nodes=12):
+    central_nodes = find_central_nodes(distance_matrix=distance_matrix, num_central_nodes=num_central_nodes)
+
+
+    # Define the range for distances
+    distance_min = 0
+    distance_max = np.max(distance_matrix)
+    distance_space = np.linspace(distance_min, distance_max, 1000)
+
+    # distances = distance_matrix.flatten()
+    # non_zero_distances = distances[distances != 0]  # Remove this line if you want zeros in the plot
+    #
+    # # Create a violin plot of distances
+    # sns.violinplot(data=non_zero_distances)
+    # plt.title('Violin plot of distances')
+    # plt.xlabel('Distance values')
+    # plt.show()
+
+    ### Take into account several central nodes for dimension prediction
+    results_dimension_prediction = {}
+    predicted_dimensions = []
+    std_errors = []
+    fit_dict_list = []
+    fit_data_list = []
+
+
+    # Perform analysis for each central node individually
+    for node in central_nodes:
+        node_counts = np.zeros_like(distance_space)
+        for i, dist in enumerate(distance_space):
+            node_counts[i] = np.sum(distance_matrix[node] <= dist)
+
+
+        # Find the first index where node_counts is not zero to avoid log(0)
+        valid_start_index = np.argmax(node_counts > 0)
+        if valid_start_index == 0 and node_counts[0] == 0:
+            continue  # Skip this node if all counts are zero
+
+        valid_distances = distance_space[valid_start_index:]
+        valid_node_counts = node_counts[valid_start_index:]
+
+        # Adjust starting index for logarithmic data from the 100th value onwards
+        start_index = 100 if len(valid_distances) > 100 else 0
+        log_x_data = np.log(valid_distances[start_index:])  # Log of distances
+        log_y_data = np.log(valid_node_counts[start_index:])  # Log of corresponding node counts
+
+        # Perform linear fitting in log-log space
+        fit_dict = linear_part_and_stats(log_x_data, log_y_data)
+        slope = fit_dict['best_slope']
+        std_err = fit_dict['best_std_err']
+
+
+        ### Store a random fit
+        results_dimension_prediction["fit_dict"] = fit_dict
+        results_dimension_prediction["fit_data"] = (log_x_data, log_y_data)
+        fit_dict_list.append(fit_dict)
+        fit_data_list.append((log_x_data, log_y_data))
+
+
+
+        predicted_dimension = slope
+        predicted_dimensions.append(predicted_dimension)
+        std_errors.append(std_err)
+
+        # # Optional: Plot each individual fit for visual inspection using normal axes for log-log data
+        # fit_line = fit_dict['best_intercept'] + fit_dict['best_slope'] * log_x_data
+        # plt.figure(figsize=(10, 6))
+        # plt.scatter(log_x_data, log_y_data, label=f'Actual Data for Node {node}')
+        # plt.plot(log_x_data, fit_line, 'r--', label=f'Linear Fit: y = {fit_dict["best_slope"]:.2f}x + {fit_dict["best_intercept"]:.2f}')
+        # plt.xlabel('Log of Distance')
+        # plt.ylabel('Log of Count of Nodes')
+        # plt.title(f'Log-Log Fit of Node Count vs. Distance for Node {node}')
+        # plt.legend()
+        # plt.grid(True)
+        # plt.show()
+
+
+    variances = np.array(std_errors) ** 2
+    variances[variances == 0] = 1e-10
+    print("variances", variances)
+    print("predicted_dimensions", predicted_dimensions)
+    weighted_avg_dimension = np.sum(np.array(predicted_dimensions) / variances) / np.sum(1 / variances)
+    std_error_weighted_avg = np.sqrt(1 / np.sum(1 / variances))
+    results_dimension_prediction['predicted_dimension'] = weighted_avg_dimension
+    results_dimension_prediction['std_predicted_dimension'] = std_error_weighted_avg
+    results_dimension_prediction['predicted_dimension_list'] = predicted_dimensions
+    results_dimension_prediction['std_predicted_dimension_list'] = std_errors
+    results_dimension_prediction['fit_dict_list'] = fit_dict_list
+    results_dimension_prediction['fit_data_list'] = fit_data_list
+
+    # TODO: this works only if we have more than 1 central node
+    plot_main_predicted_dimension_1series(args, results_dimension_prediction, title=args.args_title)
+    plot_main_predicted_dimension_multiple_fits(args, results_dimension_prediction, title=args.args_title)
+
+    return results_dimension_prediction
 
 
 def plot_dimension_fit(args, dist_threshold, cumulative_count, surface_count, cumulative_std=None):
@@ -350,126 +451,7 @@ def compute_local_dimension(args, distance_matrix, central_node_indices, dist_th
     plt.close()
 
 
-def find_best_fit_segment_old(x_data, y_data, min_points=10):
-    fit_results_dict = {}
-    best_r2 = -np.inf
-    best_start = None
-    best_end = None
-    n = len(x_data)
-    for start in range(n - min_points):
-        for end in range(start + min_points, n + 1):
-            slope, intercept, r_value, p_value, std_err = linregress(x_data[start:end], y_data[start:end])
-            if r_value ** 2 > best_r2:  # R² value
-                best_slope = slope
-                best_intercept = intercept
-                best_r2 = r_value ** 2
-                best_start = start
-                best_end = end
-                best_std_err = std_err
-                best_p_value = p_value
 
-    fit_results_dict['best_slope'] = best_slope
-    fit_results_dict['best_intercept'] = best_intercept
-    fit_results_dict['best_r2'] = best_r2
-    fit_results_dict['best_start'] = best_start
-    fit_results_dict['best_end'] = best_end
-    fit_results_dict['best_std_err'] = best_std_err
-    fit_results_dict['best_p_value'] = best_p_value
-    return fit_results_dict
-
-
-def find_best_fit_segment(x_data, y_data, min_points=10,  min_r2=0.999, args=None):
-    min_slope = 1  # avoid finite size effects
-    if args is not None:
-        if args.proximity_mode == 'experimental':
-            min_r2 = 0.95
-    n = len(x_data)
-    initial_min_points = min_points
-    # Adjusting min_points dynamically if no suitable segment is found initially.
-    for min_points in range(initial_min_points, 1, -1):  # Stop at 2 since we need at least 2 points for a line
-        best = {'best_slope': 0, 'best_r2': -np.inf}
-        best_consistency = np.inf
-        best_segment = None
-
-        for start in range(n - min_points + 1):
-            for end in range(start + min_points, n + 1):
-                slope, intercept, r_value, p_value, std_err = linregress(x_data[start:end], y_data[start:end])
-
-                # Skip segments that do not meet the minimum slope criterion and the r2 criterion
-                if r_value ** 2 < min_r2 or slope < min_slope:
-                #if r_value ** 2 < min_r2:
-                    continue
-
-                predictions = slope * x_data[start:end] + intercept
-                residuals = y_data[start:end] - predictions
-                consistency = np.std(residuals)
-                r2 = r_value ** 2
-
-                # Update the best segment if the current one has a higher slope, or if the slope is the same but has better consistency
-                if slope > best['best_slope'] or (slope == best['best_slope'] and consistency < best_consistency):
-                    best_consistency = consistency
-                    best_segment = (start, end)
-                    best.update({
-                        'best_slope': slope,
-                        'best_intercept': intercept,
-                        'best_r2': r2,
-                        'best_start': start,
-                        'best_end': end,
-                        'best_std_err': std_err,
-                        'best_p_value': p_value,
-                    })
-
-        if best_segment:  # If a suitable segment is found at any point, return it
-            return best
-    # If the loop exits without finding a segment, we've tried down to the minimum segment size without success.
-    # As a last resort, return the best attempt with the smallest min_points.
-    return best
-
-
-# def find_best_fit_segment_with_derivative_analysis(x_data, y_data, min_points=10, min_r2=0.999,
-#                                                    slope_change_threshold=0.6):
-#     n = len(x_data)
-#     best = {'best_slope': 0, 'best_r2': -np.inf, 'best_segment': None}
-#
-#     # Calculate the derivative of y with respect to x
-#     dy_dx = np.diff(y_data) / np.diff(x_data)
-#
-#     # Append a zero at the end to maintain the array size
-#     dy_dx = np.append(dy_dx, 0)
-#
-#     for start in range(n - min_points + 1):
-#         for end in range(start + min_points, n + 1):
-#             # Check for significant slope changes within the segment
-#             if np.any(np.abs(np.diff(dy_dx[start:end])) > slope_change_threshold):
-#                 print("Significant slope change detected", np.abs(np.diff(dy_dx[start:end])))
-#                 # Skip segment if significant slope change detected
-#                 continue
-#
-#             slope, intercept, r_value, p_value, std_err = linregress(x_data[start:end], y_data[start:end])
-#             r2 = r_value ** 2
-#
-#             # Continue if the segment doesn't meet criteria
-#             if r2 < min_r2 or slope <= 0:
-#                 continue
-#
-#             # Update best if this segment is better
-#             if r2 > best['best_r2']:
-#                 best.update({
-#                     'best_slope': slope,
-#                     'best_r2': r2,
-#                     'best_intercept': intercept,
-#                     'best_start': start,
-#                     'best_end': end,
-#                     'best_std_err': std_err,
-#                     'best_p_value': p_value,
-#                     'best_segment': (start, end)
-#                 })
-#
-#     if best['best_segment']:
-#         return best
-#     else:
-#         # No suitable segment found
-#         return best
 
 
 def find_best_fit_segment_with_derivative_analysis(x_data, y_data, min_points=10, min_r2=0.98,
@@ -724,6 +706,7 @@ def run_dimension_prediction(args, distance_matrix, dist_threshold=6,
     #                                                   surface_count=count_by_distance_average)
 
     try:
+        # This is the main function to compute the fits
         results_dimension_prediction = compute_dimension_prediction_fits(args, central_nodes, num_central_nodes, distance_count_matrix)
     except Exception as e:
         # Handle the error: log it, pass, or take corrective action
@@ -824,6 +807,7 @@ def compute_dimension_prediction_fits(args, central_nodes, num_central_nodes, di
         slope = fit_dict['best_slope']
         std_err = fit_dict['best_std_err']
 
+
         ### Store a random fit
         results_dimension_prediction["fit_dict"] = fit_dict
         results_dimension_prediction["fit_data"] = (log_x_data, log_y_data)
@@ -838,6 +822,9 @@ def compute_dimension_prediction_fits(args, central_nodes, num_central_nodes, di
 
 
     variances = np.array(std_errors) ** 2
+    variances[variances == 0] = 1e-10
+    print("variances", variances)
+    print("predicted_dimensions", predicted_dimensions)
     weighted_avg_dimension = np.sum(np.array(predicted_dimensions) / variances) / np.sum(1 / variances)
     std_error_weighted_avg = np.sqrt(1 / np.sum(1 / variances))
     results_dimension_prediction['predicted_dimension'] = weighted_avg_dimension
@@ -892,7 +879,7 @@ def plot_main_predicted_dimension_1series(args, results_predicted_dimension, tit
     # Save and show plot
     if hasattr(args, 'directory_map') and 'spatial_coherence' in args.directory_map:
         plot_folder = args.directory_map['spatial_coherence']
-        plt.savefig(f"{plot_folder}/predicted_dimension_and_fit_{title}.svg", format="svg", bbox_inches="tight")
+        plt.savefig(f"{plot_folder}/predicted_dimension_and_fit_{title}.{args.format_plots}", bbox_inches="tight")
     if hasattr(args, 'show_plots') and args.show_plots:
         plt.show()
 
@@ -932,8 +919,8 @@ def plot_main_predicted_dimension_multiple_fits(args, results_dimension_predicti
         x_fit = np.array(log_x_data)
         y_fit = fit_dict['best_slope'] * x_fit + fit_dict['best_intercept']
         ax.plot(x_fit, y_fit, color='red', linestyle='--', label=f"Fit {i + 1}: slope={fit_dict['best_slope']:.3f}")
-        ax.set_xlabel('$\log(r)$')
-        ax.set_ylabel('$\log(N_v)$')
+        ax.set_xlabel('$\log(l)$')
+        ax.set_ylabel('$\log(N)$')
         ax.legend(fontsize=10)
 
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])  # Adjust layout
@@ -941,7 +928,8 @@ def plot_main_predicted_dimension_multiple_fits(args, results_dimension_predicti
     # Save and show plot
     if hasattr(args, 'directory_map') and 'spatial_coherence' in args.directory_map:
         plot_folder = args.directory_map['spatial_coherence']
-        plt.savefig(f"{plot_folder}/predicted_dimension_and_multiple_fits_{title}.svg", format="svg",
+
+        plt.savefig(f"{plot_folder}/predicted_dimension_and_multiple_fits_{title}.{args.format_plots}",
                     bbox_inches="tight")
     plt.close(fig)  # Close the figure properly
 
@@ -950,6 +938,8 @@ def compute_and_plot_predicted_dimensions_for_all_nodes(args, distance_count_mat
                                                         local_dimension_mode=False):
     predicted_dimensions = []
     dimension_error = []
+    fit_dict_list = []
+    plot_folder = args.directory_map['heatmap_local']
 
     fig_loglog, ax_loglog = plt.subplots()
 
@@ -997,6 +987,9 @@ def compute_and_plot_predicted_dimensions_for_all_nodes(args, distance_count_mat
                 log_x_data = np.log(x_data)
                 log_y_data = np.log(y_data)
                 slope, intercept, r_value, p_value, std_err = linregress(log_x_data, log_y_data)
+                fit_dict = {'best_slope': slope, 'best_intercept': intercept, 'best_r2': r_value**2,
+                            'best_p_value': p_value, 'best_std_err': std_err}
+
 
 
                 # ## We correct the previous with just good fits. Method2 -- Get the linear part of the fit (not working so well for Euclidean)
@@ -1019,8 +1012,13 @@ def compute_and_plot_predicted_dimensions_for_all_nodes(args, distance_count_mat
                 x_data = np.arange(1, len(cumulative_count) + 1)
                 y_data = cumulative_count
 
-                log_x_data = np.log(x_data)[2:]
-                log_y_data = np.log(y_data)[2:]
+                if len(y_data) > 15:  # if the network is large enough, we can ommit the first points to improve the fit reliability
+                    log_x_data = np.log(x_data)[2:]
+                    log_y_data = np.log(y_data)[2:]
+                else:
+                    log_x_data = np.log(x_data)
+                    log_y_data = np.log(y_data)
+
 
                 ## Try to find the linear part of the fit
                 # fit_dict = find_best_fit_segment(log_x_data, log_y_data, min_points=10)  # based on r2 only
@@ -1030,21 +1028,9 @@ def compute_and_plot_predicted_dimensions_for_all_nodes(args, distance_count_mat
                 # slope, intercept, r_value, p_value, std_err = linregress(log_x_data, log_y_data)
                 slope, intercept, r_value, p_value, std_err = fit_dict['best_slope'], fit_dict['best_intercept'], fit_dict['best_r2'], \
                                                                 fit_dict['best_p_value'], fit_dict['best_std_err']
+
+                # plot_simple_fit(log_x_data, log_y_data, fit_dict)
             predicted_dimension = slope
-
-
-
-            # # It is  detecting the 1st region as the starting point
-            #
-            # if slope > 2.2:
-            #     plt.plot(log_x_data, log_y_data, 'o', label='Data Points')
-            #     plt.plot(log_x_data, slope * log_x_data + intercept, 'r-',
-            #             label=f'Fit: dimension={predicted_dimension:.2f}')
-            #
-            #     plt.legend()
-            #     plt.show()
-
-
 
             if central_index is not None:
                 if idx == central_index:
@@ -1072,35 +1058,16 @@ def compute_and_plot_predicted_dimensions_for_all_nodes(args, distance_count_mat
                     #     plt.show()
                     # plt.close()
 
+            # plot_simple_fit(log_x_data, log_y_data, fit_dict, save_path=f"{plot_folder}/fit_{idx}.png")
+
             predicted_dimensions.append(predicted_dimension)
             dimension_error.append(std_err)
-
-
-
-            #     if predicted_dimension > 2:
-            #         print("PREDICTED DIMENSION OUTLIER", predicted_dimension)
-            #         print("Position")
-            #         print("distances", x_data)
-            #         print("count", y_data)
-            #
-            #         expected_cumulative_count_sphere = (args.num_points * (x_data ** 2)).astype(int)  # rho * V = N
-            #         print("EXPECTED CUMULATIVE POINTS sphere", expected_cumulative_count_sphere)
-            #
-            #         print("filtered x data", filtered_x_data)
-            #         print("filtered y data", filtered_y_data)
-            #         indices_to_check.append(idx)
-            #     x_data_to_check.append(x_data)
-            #     y_data_to_check.append(y_data)
-            # else:
-            #     predicted_dimension = 1
-            #     predicted_dimension = 1
-            #     predicted_dimensions.append(predicted_dimension)
 
     # Load original positions
     original_position_folder = args.directory_map["original_positions"]
 
     if args.proximity_mode == "experimental" and args.original_positions_available:
-        positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.network_name}.csv")
+        positions_df = read_position_df(args, return_df=True)
     else:
         positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.original_title}.csv")
 
@@ -1112,10 +1079,12 @@ def compute_and_plot_predicted_dimensions_for_all_nodes(args, distance_count_mat
 
     positions_df['predicted_dimension'] = predicted_dimensions[:len(positions_df)]
 
+
+
     if not local_dimension_mode:
         positions_df['dimension_error'] = dimension_error[:len(positions_df)]
 
-    plot_folder = args.directory_map['heatmap_local']
+
     if euclidean:
         title = "euclidean"
     else:
@@ -1126,20 +1095,6 @@ def compute_and_plot_predicted_dimensions_for_all_nodes(args, distance_count_mat
     else:
         form = 'png'
 
-
-
-
-    # plt.close('all')
-    # fig = plt.figure(figsize=(10, 6))
-    # scatter = plt.scatter(positions_df['x'], positions_df['y'], c=positions_df['dimension_error'],
-    #                       cmap='viridis')
-    # plt.xlabel('X')
-    # plt.ylabel('Y')
-    # plt.colorbar(scatter, label='Dimension STD')
-    # plt.savefig(f'{plot_folder}/heatmap_predicted_dimension_std_{args.args_title}_{title}', format=form)
-    # if args.show_plots:
-    #     plt.show()
-    # plt.close()
 
     ### Dimension Prediction
     plt.close('all')
@@ -1208,6 +1163,30 @@ def compute_and_plot_predicted_dimensions_for_all_nodes(args, distance_count_mat
     return figure_data
 
 
+def plot_simple_fit(x_data, y_data, fit_dict, title=""):
+    slope, intercept, r_value, p_value, std_err = fit_dict['best_slope'], fit_dict['best_intercept'], \
+                                                  fit_dict['best_r2'], fit_dict['best_p_value'], \
+                                                  fit_dict['best_std_err']
+
+    plt.figure(figsize=(10, 6))
+    plt.scatter(x_data, y_data, label='Data Points')
+    plt.plot(x_data, intercept + x_data * slope, color='red', label=f'Fit: y = {slope:.2f}x + {intercept:.2f}')
+    plt.xlabel('X Data')
+    plt.ylabel('Y Data')
+    plt.title(title)
+    plt.legend()
+    plt.show()
+
+
+def display_fit(positions_df, trace, points, selector):
+    if points.point_inds:
+        node_idx = points.point_inds[0]
+        fit_dict_json = positions_df.loc[node_idx, 'fit_dict_json']
+        fit_dict = json.loads(fit_dict_json)
+        x_data = positions_df.loc[node_idx, 'x_data']
+        y_data = positions_df.loc[node_idx, 'y_data']
+        title = f"Fit for Node {node_idx}"
+        plot_simple_fit(x_data, y_data, fit_dict, title)
 def avg_shortest_path_mean_line_segment(args, sparse_graph, distance_matrix, dist_threshold=6, central_node_index=None):
     # TODO: take this seriously and compare predictions. How is it related to the spatial constant?
     distance_count_matrix = compute_node_counts_matrix(distance_matrix)
@@ -1688,8 +1667,8 @@ def euclidean_vs_network_plot(args, figure_data_euclidean, figure_data_network, 
     ax1.plot(figure_data_euclidean['log_x_data'],
              figure_data_euclidean['slope'] * figure_data_euclidean['log_x_data'] + figure_data_euclidean['intercept'],
              'r-', label=r'Fit: dim={:.2f}'.format(figure_data_euclidean['slope']), linestyle='-')
-    ax1.set_xlabel(r'$\log(r)$')
-    ax1.set_ylabel(r'$\log(N_v)$')
+    ax1.set_xlabel(r'$\log(l)$')
+    ax1.set_ylabel(r'$\log(N)$')
     ax1.legend(fontsize=16)
 
     # Network Heatmap
@@ -1705,8 +1684,8 @@ def euclidean_vs_network_plot(args, figure_data_euclidean, figure_data_network, 
     ax3.plot(figure_data_network['log_x_data'],
              figure_data_network['slope'] * figure_data_network['log_x_data'] + figure_data_network['intercept'],
              'r-', label=r'Fit: dim={:.2f}'.format(figure_data_network['slope']), linestyle='-')
-    ax3.set_xlabel(r'$\log(r)$')
-    ax3.set_ylabel(r'$\log(N_v)$')
+    ax3.set_xlabel(r'$\log(l)$')
+    ax3.set_ylabel(r'$\log(N)$')
     ax3.legend(fontsize=16)
 
     fig.colorbar(scatter_net, cax=axcbar, label='Predicted Dimension')
@@ -1742,7 +1721,7 @@ def make_euclidean_network_dim_pred_comparison_plot(useful_plot_folder):
     original_dist_matrix = compute_distance_matrix(original_positions)
     sp_matrix = np.array(shortest_path(csgraph=sparse_graph, directed=False))
     central_node_euc, fig_data_euc  =\
-        run_dimension_prediction_continuous(args, distance_matrix=original_dist_matrix, num_bins=50)
+        run_dimension_prediction_euclidean_discrete(args, distance_matrix=original_dist_matrix, num_bins=50)
     msp = sp_matrix.mean()
     dist_threshold = int(msp) - 1  #finite size effects, careful
     results_dimension_prediction, fig_data_net, central_node_net = (
@@ -1877,10 +1856,10 @@ def main():
 
 
     # Original dimension prediction
-    central_node_index = run_dimension_prediction_continuous(args, distance_matrix=original_dist_matrix, num_bins=50)
+    central_node_index = run_dimension_prediction_euclidean_discrete(args, distance_matrix=original_dist_matrix, num_bins=50)
 
     ## Network dimension prediction  # TODO: main function!
-    # run_dimension_prediction_continuous(args, distance_matrix=original_dist_matrix, num_bins=50)  # Euclidean
+    # run_dimension_prediction_euclidean_discrete(args, distance_matrix=original_dist_matrix, num_bins=50)  # Euclidean
     dist_threshold = int(msp) - 1  #finite size effects, careful
     results_dimension_prediction = run_dimension_prediction(args, distance_matrix=sp_matrix, dist_threshold=dist_threshold,
                                                             plot_heatmap_all_nodes=True)

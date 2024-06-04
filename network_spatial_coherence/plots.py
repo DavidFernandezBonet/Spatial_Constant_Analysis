@@ -1,3 +1,5 @@
+import warnings
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -6,7 +8,7 @@ from curve_fitting import CurveFitting
 import seaborn as sns
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
-from sklearn.metrics import roc_curve, auc, precision_recall_curve, confusion_matrix
+
 
 
 import scienceplots
@@ -15,7 +17,7 @@ from scipy.interpolate import griddata
 
 from algorithms import find_geometric_central_node, compute_shortest_path_mapping_from_central_node
 from map_image_to_colors import map_points_to_colors
-import matplotlib.lines as mlines
+
 
 
 
@@ -395,6 +397,7 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
             ax = fig.add_subplot(111)
         return ax
 
+
     def plot_positions(ax, positions_df, args, color_df=None, simulated_colors=False):
         # Merge positions_df with color_df on 'node_ID' if color_df is provided
 
@@ -484,6 +487,7 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
             else:
                 positions_df = pd.read_csv(f"{original_position_folder}/{position_filename}")
 
+
         if args.colorfile is not None:
             # Check if the colorfile is an image
             image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.svg']
@@ -499,6 +503,15 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
             positions_df = pd.read_csv(f"{reconstructed_position_folder}/positions_{args.args_title}.csv")
         else:
             positions_df = pd.read_csv(f"{reconstructed_position_folder}/{position_filename}")
+
+        if args.colorfile is not None:
+            if args.proximity_mode != "experimental":
+                original_position_folder = args.directory_map["original_positions"]
+                original_positions_df = pd.read_csv(f"{original_position_folder}/positions_{args.original_title}.csv")
+                image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.svg']
+                colorfile_extension = os.path.splitext(args.colorfile)[1].lower()
+                if colorfile_extension in image_extensions:
+                    args.id_to_color_simulation = map_points_to_colors(original_positions_df, args.colorfile, args=args)
 
         is_valid, reason = validate_edge_list_numbers(edges_df, np.array(positions_df))
         if not is_valid:
@@ -551,38 +564,43 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
         distances = []
         weights = []
 
+    number_of_edges = edges_df.shape[0]
+    print("NUMBER OF EDGES", number_of_edges)
 
-    # Draw edges
-    for _, row in edges_df.iterrows():
-        filtered_df = positions_df[positions_df['node_ID'] == row['source']]
-        if not filtered_df.empty:
-            source = filtered_df.iloc[0]
-        else:
-            continue
+    if number_of_edges > 100000:
+        warnings.warn("Too many edges (>100000), skip plotting them")
+    else:
+        # Draw edges
+        for _, row in edges_df.iterrows():
+            filtered_df = positions_df[positions_df['node_ID'] == row['source']]
+            if not filtered_df.empty:
+                source = filtered_df.iloc[0]
+            else:
+                continue
 
-        source = positions_df[positions_df['node_ID'] == row['source']].iloc[0]     # TODO: is this the most efficient?
-        target = positions_df[positions_df['node_ID'] == row['target']].iloc[0]
+            source = positions_df[positions_df['node_ID'] == row['source']].iloc[0]     # TODO: is this the most efficient?
+            target = positions_df[positions_df['node_ID'] == row['target']].iloc[0]
 
-        edge_color = 'red' if (row['source'], row['target']) in args.false_edge_ids or (
-        row['target'], row['source']) in args.false_edge_ids else 'k'
+            edge_color = 'red' if (row['source'], row['target']) in args.false_edge_ids or (
+            row['target'], row['source']) in args.false_edge_ids else 'k'
 
-        edge_alpha = 1 if (row['source'], row['target']) in args.false_edge_ids or (
-        row['target'], row['source']) in args.false_edge_ids else 0.2
+            edge_alpha = 1 if (row['source'], row['target']) in args.false_edge_ids or (
+            row['target'], row['source']) in args.false_edge_ids else 0.2
 
-        edge_linewidth = 1 if (row['source'], row['target']) in args.false_edge_ids or (  #TODO: adjust linewidth
-        row['target'], row['source']) in args.false_edge_ids else 0.5
+            edge_linewidth = 1 if (row['source'], row['target']) in args.false_edge_ids or (  #TODO: adjust linewidth
+            row['target'], row['source']) in args.false_edge_ids else 0.5
 
-        if args.dim == 3:
-            ax.plot([source['x'], target['x']], [source['y'], target['y']], [source['z'], target['z']],
-                    edge_color, linewidth=edge_linewidth, alpha=edge_alpha)
-        else:
-            ax.plot([source['x'], target['x']], [source['y'], target['y']],
-                    edge_color, linewidth=edge_linewidth, alpha=edge_alpha)
+            if args.dim == 3:
+                ax.plot([source['x'], target['x']], [source['y'], target['y']], [source['z'], target['z']],
+                        edge_color, linewidth=edge_linewidth, alpha=edge_alpha)
+            else:
+                ax.plot([source['x'], target['x']], [source['y'], target['y']],
+                        edge_color, linewidth=edge_linewidth, alpha=edge_alpha)
 
-        if plot_weights_against_distance:
-            distance = np.sqrt((source['x'] - target['x']) ** 2 + (source['y'] - target['y']) ** 2)
-            distances.append(distance)
-            weights.append(row['weight'])
+            if plot_weights_against_distance:
+                distance = np.sqrt((source['x'] - target['x']) ** 2 + (source['y'] - target['y']) ** 2)
+                distances.append(distance)
+                weights.append(row['weight'])
 
 
 
@@ -858,17 +876,26 @@ def plot_sample_spatial_constant(args, dataframe):
     plt.close()
 
 
-def plot_spatial_constant_against_subgraph_size(args, dataframe):
-    unique_sizes = dataframe['intended_size'].unique()
+def plot_spatial_constant_against_subgraph_size(args, dataframe, use_depth=False):
+
+    if use_depth:
+        size_magnitude = 'depth'
+        s_constant = 'S_depth'
+    else:
+        size_magnitude = 'intended_size'
+        s_constant = 'S_general'
+
+
+    unique_sizes = dataframe[size_magnitude].unique()
     means = []
     std_devs = []
     sizes = []
 
     # Calculate mean and standard deviation for each size
     for size in unique_sizes:
-        subset = dataframe[dataframe['intended_size'] == size]
-        mean = subset['S_general'].mean()
-        std = subset['S_general'].std()
+        subset = dataframe[dataframe[size_magnitude] == size]
+        mean = subset[s_constant].mean()
+        std = subset[s_constant].std()
         means.append(mean)
         std_devs.append(std)
         sizes.append(size)
@@ -879,49 +906,61 @@ def plot_spatial_constant_against_subgraph_size(args, dataframe):
     means = np.array(means)
     std_devs = np.array(std_devs)
 
-    # Scatter plot
-    plt.scatter(sizes, means, label='Mean Spatial Constant')
 
-    # Elegant ribbon style
-    ribbon_color = '#6FC276'
-    contour_ribon_color = '#006400'
-    plt.fill_between(sizes, means - std_devs, means + std_devs, color=ribbon_color, alpha=0.3, edgecolor=contour_ribon_color, linewidth=1, linestyle='--')
+    plt.plot(sizes, means, color='#00CD6C', marker='o')
+    plt.fill_between(sizes, means - std_devs, means + std_devs, color='#00CD6C', alpha=0.3)
 
-    # Optionally, plot the predicted S line if needed
-    predicted_s = calculate_predicted_s(args=args)
-    plt.axhline(predicted_s, color='r', linestyle='dashed', linewidth=2, label='Predicted S')
 
-    plt.xlabel('Subgraph Size')
+
+
+    # # Optionally, plot the predicted S line if needed
+    # predicted_s = calculate_predicted_s(args=args)
+    # plt.axhline(predicted_s, color='r', linestyle='dashed', linewidth=2, label='Predicted S')
+
+    if use_depth:
+        plt.xlabel('Depth')
+    else:
+        plt.xlabel('Size')
     plt.ylabel('Mean Spatial Constant')
 
     plt.legend()
 
     plot_folder = f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}"
-    plt.savefig(f"{plot_folder}/mean_s_general_vs_intended_size_{args.args_title}.png")
+    plot_folder2 = f"{args.directory_map['spatial_coherence']}"
+    plt.savefig(f"{plot_folder}/mean_s_general_vs_{size_magnitude}_{args.args_title}.png")
+    plt.savefig(f"{plot_folder2}/mean_s_general_vs_{size_magnitude}_{args.args_title}.{args.format_plots}")
     # if args.show_plots:
     #     plt.show()
     plt.close()
 
 
 
-def plot_spatial_constant_against_subgraph_size_with_false_edges(args, dataframes, false_edge_list, mst_case_df=None):
+def plot_spatial_constant_against_subgraph_size_with_false_edges(args, dataframes, false_edge_list, mst_case_df=None,
+                                                                 use_depth=False):
     plt.close('all')
     # Main plot spatial constant
     plt.figure(figsize=(6, 4.5))
 
+    if use_depth:
+        size_magnitude = 'depth'
+        # s_constant = 'S_depth'
+        s_constant = 'S_general'
+    else:
+        size_magnitude = 'intended_size'
+        s_constant = 'S_general'
 
 
     for dataframe, false_edge_count in zip(dataframes, false_edge_list):
-        unique_sizes = dataframe['intended_size'].unique()
+        unique_sizes = dataframe[size_magnitude].unique()
         means = []
         std_devs = []
         sizes = []
 
         # Calculate mean and standard deviation for each size
         for size in unique_sizes:
-            subset = dataframe[dataframe['intended_size'] == size]
-            mean = subset['S_general'].mean()
-            std = subset['S_general'].std()
+            subset = dataframe[dataframe[size_magnitude] == size]
+            mean = subset[s_constant].mean()
+            std = subset[s_constant].std()
             means.append(mean)
             std_devs.append(std)
             sizes.append(size)
@@ -946,28 +985,34 @@ def plot_spatial_constant_against_subgraph_size_with_false_edges(args, dataframe
         plt.plot(unique_sizes, means, label='MST', marker='o')
         plt.fill_between(unique_sizes, np.array(means) - np.array(std_devs), np.array(means) + np.array(std_devs), alpha=0.3)
 
-    plt.xlabel('Subgraph Size')
+    if use_depth:
+        plt.xlabel('Depth')
+    else:
+        plt.xlabel('Size')
+
+
     plt.ylabel('Mean Spatial Constant')
-    # plt.title('Mean Spatial Constant vs. Subgraph Size')
+    # plt.title('Mean Spatial Constant vs. Size')
     plt.legend()
 
     plot_folder = args.directory_map['plots_spatial_constant_subgraph_sampling']
     plot_folder2 = args.directory_map['spatial_coherence']
 
-    plt.savefig(f"{plot_folder}/mean_s_general_vs_intended_size_{args.args_title}_false_edge_version.svg")
-    plt.savefig(f"{plot_folder2}/mean_s_general_vs_intended_size_{args.args_title}_false_edge_version.svg")
+    plt.savefig(f"{plot_folder}/mean_s_general_vs_{size_magnitude}_{args.args_title}_false_edge_version.svg")
+    plt.savefig(f"{plot_folder2}/mean_s_general_vs_{size_magnitude}_{args.args_title}_false_edge_version.{args.format_plots}")
+
 
     if args.show_plots:
         plt.show()
     plt.close()
 
     plt.yscale('log')
-    plt.savefig(f"{plot_folder}/mean_s_general_vs_intended_size_{args.args_title}_false_edge_loglin_version.png")
+    plt.savefig(f"{plot_folder}/mean_s_general_vs_{size_magnitude}_{args.args_title}_false_edge_loglin_version.png")
     plt.close('all')
 
     plt.xscale('log')
     plt.yscale('log')
-    plt.savefig(f"{plot_folder}/mean_s_general_vs_intended_size_{args.args_title}_false_edge_loglog_version.png")
+    plt.savefig(f"{plot_folder}/mean_s_general_vs_{size_magnitude}_{args.args_title}_false_edge_loglog_version.png")
     plt.close('all')
 
 
@@ -1015,7 +1060,7 @@ def plot_spatial_constant_against_subgraph_size_with_multiple_series(args, dataf
     if mst_case_df is not None:
         pass
 
-    ax.set_xlabel('Subgraph Size')
+    ax.set_xlabel('Size')
     ax.set_ylabel('Mean Spatial Constant')
     if title:
         ax.set_title(title)
@@ -1049,7 +1094,7 @@ def plot_spatial_constants_subplots(args, all_dataframes, all_false_edge_lists, 
     plot_folder = args.directory_map['plots_spatial_constant_subgraph_sampling']
     plt.savefig(f"{plot_folder}/spatial_constant_subgraphs_different_weight_threshold_{args.args_title}_false_edge_version.png")
     plt.savefig(
-        f"{plot_folder}/spatial_constant_subgraphs_different_weight_threshold_{args.args_title}_false_edge_version.pdf")
+        f"{plot_folder}/spatial_constant_subgraphs_different_weight_threshold_{args.args_title}_false_edge_version.{args.format_plots}")
 
 def plot_false_edges_against_spatial_constant(args, processed_false_edge_series):
     plot_folder = args.directory_map['plots_spatial_constant_false_edge_difference']
@@ -1075,7 +1120,7 @@ def plot_false_edges_against_spatial_constant(args, processed_false_edge_series)
         means = processed_false_edge_series[size]["means"]  # Spatial Constant means
         std_devs = processed_false_edge_series[size]["std_devs"]
 
-        # Plotting the series for the current subgraph size
+        # Plotting the series for the current Size
         ax1.errorbar(false_edges, means, yerr=std_devs, color=colors[i], label=f'Size: {size}', marker='o')
         # plt.errorbar(false_edges, means, yerr=std_devs, color=colors(i), label=f'Size: {size}', marker='o')  # for matplotlib
 
@@ -1084,7 +1129,7 @@ def plot_false_edges_against_spatial_constant(args, processed_false_edge_series)
         curve_fitting_object = CurveFitting(log_false_edges, log_means)
         func_fit = curve_fitting_object.linear_model
         curve_fitting_object.perform_curve_fitting(model_func=func_fit)
-        save_path = f"{plot_folder_fit}/false_edge_powerlaw_fit_size={size}_{args.args_title}_fedgelist={false_edges}.pdf"
+        save_path = f"{plot_folder_fit}/false_edge_powerlaw_fit_size={size}_{args.args_title}_fedgelist={false_edges}.{args.format_plots}"
         curve_fitting_object.plot_fit_with_uncertainty(model_func=func_fit, xlabel="Log False Edge Count",
                                                        ylabel="Log Spatial Constant", title=f"Size {size}", save_path=save_path)
 
@@ -1096,24 +1141,24 @@ def plot_false_edges_against_spatial_constant(args, processed_false_edge_series)
     sm = cm.ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
     cbar = plt.colorbar(sm, ax=ax1)
-    cbar.set_label('Subgraph Size')
+    cbar.set_label('Size')
 
     # plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
 
 
     fig1.tight_layout()
-    fig1.savefig(f"{plot_folder}/normal_false_edge_difference_{args.args_title}_fedgelist={false_edges}.pdf")
+    fig1.savefig(f"{plot_folder}/normal_false_edge_difference_{args.args_title}_fedgelist={false_edges}.{args.format_plots}")
 
     ax1.set_xscale('log')
-    fig1.savefig(f"{plot_folder}/semilogX_false_edge_difference_{args.args_title}_fedgelist={false_edges}.pdf")
+    fig1.savefig(f"{plot_folder}/semilogX_false_edge_difference_{args.args_title}_fedgelist={false_edges}.{args.format_plots}")
 
     ax1.set_yscale('log')
     ax1.set_xscale('linear')
-    fig1.savefig(f"{plot_folder}/semilogY_false_edge_difference_{args.args_title}_fedgelist={false_edges}.pdf")
+    fig1.savefig(f"{plot_folder}/semilogY_false_edge_difference_{args.args_title}_fedgelist={false_edges}.{args.format_plots}")
 
     ax1.set_xscale('log')
     ax1.set_yscale('log')
-    fig1.savefig(f"{plot_folder}/loglog_false_edge_difference_{args.args_title}_fedgelist={false_edges}.pdf")
+    fig1.savefig(f"{plot_folder}/loglog_false_edge_difference_{args.args_title}_fedgelist={false_edges}.{args.format_plots}")
 
 def plot_weight_distribution(args, edge_list_with_weight_df):
     # # Histogram Plot
@@ -1168,7 +1213,7 @@ def plot_s_general_vs_weight_threshold(args, results):
     plt.ylabel('Mean S_general')
     plot_folder = args.directory_map['plots_spatial_constant_weighted_threshold']
     plt.savefig(f"{plot_folder}/spatial_constant_vs_weight_threshold{args.args_title}.png")
-    plt.savefig(f"{plot_folder}/spatial_constant_vs_weight_threshold{args.args_title}.pdf")
+    plt.savefig(f"{plot_folder}/spatial_constant_vs_weight_threshold{args.args_title}.{args.format_plots}")
 
 def validate_edge_list_numbers(edge_list, reconstructed_positions):
     n = len(reconstructed_positions) - 1
@@ -1194,393 +1239,3 @@ def validate_edge_list_numbers(edge_list, reconstructed_positions):
     return edge_values == expected_set
 
 
-def visualize_communities_positions(args, communities, modularity, edges_within_communities, edges_between_communities,
-                                    edge_score_dict=None, betweenness_dict=None, rank_score_dict=None):
-    import networkx as nx
-    """
-    Visualize the network with community colors, false edges, and modularity score.
-
-    :param df: DataFrame with columns ['node_id', 'x', 'y'] for node positions.
-    :param communities: Array or list of community labels corresponding to df['node_id'].
-    :param false_edges: List of tuples (node_id_start, node_id_end) representing false edges.
-    :param modularity: Modularity score of the community partition.
-    """
-
-    plt.close()
-    plt.rcdefaults()
-
-    def read_position_df(args, return_df=False):
-        if hasattr(args, 'reconstruction_mode') and args.reconstruction_mode in args.args_title:
-            old_args_title = args.args_title.replace(f"_{args.reconstruction_mode}",
-                                                     "")
-        else:
-            old_args_title = args.args_title
-
-        if args.proximity_mode == "experimental" and args.original_positions_available:
-            filename = args.original_edge_list_title
-            print("FILENAME", filename)
-            match = re.search(r"edge_list_(.*?)\.csv", filename)
-            if match:
-                extracted_part = match.group(1)
-                old_args_title = extracted_part
-            else:
-                old_args_title = filename[:-4]
-
-
-        original_points_path = f"{args.directory_map['original_positions']}/positions_{old_args_title}.csv"
-        original_points_df = pd.read_csv(original_points_path)
-        # Choose columns based on the dimension specified in args.dim
-        if args.dim == 2:
-            columns_to_read = ['x', 'y']
-        elif args.dim == 3:
-            columns_to_read = ['x', 'y', 'z']
-        else:
-            raise ValueError("Invalid dimension specified. Choose '2D' or '3D'.")
-
-        # Read the specified columns from the DataFrame
-        original_points_array = np.array(original_points_df[columns_to_read])
-
-        if return_df:
-            return original_points_df
-        else:
-            return original_points_array
-
-    if args.node_ids_map_old_to_new is not None:
-        original_points = read_position_df(args, return_df=True)
-        original_points['node_ID'] = original_points['node_ID'].map(args.node_ids_map_old_to_new)
-        original_points = original_points.dropna()
-        original_points['node_ID'] = original_points['node_ID'].astype(int)
-        original_points_df = original_points.sort_values(by='node_ID')
-        original_points = original_points_df[['x', 'y']].to_numpy()
-    else:
-        original_position_folder = args.directory_map["original_positions"]
-        original_points_df = pd.read_csv(f"{original_position_folder}/positions_{args.original_title}.csv")
-
-        # original_points_df = read_position_df(args, return_df=True)
-
-
-    # ### Plotting
-    # Load positions DataFrame
-    positions_df = original_points_df
-    # node_ids_map_new_to_old = {v: k for k, v in args.node_ids_map_old_to_new.items()}
-    # Load edges DataFrame
-    edge_list_folder = args.directory_map["edge_lists"]
-    edges_df = pd.read_csv(f"{edge_list_folder}/{args.edge_list_title}")
-
-    # TODO: this plots everything to do with community detection and false edges
-    plot_edge_communities_and_distances(edges_within_communities, edges_between_communities, original_positions_df=positions_df)
-    if edge_score_dict is not None:
-        plot_edge_scores_vs_distances(args, edge_score_dict, original_positions_df=positions_df, score_interpretation='negative')
-
-    if betweenness_dict is not None:
-        plot_edge_scores_vs_distances(args, betweenness_dict, original_positions_df=positions_df, score_interpretation='positive')
-
-    if rank_score_dict is not None:
-        plot_edge_scores_vs_distances(args, rank_score_dict, original_positions_df=positions_df, score_interpretation='negative')
-
-    plot_false_true_edges_percentages(args, edges_within_communities, edges_between_communities)
-    plot_edge_categories_and_distances(edges_within_communities, edges_between_communities, args.false_edge_ids,
-                                       original_positions_df=positions_df)
-    # Convert positions_df to a dictionary for efficient access
-    positions_dict = positions_df.set_index('node_ID')[['x', 'y']].T.to_dict('list')
-
-    # Map communities to colors
-    if isinstance(communities[0], (np.ndarray, np.generic)):
-        communities = communities[0]
-
-    print(communities)
-    communities_dict = {i: community for i, community in enumerate(communities)}
-    unique_communities = set(communities_dict.values())
-    # # community_colors = plt.cm.tab20(np.linspace(0, 1, len(unique_communities)))  # Adjust color map as needed
-    # # community_to_color = {community: color for community, color in zip(unique_communities, community_colors)}
-    community_colors = plt.cm.rainbow(np.linspace(0, 1, len(unique_communities)))
-    community_to_color = {community: color for community, color in zip(unique_communities, community_colors)}
-
-
-
-
-    plt.figure(figsize=(20, 30))
-
-    # Plot original points with community colors
-    for node_ID, (x, y) in positions_dict.items():
-        community_id = communities_dict[node_ID]
-        plt.plot(x, y, 'o', color=community_to_color[community_id])
-
-    # Plot edges
-    for _, row in edges_df.iterrows():
-        source_new_id = row['source']
-        target_new_id = row['target']
-
-        if source_new_id in positions_dict and target_new_id in positions_dict:
-            source_pos = positions_dict[source_new_id]
-            target_pos = positions_dict[target_new_id]
-
-            # Check if the edge is a false edge
-            is_false_edge = (row['source'], row['target']) in args.false_edge_ids or (
-            row['target'], row['source']) in args.false_edge_ids
-
-            edge_linewidth = 0.5
-            edge = (row['source'], row['target'])
-            if edge in edges_within_communities:
-                edge_color = "blue"
-            elif edge in edges_between_communities:
-                edge_color = "green"
-                edge_linewidth = 3
-            if is_false_edge:
-                edge_color = "red"
-                edge_linewidth = 1
-            edge_alpha = 0.1 if is_false_edge else 1
-
-            # distance = np.sqrt((source_pos[0] - target_pos[0]) ** 2 + (source_pos[1] - target_pos[1]) ** 2)
-            # if distance > 0.5:
-            #     if (row['source'], row['target']) in edges_within_communities:
-            #         edge_linewidth += 2  # Increase by 0.5 or any other value you see fit
-
-
-
-            plt.plot([source_pos[0], target_pos[0]], [source_pos[1], target_pos[1]], color=edge_color, alpha=edge_alpha,
-                     linewidth=edge_linewidth)
-
-    plt.xlabel('X')
-    plt.ylabel('Y')
-    plt.title(f'Modularity: {modularity}')
-
-
-
-
-    # Assuming the rest of your plotting code is in place and you've already created 'community_to_color'
-
-    # Create a list of proxy artists for the legend
-    legend_handles = [mlines.Line2D([], [], color=community_to_color[community], marker='o', linestyle='None',
-                                    markersize=10, label=f'Community {community}') for community in unique_communities]
-
-    plt.legend(handles=legend_handles, bbox_to_anchor=(1.05, 1), loc='upper left')
-
-    # Make sure the plot is displayed properly with the legend outside
-    plt.tight_layout()
-
-    print("Modularity: ", modularity)
-    plt.show()
-
-
-def plot_edge_communities_and_distances(edges_within_communities, edges_between_communities, original_positions_df):
-    # Function to compute Euclidean distance between two points
-    def euclidean_distance(x1, y1, x2, y2):
-        return np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-
-    # Initialize lists to store distances
-    distances_within = []
-    distances_between = []
-
-    # Create a dictionary for quick node ID to position lookup
-    positions_dict = original_positions_df.set_index('node_ID').to_dict('index')
-
-    # Compute distances for edges within communities
-    for edge in edges_within_communities:
-        node1, node2 = edge
-        pos1 = positions_dict[node1]
-        pos2 = positions_dict[node2]
-        distance = euclidean_distance(pos1['x'], pos1['y'], pos2['x'], pos2['y'])
-        distances_within.append(distance)
-
-    # Compute distances for edges between communities
-    for edge in edges_between_communities:
-        node1, node2 = edge
-        pos1 = positions_dict[node1]
-        pos2 = positions_dict[node2]
-        distance = euclidean_distance(pos1['x'], pos1['y'], pos2['x'], pos2['y'])
-        distances_between.append(distance)
-
-    # Plotting the histograms
-    plt.figure(figsize=(10, 6))
-    plt.hist(distances_within, bins=20, alpha=0.5, label='Within Communities')
-    plt.hist(distances_between, bins=20, alpha=0.5, label='Between Communities')
-    plt.xlabel('Distance')
-    plt.ylabel('Frequency')
-    plt.title('Histogram of Distances')
-    plt.legend(loc='upper right')
-    plt.show()
-
-
-def plot_edge_scores_vs_distances(args, edge_score_dict, original_positions_df, score_interpretation='positive'):
-    # Function to compute Euclidean distance between two points
-    def euclidean_distance(x1, y1, x2, y2):
-        return np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-
-    # Create a dictionary for quick node ID to position lookup
-    positions_dict = original_positions_df.set_index('node_ID').to_dict('index')
-
-    # Initialize lists to store scores and distances
-    scores = []
-    distances = []
-    colors = []
-    labels = []  # This will hold the binary labels needed for ROC computation
-
-
-    # Compute distances and retrieve scores for edges
-    for edge, score in edge_score_dict.items():
-        node1, node2 = edge
-        pos1 = positions_dict[node1]
-        pos2 = positions_dict[node2]
-        distance = euclidean_distance(pos1['x'], pos1['y'], pos2['x'], pos2['y'])
-
-        if edge in args.false_edge_ids:
-            colors.append('red')
-            labels.append(1)  # False edge
-        else:
-            colors.append('blue')
-            labels.append(0)  # True edge
-
-        distances.append(distance)
-        if score_interpretation == 'negative':
-            # Transform score if higher scores indicate a false edge
-            score = max(edge_score_dict.values()) + 1 - score
-        scores.append(score)
-
-    # Set up the figure and the subplots
-    fig, axs = plt.subplots(1, 3, figsize=(18, 6))  # Now three subplots
-
-    # Scatter plot of scores vs distances
-    axs[0].scatter(distances, scores, alpha=0.5, color=colors)
-    axs[0].set_xlabel('Distance')
-    axs[0].set_ylabel('Score')
-    axs[0].set_title('Plot of Score vs. Distance for Edges')
-
-    # ROC curve and AUC
-    fpr, tpr, _ = roc_curve(labels, scores)
-    roc_auc = auc(fpr, tpr)
-    axs[1].plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
-    axs[1].plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
-    axs[1].set_xlim([0.0, 1.0])
-    axs[1].set_ylim([0.0, 1.05])
-    axs[1].set_xlabel('False Positive Rate')
-    axs[1].set_ylabel('True Positive Rate')
-    axs[1].set_title('Receiver Operating Characteristic')
-    axs[1].legend(loc="lower right")
-
-    # Precision-Recall curve
-    precision, recall, thresholds = precision_recall_curve(labels, scores)
-    pr_auc = auc(recall, precision)
-    axs[2].plot(recall, precision, color='blue', lw=2, label='Precision-Recall curve (area = %0.2f)' % pr_auc)
-    axs[2].set_xlabel('Recall')
-    axs[2].set_ylabel('Precision')
-    axs[2].set_title('Precision-Recall Curve')
-    axs[2].legend(loc="best")
-
-    # Display the plot
-    plt.tight_layout()
-    plt.show()
-
-    f_scores = (2 * precision * recall) / (np.maximum(precision + recall, 1e-8))
-    optimal_idx = np.argmax(f_scores)
-    optimal_threshold = thresholds[optimal_idx] if optimal_idx < len(thresholds) else thresholds[-1]
-
-
-    #### Additional plotting for a specific threshold of the PR curve
-    # Plotting the Precision-Recall curve
-    plt.figure(figsize=(10, 6))
-    plt.plot(recall, precision, label=f'Precision-Recall curve (AUC = {auc(recall, precision):.2f})')
-    plt.scatter(recall[optimal_idx], precision[optimal_idx], color='red', s=100, edgecolor='k', zorder=5)
-    plt.text(recall[optimal_idx], precision[optimal_idx], f'  Threshold={optimal_threshold:.2f}',
-             verticalalignment='bottom', horizontalalignment='right')
-
-    plt.xlabel('Recall')
-    plt.ylabel('Precision')
-    plt.title('Precision-Recall Curve with Optimal Threshold Highlighted')
-    plt.legend()
-    plt.show()
-
-    predictions = [1 if x >= optimal_threshold else 0 for x in scores]
-    conf_matrix = confusion_matrix(labels, predictions)
-
-    plt.figure(figsize=(6, 6))
-    sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues', cbar=False, square=True)
-    plt.xlabel('Predicted Label')
-    plt.ylabel('True Label')
-    plt.title('Confusion Matrix at Optimal Threshold: {:.2f}'.format(optimal_threshold))
-    plt.xticks([0.5, 1.5], ['True Edge', 'False Edge'], rotation=0)
-    plt.yticks([0.5, 1.5], ['True Edge', 'False Edge'], rotation=0)
-    plt.show()
-
-
-
-def plot_false_true_edges_percentages(args, edges_within_communities, edges_between_communities):
-    false_edges = set(args.false_edge_ids)  # Assuming this is already in the form of tuples (node1, node2)
-
-    false_within = sum(edge in false_edges for edge in edges_within_communities)
-    true_within = len(edges_within_communities) - false_within
-    false_between = sum(edge in false_edges for edge in edges_between_communities)
-    true_between = len(edges_between_communities) - false_between
-
-    total_false_edges = len(false_edges)
-
-    # Calculate the percentages for the main plot
-    total_within = len(edges_within_communities)
-    total_between = len(edges_between_communities)
-    percentages_within = [false_within / total_within * 100, true_within / total_within * 100]
-    percentages_between = [false_between / total_between * 100, true_between / total_between * 100]
-
-    # Calculate the percentages of false edges that are 'within' and 'between'
-    false_within_percentage = (false_within / total_false_edges) * 100 if total_false_edges > 0 else 0
-    false_between_percentage = (false_between / total_false_edges) * 100 if total_false_edges > 0 else 0
-
-    # Setup for subplots
-    fig, axs = plt.subplots(1, 2, figsize=(14, 5))
-
-    # Main plot with stacked bars
-    categories = ['Within Communities', 'Between Communities']
-    axs[0].bar(categories, [percentages_within[0], percentages_between[0]], label='False Edges', color='r')
-    axs[0].bar(categories, [percentages_within[1], percentages_between[1]],
-               bottom=[percentages_within[0], percentages_between[0]], label='True Edges', color='g')
-    axs[0].set_ylabel('Percentage')
-    axs[0].set_title('Percentage of False and True Edges')
-    axs[0].legend()
-
-    # Subplot for percentage of false edges that are within/between
-    axs[1].bar(['False Edges Distribution'], [false_within_percentage], label='Within', color='blue')
-    axs[1].bar(['False Edges Distribution'], [false_between_percentage], bottom=[false_within_percentage],
-               label='Between', color='orange')
-    axs[1].set_ylabel('Percentage')
-    axs[1].set_title('Distribution of False Edges')
-    axs[1].legend()
-
-    plt.tight_layout()
-    plt.show()
-
-
-def plot_edge_categories_and_distances(edges_within_communities, edges_between_communities,
-                                                         false_edges, original_positions_df):
-    def euclidean_distance(x1, y1, x2, y2):
-        return np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-
-    positions_dict = original_positions_df.set_index('node_ID').to_dict('index')
-    categories = ['False Within', 'True Within', 'False Between', 'True Between']
-    distances = {category: [] for category in categories}
-
-    for edge in edges_within_communities.union(edges_between_communities):
-        node1, node2 = edge
-        pos1, pos2 = positions_dict[node1], positions_dict[node2]
-        distance = euclidean_distance(pos1['x'], pos1['y'], pos2['x'], pos2['y'])
-        if edge in edges_within_communities:
-            if edge in false_edges:
-                distances['False Within'].append(distance)
-            else:
-                distances['True Within'].append(distance)
-        else:
-            if edge in false_edges:
-                distances['False Between'].append(distance)
-            else:
-                distances['True Between'].append(distance)
-
-    fig, axs = plt.subplots(2, 2, figsize=(16, 12))
-    axs = axs.flatten()
-
-    for i, category in enumerate(categories):
-        axs[i].hist(distances[category], bins=20, alpha=0.7, label=category)
-        axs[i].set_title(category)
-        axs[i].set_xlabel('Distance')
-        axs[i].set_ylabel('Frequency')
-        axs[i].legend()
-
-    plt.tight_layout()
-    plt.show()

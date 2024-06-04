@@ -11,6 +11,7 @@ import config as default_config
 import pprint
 import shutil
 import importlib.resources as pkg_resources
+import math
 def create_project_structure(target_dir=None):
     """
     Create the project directory structure and return a dictionary mapping directory names to their corresponding paths.
@@ -43,6 +44,7 @@ def create_project_structure(target_dir=None):
         'colorfolder': f'{project_root}/data/colorcode',
         'us_counties': f'{project_root}/data/us_counties',
         'weinstein': f'{project_root}/data/weinstein',
+        'json': f'{project_root}/data/network_json_format',
 
         's_constant_results': f'{project_root}/results/individual_spatial_constant_results',
         'output_dataframe': f'{project_root}/results/output_dataframe',
@@ -55,6 +57,7 @@ def create_project_structure(target_dir=None):
         'rec_images_subgraphs': f'{project_root}/results/all_subgraphs_reconstruction/reconstructed_images_subgraphs',
 
         'plots_shortest_path_heatmap': f'{project_root}/results/plots/shortest_path_heatmap',
+        'distance_decay': f'{project_root}/results/plots/distance_decay',
         'plots_mst_image': f'{project_root}/results/plots/mst_image',
         'plots_euclidean_sp': f'{project_root}/results/plots/correlation_euclidean_sp',
         'spatial_coherence': f'{project_root}/results/plots/main_spatial_coherence_results',  #TODO: Main folder
@@ -200,6 +203,7 @@ class GraphArgs:
         self.L = config.get('L', 1)
         self._dim = config.get('dim', 2)
         self._base_proximity_mode = config.get('proximity_mode', "knn")
+        self.weighted = config.get('weighted', False)
         self._false_edges_count = config.get('false_edges_count', 0)  # TODO: is this simulation specific?
         self.true_edges_deletion_ratio = config.get('true_edges_deletion_ratio', 0)
         self.point_mode = None  # circle or square
@@ -209,19 +213,27 @@ class GraphArgs:
         self.max_subgraph_size = config.get('max_subgraph_size', 3000)
         self.network_name = ''
 
+        self.format_plots = config.get('format_plots', 'svg')
+
         self.handle_all_subgraphs = config.get('handle_all_subgraphs', False)
         self.spatial_coherence_validation = config.get('spatial_coherence_validation', False)
         self.community_detection = config.get('community_detection', False)
         self.reconstruct = config.get('reconstruct', False)
         self.original_positions_available = config.get('original_positions_available', False)
         self.plot_original_image = config.get('plot_original_image', False)
+        self.plot_reconstructed_image = config.get('plot_reconstructed_image', False)
         self.spatial_coherence_quantiative_dict = {}
 
+
+        self.weight_to_distance = config.get('weight_to_distance', False)
+        self.weight_to_distance_fun = config.get('weight_to_distance_fun', 'exp')
+        self.weight_converter = self.WeightToDistance()
 
         if self.reconstruct:
             self.reconstruction_mode = config.get('reconstruction_mode')
 
         self._intended_av_degree = config.get('intended_av_degree', 6)
+        self.distance_decay_quantile = None # Optional attribute for distance decay proximity mode
 
         self.update_proximity_mode()
 
@@ -230,6 +242,12 @@ class GraphArgs:
             initial_title = config.get('edge_list_title', None)
             if initial_title:
                 self.set_edge_list_title(initial_title)
+
+        if self.weighted:
+            self.weight_threshold = config.get('weight_threshold', 0)
+            self.weighted_threshold = config.get('weight_threshold', 0)
+
+            self.distance_to_weight_fun = config.get('distance_to_weight', False)
 
 
 
@@ -241,10 +259,7 @@ class GraphArgs:
         if self.proximity_mode == "experimental":
             ### Experiment specific
             self.title_experimental = config.get('title_experimental', None)
-            self.weighted = config.get('weighted', False)
-            if self.weighted:
-                self.weight_threshold = config.get('weight_threshold', 0)
-                self.weighted_threshold = config.get('weight_threshold', 0)
+
         else:
             ### Simulation specific
 
@@ -412,7 +427,11 @@ class GraphArgs:
             # self.args_title = f"N={self._num_points}_dim={self._dim}_{self._proximity_mode}_k={self._intended_av_degree}"
             # self.edge_list_title = f"edge_list_{self.args_title}.csv"
 
-            base_title = f"N={self._num_points}_dim={self._dim}_{self._proximity_mode}_k={self._intended_av_degree}"
+            if self.distance_decay_quantile is not None:
+                base_title = f"N={self._num_points}_dim={self._dim}_{self._proximity_mode}_k={self._intended_av_degree}_q={self.distance_decay_quantile}"
+            else:
+                base_title = f"N={self._num_points}_dim={self._dim}_{self._proximity_mode}_k={self._intended_av_degree}"
+
             prefix = "edge_list_"
             base_with_prefix = f"{prefix}{base_title}"
             if self.edge_list_title is None:
@@ -492,25 +511,85 @@ class GraphArgs:
 
 
 
+    class WeightToDistance():
+        def __init__(self, decay_rate=0.1, max_weight=100, inverse_power=2):
+            # TODO: make sure that decay rate makes sense, I think it has to be in the "distance scale" (maybe take it as the median)
 
-def export_default_config(filepath='default_config.py'):
-    from config import base, simulation, experiment  # Adjust this import as needed
+            self.decay_rate = decay_rate  # Parameter for the exponential decay model
+            self.max_weight = max_weight                        # Scaling factor for both models --> for exponential model it is the max weight
+            self.inverse_power = inverse_power                # Exponent for the inverse power law model
 
-    pp = pprint.PrettyPrinter(indent=4)
 
-    with open(filepath, 'w') as f:
-        f.write("# Default configuration template\n\n")
+        def return_weight_exponential_model(self, d):
+            """Calculate the interaction weight using the negative exponential model."""
+            # weight = math.exp(-self.decay_rate * d)   #TODO: this might need to be squared to have a "Gaussian smoorthing" effect
+            weight = math.exp(-(self.decay_rate * d)**2)
+            return round(self.max_weight * weight)   # TODO: add rounding for better modeling
 
-        f.write("# Base settings common to all scenarios\n")
-        f.write("base = ")
-        f.write(pp.pformat(base) + "\n\n")
+        def return_distance_exponential_model(self, w):
+            """Calculate the distance given a weight using the inverse of the exponential model."""
 
-        f.write("# Settings specific to simulation scenarios\n")
-        f.write("simulation = ")
-        f.write(pp.pformat(simulation) + "\n\n")
+            # ### Without gaussian smoothing
+            # if w <= 0:
+            #     return float('inf')  # Handle case where weight is zero or negative
+            # d = -math.log(w / self.max_weight) / self.decay_rate
+            # return max(d, 0)  # Ensure that distance cannot be negative
 
-        f.write("# Settings specific to experimental scenarios\n")
-        f.write("experiment = ")
-        f.write(pp.pformat(experiment) + "\n")
+            ### With Gaussian smoothing (square in the exponent)
+            if w <= 0:
+                return float('inf')  # Handle case where weight is zero or negative
 
-    print(f"Default configuration template written to {filepath}")
+            if w >= self.max_weight:
+                w = self.max_weight-1
+            # Compute the distance from the weight
+            argument = -math.log(w / self.max_weight)
+            if argument < 0:
+                raise ValueError("Negative argument is about to be sqrooted")
+            d = math.sqrt(argument) / self.decay_rate
+            if d <= 0:
+                print("argument", argument)
+                print("distance", d)
+                print("w", w)
+                print("max weight", self.max_weight)
+                print(math.log(w / self.max_weight))
+                raise ValueError("Negative or zero distance. Weight:", w, "Max weight:", self.max_weight, "Decay rate:", self.decay_rate)
+            return d
+
+
+
+
+        def return_weight_power_law_model(self, d):
+            """Calculate the interaction weight using the inverse power law model."""
+            if d == 0:
+                return float('inf')  # Avoid division by zero, handling infinite weight
+            weight = self.max_weight / (d ** self.inverse_power)
+            return round(weight)
+
+        def return_distance_power_law_model(self, w):
+            """Calculate the distance given a weight using the inverse of the power law model."""
+            if w <= 0:
+                return float('inf')  # Handle case where weight is zero or negative
+            d = (self.max_weight / w) ** (1 / self.inverse_power)
+            return d
+
+    def export_default_config(filepath='default_config.py'):
+        from config import base, simulation, experiment  # Adjust this import as needed
+
+        pp = pprint.PrettyPrinter(indent=4)
+
+        with open(filepath, 'w') as f:
+            f.write("# Default configuration template\n\n")
+
+            f.write("# Base settings common to all scenarios\n")
+            f.write("base = ")
+            f.write(pp.pformat(base) + "\n\n")
+
+            f.write("# Settings specific to simulation scenarios\n")
+            f.write("simulation = ")
+            f.write(pp.pformat(simulation) + "\n\n")
+
+            f.write("# Settings specific to experimental scenarios\n")
+            f.write("experiment = ")
+            f.write(pp.pformat(experiment) + "\n")
+
+        print(f"Default configuration template written to {filepath}")

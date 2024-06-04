@@ -8,6 +8,9 @@ import os
 import random
 import scipy.spatial.distance as ssd
 import scipy.cluster.hierarchy as sch
+from scipy.spatial.distance import pdist, squareform
+import matplotlib.pyplot as plt
+
 def generate_random_points(num_points, L, dim):
     """
     Generate 'num_points' random 2D/3D points within 'L' range (square or cube)
@@ -286,6 +289,157 @@ def get_delaunay_neighbors_corrected(positions):
     return filtered_distances, filtered_indices
 
 
+def compute_proximity_decay_graph(positions, decay_mode='decay_exp', quantile_scale=0.05, power_law_exp=4):
+    """
+    Computes the proximity decay graph with adjusted decay functions to ensure probabilities are between 0 and 1.
+    """
+    def decay_powerlaw(distance, distance_scale, exp=2):
+        normalized_distance = distance / distance_scale
+        probabilities = 1 / (np.power(normalized_distance, exp) + 0.001)
+        return probabilities
+
+    def decay_exp(distance, smooth_exponent, scale):
+        # Exponential decay naturally falls between 0 and 1
+        scaled_distance = distance / scale
+        return np.exp(-(scaled_distance)**smooth_exponent)
+
+    print("QUANTILE SCALE: ", quantile_scale)
+    # Calculate pairwise distances
+    raw_distances = squareform(pdist(positions))
+    distances = raw_distances.flatten()
+
+    distance_scale = np.quantile(distances, quantile_scale)
+
+    # Select decay function and compute probabilities
+    if decay_mode == 'power_law':
+        probabilities = decay_powerlaw(raw_distances, exp=power_law_exp, distance_scale=distance_scale)
+    else:  # exponential decay
+        probabilities = decay_exp(raw_distances, scale=distance_scale, smooth_exponent=2)
+
+    # # Ensure probabilities do not exceed the bounds [0, 1]
+    # probabilities = np.clip(probabilities, 0, 1)
+    probabilities /= np.max(probabilities)
+    np.fill_diagonal(probabilities, 0)  ## This avoid self edges
+
+    import matplotlib.pyplot as plt
+
+
+    # Plotting
+    plt.figure(figsize=(10, 6))
+    plt.scatter(distances, probabilities, alpha=0.5)
+
+    plt.xlabel('Distance')
+    plt.ylabel('Probability')
+    plt.grid(True)
+    # plt.show()
+
+
+    n = len(positions)
+    indices = np.transpose(np.triu_indices(n, k=1))
+    selected_probabilities = probabilities[indices[:, 0], indices[:, 1]]
+    rand_samples = np.random.rand(len(selected_probabilities))
+    edge_selection = rand_samples < selected_probabilities
+    selected_indices = indices[edge_selection]
+    selected_distances = raw_distances[selected_indices[:, 0], selected_indices[:, 1]]
+
+
+    # Create an adjacency list using a list of lists
+    adjacency_list = [[] for _ in range(n)]
+    adjacency_distances = [[] for _ in range(n)]
+    for edge, distance in zip(selected_indices, selected_distances):
+        adjacency_distances[edge[0]].append(distance)
+        adjacency_distances[edge[1]].append(distance)
+        adjacency_list[edge[0]].append(edge[1])
+        adjacency_list[edge[1]].append(edge[0])  # For undirected graph
+
+    # Convert the list of lists into a numpy object array
+    adjacency_array = np.array(adjacency_list, dtype=object)
+    adjacency_array_distances = np.array(adjacency_distances, dtype=object)
+
+
+    print("len selected distances", len(selected_distances))
+
+
+    # Plotting
+    plt.figure(figsize=(10, 6))
+    plt.hist(selected_distances, bins=50, alpha=0.75)
+    plt.xlabel('Edge Distance')
+    plt.ylabel('Frequency')
+    # plt.show()
+
+    return adjacency_array_distances, adjacency_array
+
+
+def compute_graph_data(positions, decay_mode='decay_exp', quantile_scale=0.05, power_law_exp=4):
+    def decay_powerlaw(distance, scale, exp):
+        normalized_distance = distance / scale
+        return 1 / (np.power(normalized_distance, exp) + 0.001)
+
+    def decay_exp(distance, scale, smooth_exponent):
+        scaled_distance = distance / scale
+        return np.exp(-(scaled_distance)**smooth_exponent)
+
+    # Calculate pairwise distances
+    distances = squareform(pdist(positions))
+    distance_scale = np.quantile(distances.flatten(), quantile_scale)
+
+    if decay_mode == 'power_law':
+        probabilities = decay_powerlaw(distances, distance_scale, power_law_exp)
+    else:
+        probabilities = decay_exp(distances, distance_scale, 2)
+
+    probabilities /= np.max(probabilities)
+    np.fill_diagonal(probabilities, 0)  # This avoid self edges
+
+    n = len(positions)
+    indices = np.transpose(np.triu_indices(n, k=1))
+    selected_probabilities = probabilities[indices[:, 0], indices[:, 1]]
+    rand_samples = np.random.rand(len(selected_probabilities))
+    edge_selection = rand_samples < selected_probabilities
+    selected_indices = indices[edge_selection]
+    selected_distances = distances[selected_indices[:, 0], selected_indices[:, 1]]
+
+    return distances.flatten(), probabilities.flatten(), selected_distances
+
+
+def plot_decay_effects(args, positions, quantile_scales, decay_modes, power_law_exp=4):
+    fig1, axes1 = plt.subplots(nrows=len(quantile_scales), ncols=len(decay_modes), figsize=(15, 10), sharex=True, sharey=True)
+    fig2, axes2 = plt.subplots(nrows=len(quantile_scales), ncols=len(decay_modes), figsize=(15, 10), sharex=True, sharey=False)
+
+
+    for i, scale in enumerate(quantile_scales):
+        for j, mode in enumerate(decay_modes):
+            print("doing this")
+            distances, probabilities, edge_distances = compute_graph_data(positions, decay_mode=mode,
+                                                                          quantile_scale=scale,
+                                                                          power_law_exp=power_law_exp)
+            if mode == "power_law":
+                mode = "PL"
+            elif mode == "decay_exp":
+                mode = "exp"
+
+            ax1 = axes1[i, j] if axes1.ndim > 1 else axes1[max(i, j)]
+            ax2 = axes2[i, j] if axes2.ndim > 1 else axes2[max(i, j)]
+
+            ax1.scatter(distances, probabilities, alpha=0.5)
+            ax1.set_title(f'{mode}, Q={scale}')
+            ax1.set_xlabel('Distance')
+            ax1.set_ylabel('Probability')
+
+            ax2.hist(edge_distances, bins=50, alpha=0.75)
+            ax2.set_title(f'{mode}, Q={scale}')
+            ax2.set_xlabel('Edge Distance')
+            ax2.set_ylabel('Frequency')
+
+    fig1.tight_layout()
+    fig2.tight_layout()
+    plot_folder = args.directory_map['distance_decay']
+    print("finished 1")
+    fig1.savefig(f"{plot_folder}/probability_decay_{args.args_title}.png")
+    print("finished 2")
+    fig2.savefig(f"{plot_folder}/histogram_edge_decay_{args.args_title}.png")
+    print("finished 3")
+
 
 def compute_epsilon_ball_radius(density, intended_degree, dim, base_proximity_mode):
     if dim == 2:
@@ -314,7 +468,7 @@ def compute_proximity_graph(args, positions):
     """
 
     valid_modes = ["knn", "epsilon-ball", "knn_bipartite", "epsilon_bipartite", "delaunay", "delaunay_corrected",
-                   "lattice", "random"]
+                   "lattice", "random", "distance_decay"]
 
     # Extract the base proximity mode from the args.proximity_mode
     base_proximity_mode = args.proximity_mode.split("_with_false_edges=")[0]
@@ -402,6 +556,23 @@ def compute_proximity_graph(args, positions):
         # Calculate the actual average degree to verify
         actual_av_degree = sum(len(neighbor) for neighbor in indices) / num_points
         print(f"Actual Average Degree: {actual_av_degree}")
+    elif base_proximity_mode == "distance_decay":
+
+        # TODO: uncomment this if you don't want extra plots with different quantile scales
+        ### example plotting effects
+        start = 0.05
+        stop = 0.30
+        step = 0.05
+
+        num = int((stop - start) / step + 1)
+        distance_decay_quantiles_list = np.linspace(start, stop, num)
+        quantile_scales = distance_decay_quantiles_list
+        # quantile_scales = [0.05, 0.15, 0.25, 0.35, 0.75, 0.95]
+        decay_modes = ['power_law', 'decay_exp']
+        # decay_modes = ['decay_exp']
+        plot_decay_effects(args, positions, quantile_scales, decay_modes)
+        quantile_scale = args.distance_decay_quantile
+        distances, indices = compute_proximity_decay_graph(positions, quantile_scale=quantile_scale)
     else:
 
         raise ValueError("Please input a valid proximity graph")
@@ -432,9 +603,27 @@ def write_positions(args, np_positions, output_path):
     output_file_path = f"{output_path}/positions_{title}.csv"
 
     # Write the DataFrame to a CSV file
-    args.positions_path = output_file_path
+    args.positions_path = output_file_path    # defined a little out of the blue? It is for the read_df function
     positions_df.to_csv(output_file_path, index=False)
 
+
+def compute_decay_rate(positions, quantile=0.5):
+    """
+    computes a reasonable "scale factor" to weight the graphs
+    """
+    distance_matrix = pdist(positions)
+    distance_matrix = squareform(distance_matrix)
+    distances = distance_matrix.flatten()
+    nonzero_distances = distances[distances > 0]
+    distance_quantile = np.quantile(nonzero_distances, quantile)
+
+
+
+    # The decay rate is the inverse of the quantile distance
+    decay_rate = 1 / distance_quantile if distance_quantile != 0 else float('inf')
+    print(f"Distance quantile: {distance_quantile}")
+    print(f"Decay rate: {decay_rate}")
+    return decay_rate
 
 def sort_points_by_distance_to_centroid(points):
     points = np.array(points)
@@ -454,6 +643,46 @@ def sort_points_for_heatmap(points):
     order = dendro['leaves']
     sorted_points = points[order]
     return sorted_points
+
+
+def distribute_weights(num_edges, total_weight, max_weight):
+    # Generate random weights
+    weights = np.random.randint(1, max_weight + 1, size=num_edges)
+    while sum(weights) != total_weight:
+        # Adjust weights to sum up to total_weight
+        diff = sum(weights) - total_weight
+        for i in range(num_edges):
+            if diff == 0:
+                break
+            if diff > 0 and weights[i] > 1:
+                adjustment = min(weights[i] - 1, diff)
+                weights[i] -= adjustment
+                diff -= adjustment
+            elif diff < 0:
+                adjustment = min(max_weight - weights[i], -diff)
+                weights[i] += adjustment
+                diff += adjustment
+    return weights
+
+def add_weights_to_false_edges(edge_df, args, max_weight):
+    if args.weighted:
+        # Add 'weight' column if it does not exist
+        if 'weight' not in edge_df.columns:
+            raise ValueError("Weight not in the edge_df columns")
+        if args.false_edges_count < 1:
+            raise ValueError("False edge counts must be at least 1")
+
+        # Compute and assign weights and distances for false edges
+        total_weight = (args.false_edges_count * args.weight_converter.max_weight) / 3  # weight budget
+        weights = distribute_weights(args.false_edges_count, total_weight, max_weight)
+        for i, edge in enumerate(args.false_edge_ids):
+            # Extract the indices for source and target
+            source_idx, target_idx = edge[0], edge[1]
+            # Assign a random weight between 1 and max_weight
+            weight = weights[i]
+            edge_df.loc[(edge_df['source'] == source_idx) & (edge_df['target'] == target_idx), 'weight'] = weight
+    return edge_df
+
 
 def write_proximity_graph(args, order_indices=False, point_mode="square"):
     base_proximity_mode = args.proximity_mode.split("_with_false_edges=")[0]
@@ -481,16 +710,19 @@ def write_proximity_graph(args, order_indices=False, point_mode="square"):
 
     position_folder = args.directory_map["original_positions"]
     edge_list_folder = args.directory_map["edge_lists"]
+    positions = np.array(points)
 
     # Create the edge list without duplicates
     edges = set()
     for i, neighbors in enumerate(indices):
-        for neighbor in neighbors:
-            # Ensure the smaller index always comes first
-            edge = tuple(sorted((i, neighbor)))
+        for j, neighbor in enumerate(neighbors):
+            if args.weighted:
+                # Include distance with edges for weighted case
+                edge = tuple(sorted((i, neighbor))) + (distances[i][j],)
+            else:
+                # Unweighted case, include only nodes
+                edge = tuple(sorted((i, neighbor)))
             edges.add(edge)
-
-    # TODO: False edges only for bipartite set
 
 
     ### Add false edges!
@@ -507,15 +739,19 @@ def write_proximity_graph(args, order_indices=False, point_mode="square"):
                 edge = tuple(sorted((i, j)))
                 # Check to avoid adding an edge that already exists
                 if edge not in edges:
-                    edges.add(edge)
                     args.false_edge_ids.append(edge)
+                    distance = np.linalg.norm(positions[edge[0]] - positions[edge[1]])
+                    edge = tuple(sorted((i, j))) + (distance,)
+                    edges.add(edge)
                 else:
                     while edge in edges:
                         j = random.randint(half, args.num_points - 1)
                         edge = tuple(sorted((i, j)))
                         if edge not in edges:
-                            edges.add(edge)
                             args.false_edge_ids.append(edge)
+                            distance = np.linalg.norm(positions[edge[0]] - positions[edge[1]])
+                            edge = tuple(sorted((i, j))) + (distance,)
+                            edges.add(edge)
                             break
 
     else:
@@ -526,11 +762,38 @@ def write_proximity_graph(args, order_indices=False, point_mode="square"):
                 j = random.randint(0, args.num_points - 1)
                 if i != j:  # Avoid self-loop
                     edge = tuple(sorted((i, j)))
-                    edges.add(edge)
                     args.false_edge_ids.append(edge)
+                    if args.weighted:
+                        distance = np.linalg.norm(positions[edge[0]] - positions[edge[1]])
+                        edge = tuple(sorted((i, j))) + (distance,)
+                    edges.add(edge)
 
     write_positions(args, np_positions=np.array(points), output_path=position_folder)
-    edge_df = pd.DataFrame(list(edges), columns=['source', 'target'])
+    columns = ['source', 'target', 'distance'] if args.weighted else ['source', 'target']
+
+
+    edge_df = pd.DataFrame(list(edges), columns=columns)
+
+    if args.weighted and args.weight_to_distance:
+        args.weight_converter.decay_rate = compute_decay_rate(points, quantile=0.01) # TODO: hardcoded, find the proper scaling factor
+        if args.weight_to_distance_fun == "exp":
+            edge_df['weight'] = edge_df['distance'].apply(args.weight_converter.return_weight_exponential_model)
+        else:
+            raise ValueError("Please choose valid weight to distance function")
+        if args.false_edges_count:
+            edge_df = add_weights_to_false_edges(edge_df=edge_df, args=args, max_weight=args.weight_converter.max_weight)
+
+        # TODO: this might be an interesting plot for the paper
+        # ### Plots the weight to distance relationship
+        # plt.figure(figsize=(10, 6))
+        # plt.scatter(edge_df['distance'], edge_df['weight'], color='blue')
+        # plt.title('Weight to Distance Relationship')
+        # plt.xlabel('Distance')
+        # plt.ylabel('Weight')
+        # plt.grid(True)
+        # plt.show()
+
+        edge_df = edge_df[edge_df['weight'] != 0]  ## remove 0 weights
 
     # # TODO: revert to this if errors arise
     # edge_df.to_csv(os.path.join(edge_list_folder, f"edge_list_{args.args_title}.csv"), index=False)

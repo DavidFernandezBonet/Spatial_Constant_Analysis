@@ -16,12 +16,14 @@ import pymde
 import scipy.sparse as sp
 from scipy.sparse.csgraph import shortest_path
 from scipy.sparse.csgraph import connected_components
+from scipy.sparse import issparse
+
 from scipy.sparse.csgraph import breadth_first_order
 import networkx as nx
 from sklearn.manifold import MDS
-from community import community_louvain
+
 from scipy.sparse import coo_matrix, csr_matrix
-from collections import Counter
+
 from scipy.spatial import KDTree
 
 
@@ -286,6 +288,37 @@ def get_bfs_samples(G, n_graphs, min_nodes):
     return subgraphs
 
 
+def get_bfs_samples_by_depth(G, n_graphs, bfs_depth, node_ids=None):
+    if bfs_depth < 0:
+        raise ValueError("bfs_depth must be non-negative")
+
+
+    subgraphs = []
+
+    for i in range(n_graphs):
+        if node_ids is not None:
+            start_node = node_ids[i]
+        else:
+            start_node = random.randint(0, G.vcount() - 1)  # Randomize the start node for each subgraph
+
+
+        visited = {start_node}
+        queue = [(start_node, 0)]  # Queue stores tuples (node, depth)
+
+        while queue:
+            current, depth = queue.pop(0)
+            if depth < bfs_depth:
+                neighbors = [neigh for neigh in G.neighbors(current, mode="ALL") if neigh not in visited]
+                visited.update(neighbors)
+                queue.extend((neigh, depth + 1) for neigh in neighbors)
+
+        if visited:
+            subgraph = G.subgraph(visited)
+            subgraphs.append(subgraph)
+
+    return subgraphs
+
+
 def get_one_bfs_sample(G, sample_size):
     if sample_size > G.vcount():
         raise ValueError("sample_size must be less than or equal to the number of nodes in G")
@@ -397,7 +430,7 @@ class ImageReconstruction:
         landmark_isomap(): A specific embedding technique that uses Isomap based on landmarks for dimensionality reduction.
     """
 
-    def __init__(self, graph, dim=2, node_embedding_mode="ggvec", manifold_learning_mode="UMAP",
+    def __init__(self, graph, shortest_path_matrix, dim=2, node_embedding_mode="ggvec", manifold_learning_mode="UMAP",
                  node_embedding_components=64, manifold_learning_neighbors=15):
         """
         Initialize the ImageReconstruction object.
@@ -406,6 +439,7 @@ class ImageReconstruction:
         :param dim: Target dimension for the UMAP reduction (2 or 3).
         """
         self.graph = graph
+        self.shortest_path_matrix = shortest_path_matrix
         self.dim = dim
         self.node_embedding_components = node_embedding_components
         self.manifold_learning_neighbors = manifold_learning_neighbors
@@ -424,10 +458,15 @@ class ImageReconstruction:
 
             # Graph is considered weighted if any weight is different from 1
             is_weighted = not np.all(weights == 1)
-
-            if is_weighted and self.node_embedding_mode != "PyMDE":
-                self.node_embedding_mode = "PyMDE_weighted"
-                print("Detected a weighted graph. Switching node_embedding_mode to 'PyMDE_weighted'.")
+            if is_weighted and (self.node_embedding_mode != "PyMDE" and self.node_embedding_mode != "MDS"):
+                if is_weighted and (self.node_embedding_mode == "landmark_isomap"):
+                    self.node_embedding_mode = "landmark_isomap_weighted"
+                    print("Detected a weighted graph. Switching node_embedding_mode to 'landmark_isomap_weighted'.")
+                elif is_weighted and (self.node_embedding_mode == "STRND"):
+                    print("Detected a weighted graph. Let's try STRND for weighted graphs.")
+                else:
+                    self.node_embedding_mode = "PyMDE_weighted"
+                    print("Detected a weighted graph. Switching node_embedding_mode to 'PyMDE_weighted'.")
 
 
     def compute_embeddings(self, args=None):
@@ -438,30 +477,45 @@ class ImageReconstruction:
         if self.node_embedding_mode == 'ggvec':
             ggvec_model = GGVec(n_components=self.node_embedding_components)
             node_embeddings = ggvec_model.fit_transform(self.graph)
-
-
         elif self.node_embedding_mode == "STRND":
             # TODO: add node_embedding_components
             # raise ValueError("Not implemented yet")
             ### nodevectors
             # node2vec_model = Node2Vec(n_components=self.node_embedding_components)
             # node_embeddings = node2vec_model.fit_transform(self.graph)
-
             ### pecanpy
             edge_list_folder = args.directory_map['edge_lists']
             edge_list_path = f'{edge_list_folder}/{args.edge_list_title}'
 
             # Temporary file without header
+            delimiter = ","
+            edge_df = pd.read_csv(edge_list_path, delimiter=delimiter)
+            if args.weighted:
+                edge_df = edge_df[['source', 'target', 'weight']]
+            else:
+                edge_df = edge_df[['source', 'target']]
+            # with tempfile.NamedTemporaryFile(mode='w+', delete=False) as tmp_file:
+            #     with open(edge_list_path, 'r') as f:
+            #         next(f)  # Skip the header line
+            #         for line in f:
+            #             parts = line.strip().split(delimiter)
+            #             # Ensure only node1, node2, and weight are written to the new file
+            #             if len(parts) >= 3:
+            #                 # Write only the first three columns to the new file
+            #                 tmp_file.write(f'{parts[0]}{delimiter}{parts[1]}{delimiter}{parts[3]}\n')  # weight is in the 4th column
             with tempfile.NamedTemporaryFile(mode='w+', delete=False) as tmp_file:
-                with open(edge_list_path, 'r') as f:
-                    next(f)  # Skip the header line
-                    for line in f:
-                        tmp_file.write(line)
+                edge_df.to_csv(tmp_file.name, index=False, header=False)
 
             g = node2vec.PreComp(p=1, q=1, workers=4, verbose=True, )
-
             # load graph from temporary edgelist file
-            g.read_edg(tmp_file.name, weighted=False, directed=False, delimiter=',')
+            if args.weighted and args.weight_to_distance:
+                ### print the weights
+                # tmp = pd.read_csv(tmp_file.name, header=None, names=['source', 'target', 'weight'])
+                # print("weights", tmp['weight'])
+
+                g.read_edg(tmp_file.name, weighted=True, directed=False, delimiter=',')
+            else:
+                g.read_edg(tmp_file.name, weighted=False, directed=False, delimiter=',')
             g.preprocess_transition_probs()
             node_embeddings = g.embed(dim=self.node_embedding_components)
 
@@ -478,7 +532,10 @@ class ImageReconstruction:
 
 
         elif self.node_embedding_mode == "landmark_isomap":
+
             node_embeddings = self.landmark_isomap()
+        elif self.node_embedding_mode == "landmark_isomap_weighted":
+            node_embeddings = self.landmark_isomap_weighted()
 
         elif self.node_embedding_mode == "spring_relaxation":
             G = nx.from_scipy_sparse_array(self.graph)
@@ -493,6 +550,7 @@ class ImageReconstruction:
                 sp_matrix = compute_shortest_path_matrix_sparse_graph(self.graph, args=args)
 
             mds = MDS(n_components=args.dim, dissimilarity='precomputed', random_state=42)
+
             positions = mds.fit_transform(sp_matrix)
             node_embeddings = positions
 
@@ -605,6 +663,8 @@ class ImageReconstruction:
 
         if old_indices and args.node_ids_map_old_to_new:  # Preserve old indicies, this will make it so it doesn't go from 0 to N-1
             node_ids_map_new_to_old = {new: old for old, new in args.node_ids_map_old_to_new.items()}
+
+            print(args.node_ids_map_old_to_new)
             node_ids = [node_ids_map_new_to_old[new_index] for new_index in sorted(node_ids_map_new_to_old)]
             positions_df['node_ID'] = node_ids
             # Define the output file path
@@ -633,7 +693,17 @@ class ImageReconstruction:
         """
         embeddings = self.compute_embeddings(args)
 
-        if self.node_embedding_mode != 'landmark_isomap' or self.node_embedding_mode != 'spring_relaxation':
+        # TODO: Modes that do not require dimensionality reduction  (careful, the list has to be updated if I add new modes)
+        excluded_modes = [
+            'landmark_isomap',
+            'landmark_isomap_weighted',
+            'spring_relaxation',
+            'PyMDE',
+            'MDS',
+            'PyMDE_weighted',
+        ]
+        # Check if the current mode is not in the list of excluded modes
+        if self.node_embedding_mode not in excluded_modes:
             reconstructed_points = self.reduce_dimensions(embeddings)
         else:  # in landmark isomap the result is already the reconstructed points
             reconstructed_points = embeddings
@@ -747,6 +817,50 @@ class ImageReconstruction:
             recovered_positions = np.transpose(0.5 * L_slash.dot(np.transpose(mean_column - D2_all)))
             return recovered_positions
 
+        recovered_positions = landmark_MDS(landmark_distance_matrix, all_distances_to_landmarks)
+        vectors = recovered_positions
+        return vectors
+
+    def landmark_isomap_weighted(self):
+        def select_landmarks(num_landmarks, num_nodes):
+            return np.random.choice(np.arange(num_nodes), num_landmarks, replace=False)
+
+        def symmetrize(a):
+            """
+            """
+            return np.maximum(a, a.T)
+
+        def landmark_MDS(diss_matrix_landmarks, all_distance_to_landmarks):
+            """
+            1. Apply MDS to position landmark nodes
+            2. Use landmark positions eigenvalues (Moore-Penrose inverse) to position the rest of the nodes
+            """
+            mds = manifold.MDS(n_components=self.dim, metric=True, random_state=2,
+                               dissimilarity="precomputed")
+
+            L = np.array(mds.fit_transform(diss_matrix_landmarks))  # landmark_coordinates --> good results
+
+            # Triangulate all points
+            D2 = diss_matrix_landmarks ** 2
+            D2_all = all_distance_to_landmarks ** 2
+            mean_column = D2.mean(axis=0)
+            L_slash = np.linalg.pinv(L)
+            recovered_positions = np.transpose(0.5 * L_slash.dot(np.transpose(mean_column - D2_all)))
+            return recovered_positions
+
+        # The shortest path matrix (NxN) is provided as input
+        shortest_path_matrix = self.shortest_path_matrix
+        N = shortest_path_matrix.shape[0]
+
+        # Select random landmarks
+        selected_landmarks = select_landmarks(self.node_embedding_components, N)
+        all_distances_to_landmarks = shortest_path_matrix[:, selected_landmarks]
+
+        # Landmark DxD distance matrix (symmetric positive)
+        landmark_distance_matrix = all_distances_to_landmarks[selected_landmarks]
+        landmark_distance_matrix = symmetrize(landmark_distance_matrix)
+
+        # Apply landmark MDS to get node embeddings
         recovered_positions = landmark_MDS(landmark_distance_matrix, all_distances_to_landmarks)
         vectors = recovered_positions
         return vectors
@@ -909,17 +1023,26 @@ def compute_shortest_path_matrix_sparse_graph(sparse_graph, args=None, force_rec
     # TODO: this doesn't force to recompute the shortest path matrix
     from utils import convert_graph_type
     sparse_graph = convert_graph_type(args, graph=sparse_graph, desired_type="sparse")
+    is_weighted = np.any(sparse_graph.data != 1) and issparse(sparse_graph)
 
     if args is None:
-        sp_matrix = np.array(shortest_path(csgraph=sparse_graph, directed=False))
+        sp_matrix = np.array(shortest_path(csgraph=sparse_graph, directed=False, unweighted=not is_weighted))
+        if np.any((sp_matrix == 0) & (~np.eye(sp_matrix.shape[0], dtype=bool))):
+            raise ValueError("Shortest path matrix contains zero values off the diagonal, which is invalid for a shortest path matrix.")
         return sp_matrix
     elif (args is not None) and (args.shortest_path_matrix is not None) and (not force_recompute):
         return args.shortest_path_matrix
     else:
-        sp_matrix = np.array(shortest_path(csgraph=sparse_graph, directed=False))
+        sp_matrix = np.array(shortest_path(csgraph=sparse_graph, directed=False, unweighted=not is_weighted))
+        if np.any((sp_matrix == 0) & (~np.eye(sp_matrix.shape[0], dtype=bool))):
+            raise ValueError("Shortest path matrix contains zero values off the diagonal, which is invalid for a shortest path matrix.")
         args.shortest_path_matrix = sp_matrix
         args.mean_shortest_path = sp_matrix.mean()
         return sp_matrix
+
+
+
+
 
 
 def safely_remove_edges_sparse(csgraph, percentage=10):
@@ -1051,128 +1174,12 @@ def sample_csgraph_subgraph(args, csgraph, min_nodes=3000):
     return subgraph
 
 
-def detect_communities_and_compute_modularity(csgraph, n_runs=1):
-    all_communities = []
-    all_modularities = []
-    G = nx.from_scipy_sparse_array(csgraph)
-    for _ in range(n_runs):
-        partition = community_louvain.best_partition(G)
-        communities = np.zeros(G.number_of_nodes())
-        node_label_to_position = {node: i for i, node in enumerate(G.nodes())}
-        for node, community in partition.items():
-            node_position = node_label_to_position[node]
-            communities[node_position] = community
-        modularity = community_louvain.modularity(partition, G)
-        all_communities.append(communities)
-        all_modularities.append(modularity)
-    if n_runs == 1:
-        return all_communities[0], all_modularities[0]
-    else:
-        return all_communities, all_modularities
-
-
-def count_false_edges_within_communities(args, communities):
-    # Convert sparse graph to NetworkX graph
-    G = nx.from_scipy_sparse_array(args.sparse_graph)
-    node_to_community = {node: int(communities[i]) for i, node in enumerate(G.nodes())}
-
-    false_edges_within_communities_count = 0
-    edges_within_communities = set()
-    edges_between_communities = set()
-
-    # Iterate over all edges to categorize them
-    for i, (node1, node2) in enumerate(G.edges()):
-        # Check if both nodes are in the same community
-        if node_to_community[node1] == node_to_community[node2]:
-            edges_within_communities.add((node1, node2))
-            # If this edge is also listed as a false edge, increase the count
-            if (node1, node2) in args.false_edge_ids:
-                false_edges_within_communities_count += 1
-        else:
-            edges_between_communities.add((node1, node2))
-    print("false edges within communities", false_edges_within_communities_count)
-    return edges_within_communities, edges_between_communities
-
-
-def identify_consistent_edge_classifications(args, all_communities, within_threshold_ratio=0.3):
-    # within_threshold_ratio = 0.4 by default
-    G = nx.from_scipy_sparse_array(args.sparse_graph)
-
-    # Initialize containers for tracking edge classifications across runs
-    edges_within_communities_runs = [set() for _ in range(len(all_communities))]
-    edges_between_communities_runs = [set() for _ in range(len(all_communities))]
-
-    for run_idx, communities in enumerate(all_communities):
-        node_to_community = {node: int(communities[i]) for i, node in enumerate(G.nodes())}
-
-        # Classify edges for this run
-        for edge in G.edges():
-            node1, node2 = edge
-            if node_to_community[node1] == node_to_community[node2]:
-                edges_within_communities_runs[run_idx].add(edge)
-            else:
-                edges_between_communities_runs[run_idx].add(edge)
-
-    ### Old part where we don't weight it by  number of appearances in the run
-
-    # # Aggregate edge classifications across runs
-    # consistently_within = set.intersection(*edges_within_communities_runs)
-    # consistently_between = set.intersection(*edges_between_communities_runs)
-    #
-    # # Identify edges that were ever within communities across runs
-    # ever_within = set.union(*edges_within_communities_runs)
-    #
-    # # Edges that are likely true are those ever classified as within,
-    # # subtracting those consistently between gives edges that were at least once within but not always between
-    #
-    # ### There is a distinction between "ever within" and "consistently within".
-    # # likely_true_edges = ever_within - consistently_between
-    #
-    # likely_true_edges = consistently_within
-    # if ever_within != likely_true_edges:
-    #     print(f"Warning! {len(likely_true_edges)} out of {len(ever_within)} edges were likely true")
-    #
-    # # Consistently between communities edges are more likely to be false
-    # likely_false_edges = consistently_between
-
-    ### End of old part
-
-
-    ## This sets the edges that are more than 50% inside a community as probably true edges
-    within_counter = Counter(edge for run in edges_within_communities_runs for edge in run)
-    between_counter = Counter(edge for run in edges_between_communities_runs for edge in run)
-
-    # Determine the predominant classification for each edge
-    total_runs = len(edges_within_communities_runs)  # Assuming equal number of runs for both classifications
-    consistently_within = set()
-    consistently_between = set()
-
-    edge_score_dict = {}
-    for edge in set(within_counter) | set(between_counter):  # Union of all edges seen
-        within_count = within_counter.get(edge, 0)
-        between_count = between_counter.get(edge, 0)
-
-        total_count = within_count + between_count
-        score = within_count / total_count  # confidence we have on the edge
-        edge_score_dict[edge] = score
-
-        # Adjust the condition to use the within_threshold_ratio
-        if score > within_threshold_ratio:
-            consistently_within.add(edge)
-        elif score <= within_threshold_ratio and between_count > 0:
-            consistently_between.add(edge)
-
-    likely_true_edges = consistently_within
-    likely_false_edges = consistently_between
-    return likely_true_edges, likely_false_edges, edge_score_dict
-
-
-def compute_edge_betweenness_centrality(sparse_matrix):
-    G = nx.from_scipy_sparse_array(sparse_matrix)
-    centrality = nx.edge_betweenness_centrality(G, normalized=True)
-    return centrality
-
 def edge_list_to_sparse_graph(edge_list):
+    """
+    Convert an edge list to a sparse adjacency matrix.
+    Edge list is a list of tuples (node1, node2)
+    """
+
     # Flatten the edge list and get unique nodes
     nodes = np.unique(np.array(list(edge_list)).flatten())
     # Map node IDs to matrix indices
@@ -1273,60 +1280,57 @@ def randomly_delete_edges(args, csr_graph, delete_ratio=0.1):
     else:
         protected_edges = set()
 
-    # Gather all edge indices, excluding protected edges
-    all_edges = [(i, j) for i, j in zip(rows, cols) if (i, j) not in protected_edges and (j, i) not in protected_edges]
+    all_edges = [(i, j) for i, j in zip(rows, cols) if
+                 i < j and (i, j) not in protected_edges and (j, i) not in protected_edges]
 
     # Number of edges to attempt to delete
     num_deletable_edges = len(all_edges)
     edges_to_delete = int(num_deletable_edges * delete_ratio)
 
-    # Randomly select edges to delete
-    indices = list(range(num_deletable_edges))
-    random.shuffle(indices)
 
     # Randomly select edges to delete
     random.shuffle(all_edges)  # Shuffle the list of deletable edges
 
+    lil_graph = csr_graph.tolil()  # Convert to LIL format for easier manipulation
+
+    # print("number of edges to delete", edges_to_delete)
+    # print("total number of edges", len(all_edges))
     deletions = 0
-    for (row, col) in all_edges:
-        if deletions >= edges_to_delete:
-            break
+    while deletions < edges_to_delete:
+        if not all_edges:
+            raise ValueError("No more edges to delete! The graph cannot be any more sparse without disconnecting it")
+            break  # Exit if there are no more edges to consider
 
-        # row = rows[idx]
-        # col = cols[idx]
-
-        # rows, cols = csr_graph.nonzero()
-        # csr_graph[cols, rows] = csr_graph[rows, cols]
+        # Select a random edge
+        edge_index = random.randint(0, len(all_edges) - 1)
+        row, col = all_edges.pop(edge_index)  # Remove the edge from the list
 
         # Temporarily remove the edge
-        original_value = csr_graph[row, col]
-        csr_graph[row, col] = 0
-        csr_graph[col, row] = 0  # Ensure symmetry
-        csr_graph = csr_graph + csr_graph.T - sp.diags(csr_graph.diagonal())
+        original_value = lil_graph[row, col]
+        lil_graph[row, col] = 0
+        lil_graph[col, row] = 0  # Ensure symmetry
 
         # Check if the graph is still connected
-        if not ensure_connected(csr_graph) or csr_graph[row, :].nnz == 0 or csr_graph[:, col].nnz == 0:
+        if not ensure_connected(lil_graph) or lil_graph[row, :].nnz == 0 or lil_graph[:, col].nnz == 0:
             # If not connected, revert the deletion
-            csr_graph[row, col] = original_value
-            csr_graph[col, row] = original_value
+            lil_graph[row, col] = original_value
+            lil_graph[col, row] = original_value
         else:
             deletions += 1
 
-    # # Reinforce symmetry and correct diagonals if necessary
-    # csr_graph = csr_graph + csr_graph.T - sp.diags(csr_graph.diagonal())
 
+    # Convert back to CSR, removing explicit zeros
+    csr_graph = lil_graph.tocsr()
 
-    csr_graph = replace_infinities_sparse(csr_graph)
-    # Logging and diagnostics
-    isolated_nodes = [i for i in range(csr_graph.shape[0]) if csr_graph.indptr[i] == csr_graph.indptr[i + 1]]
-    print("Isolated nodes:", isolated_nodes)
-    print("Is the graph still connected:", ensure_connected(csr_graph))
-    print("Number of points:", csr_graph.shape[0])
-    print("Number of deletions:", deletions)
-
-    # Extract and store the updated edge list
     rows, cols = csr_graph.nonzero()
-    filtered_edges = [(i, j) for i, j in zip(rows, cols) if i < j]
+    filtered_edges = [(i, j) for i, j in zip(rows, cols) if i > j]
+    # print("number of edges deleted", edges_to_delete)
+    # print("AFTER number of edges", len(filtered_edges))
+
+    if len(filtered_edges) - len(protected_edges)!= num_deletable_edges - edges_to_delete:
+        raise ValueError("Incorrect number of edges:", len(filtered_edges)- len(protected_edges),
+                         "Should be:", num_deletable_edges - edges_to_delete)
+
     edge_df = pd.DataFrame(filtered_edges, columns=['source', 'target'])
     edge_list_folder = args.directory_map["edge_lists"]
     args.args_title = args.args_title + f"_edge_del_ratio_{delete_ratio}"
@@ -1335,14 +1339,16 @@ def randomly_delete_edges(args, csr_graph, delete_ratio=0.1):
 
 
 
-
-
     args.edge_list_title = edge_list_title
     args.sparse_graph = csr_graph
+
+
     args.shortest_path_matrix = compute_shortest_path_matrix_sparse_graph(csr_graph, None)
     args.mean_shortest_path = args.shortest_path_matrix.mean()
+    args.num_edges = args.sparse_graph.nnz // 2
     print("Mean shortest path:", args.mean_shortest_path)
-    print("Is the graph still connected 2:", ensure_connected(csr_graph))
+
+
 
     return args, csr_graph
 
