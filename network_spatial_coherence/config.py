@@ -1,6 +1,6 @@
 # Base settings common to all scenarios
 base = {
-    "proximity_mode": "knn",  # Options 1) Simulation: knn, epsilon-ball, lattice, delaunay_corrected, distance_decay... 2) experimental
+    "proximity_mode": "experimental",  # Options 1) Simulation: knn, epsilon-ball, lattice, delaunay_corrected, distance_decay... 2) experimental
     "dim": 2,
     "false_edges_count": 0,
     "true_edges_deletion_ratio": 0,
@@ -22,7 +22,7 @@ base = {
 
     # Make sure to tune the parameters for weighted graph (set everything to True, weight threshold nonzero maybe)
     "weighted": True,
-    "weight_threshold": 6,
+    "weight_threshold": 0,
     "weight_to_distance": True,
     "weight_to_distance_fun": "exp",  #TODO: implement this (it is done for creation but not for regular)
     "verbose": True,
