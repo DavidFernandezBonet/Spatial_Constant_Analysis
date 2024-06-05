@@ -348,14 +348,40 @@ def create_violin_plot(folder_path, quantity_to_evaluate):
     print(combined_data)
     # Plotting the violin plot
     sns.violinplot(data=combined_data, y=quantity_to_evaluate)
-    sns.swarmplot(data=combined_data, y=quantity_to_evaluate, color='black', alpha=0.5)  # 'alpha' is for transparency
+    # sns.swarmplot(data=combined_data, y=quantity_to_evaluate, color='black', alpha=0.5)  # 'alpha' is for transparency
     # sns.stripplot(data=combined_data, y=quantity_to_evaluate, color='black', jitter=0.1, size=5,
     #               alpha=0.5)  # 'jitter' adds a small horizontal variation
 
-    # Identifying the top two outliers
-    max_values = combined_data[quantity_to_evaluate].nlargest(2)
-    outlier_data = combined_data[combined_data[quantity_to_evaluate].isin(max_values)]
+    # Calculate maximum, median, and minimum values
+    max_value = combined_data[quantity_to_evaluate].max()
+    second_max_value = combined_data[quantity_to_evaluate].nlargest(2).values[1]
+    min_value = combined_data[quantity_to_evaluate].min()
+    second_min_value = combined_data[quantity_to_evaluate].nsmallest(2).values[1]
+    ## Calculate median
+    median_value = np.percentile(combined_data[quantity_to_evaluate], 50)
+    top_90_percent_value = np.percentile(combined_data[quantity_to_evaluate], 97)
 
+    # Find rows corresponding to these values (or the closest match in the data)
+    closest_median = \
+    combined_data.iloc[(combined_data[quantity_to_evaluate] - median_value).abs().argsort()[:1]][
+        quantity_to_evaluate].values[0]
+    closest_top_90_percent = \
+    combined_data.iloc[(combined_data[quantity_to_evaluate] - top_90_percent_value).abs().argsort()[:1]][
+        quantity_to_evaluate].values[0]
+
+    specific_title_quantity = combined_data[combined_data['edge_list_title'] ==
+                                            'Sample01_human_pbmcs_unstimulated_component_RCVCMP0000120_edgelist.csv'][quantity_to_evaluate].iloc[0]
+    # Identify the rows corresponding to these values
+    special_values = [max_value, closest_top_90_percent, specific_title_quantity]
+
+
+
+    # # Identifying the top two outliers
+    # special_values = combined_data[quantity_to_evaluate].nlargest(2)
+    outlier_data = combined_data[combined_data[quantity_to_evaluate].isin(special_values)]
+
+    print(special_values)
+    print(outlier_data)
     # Highlight the outliers with a different color and larger point
     sns.swarmplot(data=outlier_data, y=quantity_to_evaluate, color='red', size=8)
 
@@ -376,13 +402,17 @@ def create_violin_plot(folder_path, quantity_to_evaluate):
                  color='green')
 
     # Finalize the plot
-    plt.title(f'Violin plot of {quantity_to_evaluate}')
-    plt.xlabel('Files')
-    plt.ylabel(quantity_to_evaluate)
+    plt.ylabel(LABEL_MAPPINGS[quantity_to_evaluate])
 
     # Set y-axis limits and ticks
     # plt.ylim(0, 1)  # Set the limits of y-axis from 0 to 1
     # plt.yticks(np.arange(0, 1.1, 0.1))  # Set y-axis ticks at intervals of 0.1
+    args = GraphArgs()
+    plot_folder = args.directory_map['dataframes']
+    current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    filename = f"{plot_folder}/violin_plot_{quantity_to_evaluate}_{current_time}"
+    plt.savefig(filename + '.svg')
+    print(f"Saved plot to {filename}.svg")
 
     plt.show()
 
@@ -575,7 +605,7 @@ folder_path = "/home/david/PycharmProjects/Spatial_Constant_Analysis/results/out
 # folder_path = "/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240603_095632_proximity_mode_edge_list_title_uropod/"
 ## edge threshold 2000-8000
 # folder_path = "/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240603_151811_proximity_mode_edge_list_title_uropod_2000-8000/"
-quantity_to_evaluate = 'gram_total_contribution_all_eigens'
+quantity_to_evaluate = 'gram_total_contribution'
 
 create_violin_plot(folder_path, quantity_to_evaluate)
 

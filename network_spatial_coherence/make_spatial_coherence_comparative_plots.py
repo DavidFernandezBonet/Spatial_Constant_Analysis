@@ -11,6 +11,7 @@ import pandas as pd
 from algorithms import compute_shortest_path_matrix_sparse_graph, select_false_edges_csr
 from gram_matrix_analysis import plot_gram_matrix_eigenvalues
 from utils import add_specific_random_edges_to_csrgraph, write_edge_list_sparse_graph
+from plots import save_plotting_data
 from check_latex_installation import check_latex_installed
 from dimension_prediction import run_dimension_prediction
 from gram_matrix_analysis import compute_gram_matrix_eigenvalues
@@ -183,14 +184,14 @@ def generate_experimental_graphs(edge_list_titles_dict):
     ## add simulated graph for compariosn
     args = GraphArgs()
     args.num_points = 1000
-    args.proximity_mode = "knn"
+    args.proximity_mode = "delaunay_corrected"
     args.dim = 2
     args.intended_av_degree = 10
     args.verbose = False
-    write_proximity_graph(args, point_mode="square", order_indices=False)
+    write_proximity_graph(args, point_mode="circle", order_indices=False)
     args.sparse_graph = load_graph(args, load_mode='sparse')
     args.shortest_path_matrix = compute_shortest_path_matrix_sparse_graph(args=args, sparse_graph=args.sparse_graph)
-    args.network_name = "KNN"
+    args.network_name = "Simulation"
     args_list.append(args)
     return args_list
 
@@ -219,6 +220,9 @@ def plot_comparative_spatial_constant(results_dfs, args_list, title="", use_dept
         size_magnitude = 'intended_size'
         s_constant = 'S_general'
 
+    data_means = []
+    data_depths = []
+    data_stds = []
     for i, (results_df_net, args) in enumerate(zip(results_dfs, args_list)):
         unique_sizes = results_df_net[size_magnitude].unique()
         means = []
@@ -236,6 +240,10 @@ def plot_comparative_spatial_constant(results_dfs, args_list, title="", use_dept
         sizes_net = np.array(sizes)
         means_net = np.array(means)
         std_devs_net = np.array(std_devs)
+
+        data_means.append(means_net)
+        data_depths.append(sizes_net)
+        data_stds.append(std_devs_net)
 
         # Use color from the selected palette
         color = colors[i]
@@ -258,6 +266,18 @@ def plot_comparative_spatial_constant(results_dfs, args_list, title="", use_dept
     plt.savefig(f"{plot_folder}/comparative_spatial_constant_{title}.svg")
     plot_folder2 = f"{args_list[0].directory_map['comparative_plots']}"
     plt.savefig(f"{plot_folder2}/comparative_spatial_constant_{title}.svg")
+
+
+    column_names_means = [args.network_name + ' mean spatial constant' for args in args_list]
+    column_names_sizes = [args.network_name + ' depths' for args in args_list]
+    column_names_stds = [args.network_name + ' stds' for args in args_list]
+    column_names = column_names_means + column_names_sizes + column_names_stds
+    data = data_means + data_depths + data_stds
+    print(len(column_names), len(data))
+    save_plotting_data(column_names=column_names, data=data,
+                       csv_filename=f"{plot_folder2}/comparative_spatial_constant_{title}.csv")
+
+
     if args.show_plots:
         plt.show()
 def make_spatial_constant_comparative_plot(args_list, title=""):
@@ -343,6 +363,12 @@ def plot_comparative_predicted_dimension(args_list, results_predicted_dimension_
     plt.savefig(f"{plot_folder}/comparative_dimension_prediction_violin_{title}.svg")
     plot_folder2 = f"{args_list[0].directory_map['comparative_plots']}"
     plt.savefig(f"{plot_folder2}/comparative_dimension_prediction_violin_{title}.svg")
+
+    column_names = [args.network_name for args in args_list]
+    data = violin_data
+    save_plotting_data(column_names=column_names, data=data,
+                       csv_filename=f"{plot_folder2}/comparative_dimension_prediction_violin_{title}.csv")
+
     if args_list[0].show_plots:
         plt.show()
 
@@ -465,6 +491,18 @@ def plot_eigenvalue_contributions_comparative(eigenvalues_list, args_list, title
     plt.savefig(f"{plot_folder}/comparative_{prefix}eigenvalue_contributions_{title}.svg")
     plot_folder2 = f"{args_list[0].directory_map['comparative_plots']}"
     plt.savefig(f"{plot_folder2}/comparative_{prefix}eigenvalue_contributions_{title}.svg")
+
+    column_names = [args.network_name for args in args_list]
+    if consider_first_eigenvalues_only:
+        data = cumulative_variance_first_d_eigenvalues
+    else:
+        data = cumulative_variances
+    print("consider first eigenvalues only", consider_first_eigenvalues_only)
+    print("cumulative_variances", cumulative_variances)
+    print("data", data)
+    data = [item[0] for item in data]  # ignore the color tuple (2nd element)
+    save_plotting_data(column_names=column_names, data=data,
+                       csv_filename=f"{plot_folder2}/comparative_{prefix}eigenvalue_contributions_{title}.csv")
     if args.show_plots:
         plt.show()
 
@@ -577,10 +615,20 @@ def plot_spectral_gap_comparative(args_list, eigenvalues_list, score_method='i',
     axs[1].set_xticklabels([args.network_name for args in args_list], rotation=0, ha="center")
     axs[1].set_ylim(0, 1)
     plt.tight_layout()
+
+
+
+
     plot_folder = f"{args_list[0].directory_map['mds_dim']}"
     plt.savefig(f"{plot_folder}/comparative_spectral_gap_{title}.svg")
     plot_folder2 = f"{args_list[0].directory_map['comparative_plots']}"
     plt.savefig(f"{plot_folder2}/comparative_spectral_gap_{title}.svg")
+
+    column_names = [args.network_name for args in args_list]
+    data = spectral_gap_scores
+    save_plotting_data(column_names=column_names, data=data,
+                       csv_filename=f"{plot_folder2}/comparative_spectral_gap_{title}.csv")
+
     if args.show_plots:
         plt.show()
 
@@ -669,20 +717,28 @@ if __name__ == "__main__":
         # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_1880_subgraph_4.csv": ('S4', None),
         # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_1156_subgraph_5.csv": ('S5', None),
         # }
-        #
-        edge_list_titles_dict = {
-            "pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv": ('Raji', None),
-            "pixelgen_processed_edgelist_Sample07_pbmc_CD3_capped_cell_3_RCVCMP0000344.csv": ('CD3', None),
-            "pixelgen_example_graph.csv": ('Uro', None)
 
+        # # Pixelgen different datasets
+        # edge_list_titles_dict = {
+        #     "pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv": ('Raji', None),
+        #     "pixelgen_processed_edgelist_Sample07_pbmc_CD3_capped_cell_3_RCVCMP0000344.csv": ('CD3', None),
+        #     "pixelgen_example_graph.csv": ('Uro', None)
+        # }
+
+        # Pixelgen pbmc dataset good, bad, ugly (different gradients of spatial coherence)
+        edge_list_titles_dict = {
+            "Sample01_human_pbmcs_unstimulated_component_RCVCMP0001392_edgelist.csv": ('PBMC 1', None),
+            "Sample01_human_pbmcs_unstimulated_component_RCVCMP0002024_edgelist.csv": ('PBMC 2', None),
+            "Sample01_human_pbmcs_unstimulated_component_RCVCMP0000120_edgelist.csv": ('PBMC 3', None)
         }
+
         title = title_experimental
         args_list = generate_experimental_graphs(edge_list_titles_dict=edge_list_titles_dict)
     else:
         raise ValueError("what_to_run must be 'simulation' or 'experimental'")
 
 
-    ## Pipeline
-    make_spatial_constant_comparative_plot(args_list, title=title)
-    make_dimension_prediction_comparative_plot(args_list, title=title)
+    ## Comparative Pipeline
+    # make_spatial_constant_comparative_plot(args_list, title=title)
+    # make_dimension_prediction_comparative_plot(args_list, title=title)
     make_gram_matrix_analysis_comparative_plot(args_list, title=title)

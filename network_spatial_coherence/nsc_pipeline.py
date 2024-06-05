@@ -579,7 +579,7 @@ def run_pipeline_for_several_parameters(parameter_ranges):
     total_iterations = len(list(product(*values)))
     for i, value_combination in enumerate(product(*values)):
         if args.verbose:
-            print("Iteration", i, "out of", total_iterations)
+            print("Iteration", i+1, "out of", total_iterations)
         param_dict = dict(zip(keys, value_combination))
         args = GraphArgs()
         args.update_args(**param_dict)
@@ -690,9 +690,9 @@ if __name__ == "__main__":
         # run_pipeline_for_several_parameters(parameter_ranges=parameter_ranges)
 
 
-        #### Pixelgen iterations
-        arguito = GraphArgs()
-        mpx_directory = arguito.directory_map['pixelgen_data']
+        # #### Pixelgen iterations   (uncomment these first 3, and then one of the types - Raji, Uropod, PBMC)
+        # arguito = GraphArgs()
+        # mpx_directory = arguito.directory_map['pixelgen_data']
 
         # # Raji
         # mpx_dataset = 'Sample03_Raji_control_edge_t=2000-8000'       # 'Sample03_Raji_control_edge_t=8000', 'Sample03_Raji_control_edge_t=2000-8000'
@@ -706,14 +706,26 @@ if __name__ == "__main__":
         # dir_path = Path(mpx_dataset_dir)
         # mpx_edgelists = [entry.name for entry in dir_path.iterdir() if entry.is_file()]
 
-        # PBMC
-        mpx_dataset = 'Sample01_human_pbmcs_unstimulated_edge_t=2000-8000' #'Sample01_human_pbmcs_unstimulated_edge_t=8000' ''Sample01_human_pbmcs_unstimulated_edge_t=2000-8000'
-        mpx_dataset_dir = os.path.join(mpx_directory, mpx_dataset)
-        dir_path = Path(mpx_dataset_dir)
-        mpx_edgelists = [entry.name for entry in dir_path.iterdir() if entry.is_file()]
+        # # PBMC
+        # mpx_dataset = 'Sample01_human_pbmcs_unstimulated_edge_t=2000-8000' #'Sample01_human_pbmcs_unstimulated_edge_t=8000' ''Sample01_human_pbmcs_unstimulated_edge_t=2000-8000'
+        # mpx_dataset_dir = os.path.join(mpx_directory, mpx_dataset)
+        # dir_path = Path(mpx_dataset_dir)
+        # mpx_edgelists = [entry.name for entry in dir_path.iterdir() if entry.is_file()]
+        #
+        # parameter_ranges = {"proximity_mode": ['experimental'],
+        #                     "edge_list_title": mpx_edgelists}
+        # run_pipeline_for_several_parameters(parameter_ranges=parameter_ranges)
 
+
+        ### Run chain of known edge lists:
+
+        edge_lists_known = [
+            'Sample01_human_pbmcs_unstimulated_component_RCVCMP0001392_edgelist.csv',
+            'Sample01_human_pbmcs_unstimulated_component_RCVCMP0002024_edgelist.csv',
+            'Sample01_human_pbmcs_unstimulated_component_RCVCMP0000120_edgelist.csv'
+        ]
         parameter_ranges = {"proximity_mode": ['experimental'],
-                            "edge_list_title": mpx_edgelists}
+                            "edge_list_title": edge_lists_known}
         run_pipeline_for_several_parameters(parameter_ranges=parameter_ranges)
 
     else:
@@ -729,5 +741,8 @@ if __name__ == "__main__":
                     # plot_profiling_results(single_graph_args)  # Plot the results at the end
         else:
             single_graph_args, output_df = run_pipeline(graph, args)
+            store_folder = args.directory_map['single_output_df']
+            output_df.to_csv(os.path.join(store_folder, f'quantitative_metrics_{args.args_title}.csv'), index=False)
+            # optionally profile every time
             plot_profiling_results(single_graph_args)  # Plot the results at the end
 

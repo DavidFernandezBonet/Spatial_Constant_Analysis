@@ -585,7 +585,7 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
             row['target'], row['source']) in args.false_edge_ids else 'k'
 
             edge_alpha = 1 if (row['source'], row['target']) in args.false_edge_ids or (
-            row['target'], row['source']) in args.false_edge_ids else 0.2
+            row['target'], row['source']) in args.false_edge_ids else 0.8    # edge opacity
 
             edge_linewidth = 1 if (row['source'], row['target']) in args.false_edge_ids or (  #TODO: adjust linewidth
             row['target'], row['source']) in args.false_edge_ids else 0.5
@@ -1239,3 +1239,26 @@ def validate_edge_list_numbers(edge_list, reconstructed_positions):
     return edge_values == expected_set
 
 
+def save_plotting_data(column_names, data, csv_filename,):
+    """
+    Saves plotting data to a CSV file and optionally creates a basic plot.
+
+    Parameters:
+    - column_names: List of column names.
+    - data: List of data arrays, where each array corresponds to a column.
+    - csv_filename: Filename for the output CSV file.
+    - plot_filename: Optional filename for saving the plot. If None, no plot is saved.
+    """
+
+    data_float = []
+    for arr in data:
+        if isinstance(arr, list):  # Check if the data is in list format
+            arr = np.array(arr)   # Convert list to NumPy array
+        if arr.dtype.kind in 'ui':  # Check if the array is of integer type
+            arr = arr.astype(float)  # Convert integer array to float
+        data_float.append(arr)
+    max_length = max(len(arr) for arr in data_float)
+    padded_data = [np.pad(arr, (0, max_length - len(arr)), 'constant', constant_values=np.nan) for arr in data_float]
+    df = pd.DataFrame({col: dat for col, dat in zip(column_names, padded_data)})
+    df.to_csv(csv_filename, index=False)
+    print(f'Data saved to {csv_filename}')

@@ -22,7 +22,7 @@ base = {
 
     # Make sure to tune the parameters for weighted graph (set everything to True, weight threshold nonzero maybe)
     "weighted": True,
-    "weight_threshold": 0,
+    "weight_threshold": 1,
     "weight_to_distance": True,
     "weight_to_distance_fun": "exp",  #TODO: implement this (it is done for creation but not for regular)
     "verbose": True,
@@ -31,7 +31,7 @@ base = {
 # Settings specific to simulation scenarios
 simulation = {
     "num_points": 1000,
-    "intended_av_degree": 200,  # set to 200 for weighted graphs
+    "intended_av_degree": 10,  # set to 200 for weighted graphs
     "L": 1, # system size
 }
 

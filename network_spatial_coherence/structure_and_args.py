@@ -48,6 +48,7 @@ def create_project_structure(target_dir=None):
 
         's_constant_results': f'{project_root}/results/individual_spatial_constant_results',
         'output_dataframe': f'{project_root}/results/output_dataframe',
+        'single_output_df': f'{project_root}/results/single_runs_output_dataframe',
         'plots': f'{project_root}/results/plots',
         'plots_original_image': f'{project_root}/results/plots/original_image',
         'plots_reconstructed_image': f'{project_root}/results/plots/reconstructed_image',
