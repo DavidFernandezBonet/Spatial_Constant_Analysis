@@ -63,6 +63,40 @@ COLORMAP_STYLES = {
     "gram_last_spectral_gap": "magma",
 }
 
+def transform_dataframes_in_folder(folder_path):
+    """Transform all CSV files in a folder into a single DataFrame."""
+    files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith('.csv')]
+    all_data = []
+    for file_path in files:
+        df = pd.read_csv(file_path)
+        # Use pivot_table instead of pivot, and handle duplicates by averaging (you can change the aggfunc if needed)
+        df_pivot = df.pivot_table(index=None, columns='Property', values='Value', aggfunc='first')
+        all_data.append(df_pivot)
+    return pd.concat(all_data, ignore_index=True)
+
+
+def transform_dataframes_in_folders(folders, new_folder_name):
+    """Transform DataFrames in multiple folders, merge into one DataFrame, and save in a new directory."""
+    all_data = []
+    for folder in folders:
+        df = transform_dataframes_in_folder(folder)
+        all_data.append(df)
+    merged_df = pd.concat(all_data, ignore_index=True)
+
+    # Determine the parent directory of the folders provided
+    if folders:
+        parent_dir = os.path.dirname(folders[0])
+        new_folder_path = os.path.join(parent_dir, new_folder_name)
+
+        # Create the directory if it does not exist
+        os.makedirs(new_folder_path, exist_ok=True)
+
+        # Save the merged DataFrame to the new directory
+        output_file_path = os.path.join(new_folder_path, 'merged_data.csv')
+        merged_df.to_csv(output_file_path, index=False)
+        print(f"Merged DataFrame saved to {output_file_path}")
+
+    return merged_df
 
 def load_data(folder_path, parameter_x, parameter_y, quantity_to_evaluate, omit_df_with_parameters):
     combined_data = pd.DataFrame()
@@ -417,6 +451,36 @@ def create_violin_plot(folder_path, quantity_to_evaluate):
     plt.show()
 
 
+def create_violin_plot_slidetag_nbeads(df, quantity_to_evaluate):
+    # Extract nbead value from the edge_list_title column
+    df['nbead'] = df['edge_list_title'].str.extract('nbead_(\d+)').astype(int)
+
+    # Ensure the quantity to evaluate is numeric, handling non-numeric gracefully
+    df[quantity_to_evaluate] = pd.to_numeric(df[quantity_to_evaluate], errors='coerce')
+
+    # Sort the DataFrame by 'nbead' for ordered plotting
+    df = df.sort_values('nbead')
+
+    # Set up the plot
+    plt.figure(figsize=(12, 6))
+    ax = sns.boxplot(x='nbead', y=quantity_to_evaluate, data=df)
+
+    # Add scatter plot on top of the violin plot
+    sns.stripplot(x='nbead', y=quantity_to_evaluate, data=df, jitter=False, color='black', size=3, ax=ax)
+
+    plt.xlabel('Bead filter threshold')
+    plt.ylabel(LABEL_MAPPINGS.get(quantity_to_evaluate, quantity_to_evaluate))
+
+
+    args = GraphArgs()
+    plot_folder = args.directory_map['dataframes']
+    current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    filename = f"{plot_folder}/violin_plot_slidetag_beads_{quantity_to_evaluate}_{current_time}"
+    plt.savefig(filename + '.svg')
+    plt.show()
+
+args = GraphArgs()
+dataframe_folder = args.directory_map['output_dataframe']
 
 # def create_heatmap(folder_path, parameter_x, parameter_y, quantity_to_evaluate, omit_df_with_parameters={}):
 #     """
@@ -596,16 +660,25 @@ def create_violin_plot(folder_path, quantity_to_evaluate):
 ## edge threshold 2000-8000
 # folder_path = "/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240603_143439_proximity_mode_edge_list_title_raji_2000-8000/"
 
-# # pbmc human cells
-# folder_path = "/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240531_170946_proximity_mode_edge_list_title_pbmc/"
-## edge threshold 2000-8000
-folder_path = "/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240603_153707_proximity_mode_edge_list_title_pbmc_2000-8000/"
+# # # pbmc human cells
+# # folder_path = "/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240531_170946_proximity_mode_edge_list_title_pbmc/"
+# ## edge threshold 2000-8000
+# folder_path = "/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240603_153707_proximity_mode_edge_list_title_pbmc_2000-8000/"
+#
+# # # uropod
+# # folder_path = "/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240603_095632_proximity_mode_edge_list_title_uropod/"
+# ## edge threshold 2000-8000
+# # folder_path = "/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240603_151811_proximity_mode_edge_list_title_uropod_2000-8000/"
+# quantity_to_evaluate = 'gram_total_contribution'
+# create_violin_plot(folder_path, quantity_to_evaluate)
 
-# # uropod
-# folder_path = "/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240603_095632_proximity_mode_edge_list_title_uropod/"
-## edge threshold 2000-8000
-# folder_path = "/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240603_151811_proximity_mode_edge_list_title_uropod_2000-8000/"
-quantity_to_evaluate = 'gram_total_contribution'
 
-create_violin_plot(folder_path, quantity_to_evaluate)
 
+folder_paths = ['/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240605_170926_proximity_mode_edge_list_title_slidetag8',
+'/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240605_165712_proximity_mode_edge_list_title_slidetag3',
+'/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240605_171602_proximity_mode_edge_list_title_slidetag4',
+'/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240605_164234_proximity_mode_edge_list_title_slidetag6',
+'/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240605_170015_proximity_mode_edge_list_title_slidetag7',
+'/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240605_165532_proximity_mode_edge_list_title_slidetag5']  # List of folder paths
+merged_df = transform_dataframes_in_folders(folder_paths, new_folder_name='slidetag_different_nbeads')
+create_violin_plot_slidetag_nbeads(df=merged_df, quantity_to_evaluate='gram_total_contribution')

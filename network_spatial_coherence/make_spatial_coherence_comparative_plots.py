@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from structure_and_args import GraphArgs
 from create_proximity_graph import write_proximity_graph
 from utils import load_graph
-from data_analysis import run_simulation_subgraph_sampling, run_simulation_subgraph_sampling_by_bfs_depth
+from data_analysis import run_simulation_subgraph_sampling_by_bfs_depth, run_spatial_constant_continuous
 import matplotlib.colors as mcolors
 import pandas as pd
 from algorithms import compute_shortest_path_matrix_sparse_graph, select_false_edges_csr
@@ -13,12 +13,13 @@ from gram_matrix_analysis import plot_gram_matrix_eigenvalues
 from utils import add_specific_random_edges_to_csrgraph, write_edge_list_sparse_graph
 from plots import save_plotting_data
 from check_latex_installation import check_latex_installed
-from dimension_prediction import run_dimension_prediction
+from dimension_prediction import run_dimension_prediction, run_dimension_prediction_continuous
 from gram_matrix_analysis import compute_gram_matrix_eigenvalues
 import copy
 import random
 import matplotlib
 import matplotlib.patches as mpatches
+import warnings
 matplotlib.use('Agg')  # Use a non-GUI backend, it was throwing errors otherwise when running the experimental setting
 
 # is_latex_in_os = check_latex_installed()
@@ -148,8 +149,9 @@ def generate_experimental_graphs(edge_list_titles_dict):
             args.edge_list_title = edge_list
             args.proximity_mode = "experimental"
             if args.num_points > 3000:
-                args.large_graph_subsampling = True
-                args.max_subgraph_size = 3000
+                warnings.warn("Large graph detected! Subsampling reccommended")
+                # args.large_graph_subsampling = True
+                # args.max_subgraph_size = 3000
             sparse_graph = load_graph(args, load_mode='sparse')
             args.sparse_graph = sparse_graph
             args.shortest_path_matrix = compute_shortest_path_matrix_sparse_graph(args=args,
@@ -167,9 +169,13 @@ def generate_experimental_graphs(edge_list_titles_dict):
                 args.weight_threshold = weight
                 args.edge_list_title = edge_list
                 args.proximity_mode = "experimental"
+                args.weighted = True
+                args.weight_to_distance = True
+                args.weight_to_distance_fun = "exp"
                 if args.num_points > 3000:
-                    args.large_graph_subsampling = True
-                    args.max_subgraph_size = 3000
+                    warnings.warn("Large graph detected! Subsampling reccommended")
+                    # args.large_graph_subsampling = True
+                    # args.max_subgraph_size = 3000
                 sparse_graph = load_graph(args, load_mode='sparse')
                 args.sparse_graph = sparse_graph
                 args.shortest_path_matrix = compute_shortest_path_matrix_sparse_graph(args=args, sparse_graph=args.sparse_graph)
@@ -182,17 +188,21 @@ def generate_experimental_graphs(edge_list_titles_dict):
 
 
     ## add simulated graph for compariosn
-    args = GraphArgs()
-    args.num_points = 1000
-    args.proximity_mode = "delaunay_corrected"
-    args.dim = 2
-    args.intended_av_degree = 10
-    args.verbose = False
-    write_proximity_graph(args, point_mode="circle", order_indices=False)
-    args.sparse_graph = load_graph(args, load_mode='sparse')
-    args.shortest_path_matrix = compute_shortest_path_matrix_sparse_graph(args=args, sparse_graph=args.sparse_graph)
-    args.network_name = "Simulation"
-    args_list.append(args)
+
+    if args.weighted and args.weight_to_distance:  # if the last case was weighted, the simulation will also be
+        a = 2
+    else:  # only have simulated comparison for unweighted graph
+        args_sim = GraphArgs()
+        args_sim.num_points = 1000
+        args_sim.proximity_mode = "delaunay_corrected"
+        args_sim.dim = 2
+        args_sim.intended_av_degree = 10
+        args_sim.verbose = False
+        write_proximity_graph(args_sim, point_mode="circle", order_indices=False)
+        args_sim.sparse_graph = load_graph(args_sim, load_mode='sparse')
+        args_sim.shortest_path_matrix = compute_shortest_path_matrix_sparse_graph(args=args_sim, sparse_graph=args_sim.sparse_graph)
+        args_sim.network_name = "Simulation"
+        args_list.append(args_sim)
     return args_list
 
 
@@ -255,7 +265,7 @@ def plot_comparative_spatial_constant(results_dfs, args_list, title="", use_dept
 
 
     if use_depth:
-        plt.xlabel('BFS Depth')
+        plt.xlabel('Depth')
     else:
         plt.xlabel('Size')
     plt.ylabel('Mean Spatial Constant')
@@ -287,7 +297,7 @@ def make_spatial_constant_comparative_plot(args_list, title=""):
         size_interval = int(args.num_points / 10)  # collect 10 data points
 
         ## Network Spatial Constant
-        igraph_graph = load_graph(args, load_mode='igraph')  #TODO: make sure igraph is what you need
+        # igraph_graph = load_graph(args, load_mode='igraph')  #TODO: make sure igraph is what you need
         # igraph_graph = load_graph(args, load_mode='sparse')
 
         # ### Run with size
@@ -299,10 +309,19 @@ def make_spatial_constant_comparative_plot(args_list, title=""):
         shortest_path_matrix = args.shortest_path_matrix
         print("NETWORK NAME", args.network_name)
 
-        net_results_df = run_simulation_subgraph_sampling_by_bfs_depth(args, shortest_path_matrix=shortest_path_matrix,
-                                                                    n_subgraphs=n_samples, graph=igraph_graph,
-                                                                    add_false_edges=False, return_simple_output=False,
-                                                                       all_depths=True)
+        if args.weighted and args.weight_to_distance:
+            igraph_graph = load_graph(args, load_mode='sparse')
+            net_results_df = run_spatial_constant_continuous(args, shortest_path_matrix=shortest_path_matrix,
+                                                          n_subgraphs=10,
+                                                          graph=igraph_graph, add_false_edges=False,
+                                                          false_edge_list=[], return_simple_output=False)
+        else:
+            igraph_graph = load_graph(args, load_mode='igraph')  # TODO: make sure igraph is what you need
+            net_results_df = run_simulation_subgraph_sampling_by_bfs_depth(args, shortest_path_matrix=shortest_path_matrix,
+                                                                        n_subgraphs=n_samples, graph=igraph_graph,
+                                                                        add_false_edges=False, return_simple_output=False,
+                                                                        all_depths=True)
+
 
         net_results_df_list.append(net_results_df)
 
@@ -318,10 +337,16 @@ def make_dimension_prediction_comparative_plot(args_list, title=""):
             compute_shortest_path_matrix_sparse_graph(sparse_graph=sparse_graph, args=args)
         elif args.shortest_path_matrix is None:
             compute_shortest_path_matrix_sparse_graph(sparse_graph=args.sparse_graph, args=args)
-        results_pred_dimension = run_dimension_prediction(args, distance_matrix=args.shortest_path_matrix,
-                                                          dist_threshold=int(args.mean_shortest_path),
-                                                          num_central_nodes=10,
-                                                          local_dimension=False, plot_heatmap_all_nodes=False)
+
+        if args.weight_to_distance and args.weighted:  # weighted case
+            # TODO: include heatmap nodes for weighted
+            results_pred_dimension = run_dimension_prediction_continuous(args, distance_matrix=args.shortest_path_matrix,
+                                                              num_central_nodes=12,)
+        else:
+            results_pred_dimension = run_dimension_prediction(args, distance_matrix=args.shortest_path_matrix,
+                                                              dist_threshold=int(args.mean_shortest_path),
+                                                              num_central_nodes=12,
+                                                              local_dimension=False, plot_heatmap_all_nodes=False)
         results_pred_dimension_list.append(results_pred_dimension)
     plot_comparative_predicted_dimension(args_list=args_list, results_predicted_dimension_list=results_pred_dimension_list,
                                          title=title)
@@ -493,10 +518,12 @@ def plot_eigenvalue_contributions_comparative(eigenvalues_list, args_list, title
     plt.savefig(f"{plot_folder2}/comparative_{prefix}eigenvalue_contributions_{title}.svg")
 
     column_names = [args.network_name for args in args_list]
-    if consider_first_eigenvalues_only:
-        data = cumulative_variance_first_d_eigenvalues
-    else:
-        data = cumulative_variances
+    # if consider_first_eigenvalues_only:
+    #     data = cumulative_variance_first_d_eigenvalues
+    #     print("cumulative_variance_first_d_eigenvalues", cumulative_variance_first_d_eigenvalues)
+    # else:
+    #     data = cumulative_variances
+    data = cumulative_variances
     print("consider first eigenvalues only", consider_first_eigenvalues_only)
     print("cumulative_variances", cumulative_variances)
     print("data", data)
@@ -625,7 +652,8 @@ def plot_spectral_gap_comparative(args_list, eigenvalues_list, score_method='i',
     plt.savefig(f"{plot_folder2}/comparative_spectral_gap_{title}.svg")
 
     column_names = [args.network_name for args in args_list]
-    data = spectral_gap_scores
+    data = [[spectral_gap_score] for spectral_gap_score in spectral_gap_scores]
+    print("Spectral gap scores: ", spectral_gap_scores)
     save_plotting_data(column_names=column_names, data=data,
                        csv_filename=f"{plot_folder2}/comparative_spectral_gap_{title}.csv")
 
@@ -686,7 +714,7 @@ def plot_pos_neg_eigenvalue_proportions_comparative(args_list, eigenvalues_list)
     plt.show()
 if __name__ == "__main__":
     what_to_run = "experimental"  # simulation or experimental
-    title_experimental = "MPX" # "Experimental Comparison"
+
 
     if what_to_run == "simulation":
         ## Simulation with False Edges
@@ -719,19 +747,24 @@ if __name__ == "__main__":
         # }
 
         # # Pixelgen different datasets
+        # title_experimental = "MPX 1"  # "Experimental Comparison"
         # edge_list_titles_dict = {
         #     "pixelgen_processed_edgelist_Sample04_Raji_Rituximab_treated_cell_3_RCVCMP0001806.csv": ('Raji', None),
         #     "pixelgen_processed_edgelist_Sample07_pbmc_CD3_capped_cell_3_RCVCMP0000344.csv": ('CD3', None),
         #     "pixelgen_example_graph.csv": ('Uro', None)
         # }
 
-        # Pixelgen pbmc dataset good, bad, ugly (different gradients of spatial coherence)
-        edge_list_titles_dict = {
-            "Sample01_human_pbmcs_unstimulated_component_RCVCMP0001392_edgelist.csv": ('PBMC 1', None),
-            "Sample01_human_pbmcs_unstimulated_component_RCVCMP0002024_edgelist.csv": ('PBMC 2', None),
-            "Sample01_human_pbmcs_unstimulated_component_RCVCMP0000120_edgelist.csv": ('PBMC 3', None)
-        }
+        # # Pixelgen pbmc dataset good, bad, ugly (different gradients of spatial coherence)
+        # title_experimental = "MPX" # "Experimental Comparison"
+        # edge_list_titles_dict = {
+        #     "Sample01_human_pbmcs_unstimulated_component_RCVCMP0001392_edgelist.csv": ('PBMC 1', None),
+        #     "Sample01_human_pbmcs_unstimulated_component_RCVCMP0002024_edgelist.csv": ('PBMC 2', None),
+        #     "Sample01_human_pbmcs_unstimulated_component_RCVCMP0000120_edgelist.csv": ('PBMC 3', None)
+        # }
 
+        # # Weinstein different thresholds
+        title_experimental = "DNA_Mic"
+        edge_list_titles_dict = {"weinstein_data_corrected_february.csv": ('DNA_M', np.arange(1, 10))}
         title = title_experimental
         args_list = generate_experimental_graphs(edge_list_titles_dict=edge_list_titles_dict)
     else:
@@ -739,6 +772,6 @@ if __name__ == "__main__":
 
 
     ## Comparative Pipeline
-    # make_spatial_constant_comparative_plot(args_list, title=title)
-    # make_dimension_prediction_comparative_plot(args_list, title=title)
+    make_spatial_constant_comparative_plot(args_list, title=title)
+    make_dimension_prediction_comparative_plot(args_list, title=title)
     make_gram_matrix_analysis_comparative_plot(args_list, title=title)

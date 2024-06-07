@@ -575,7 +575,6 @@ def run_pipeline_for_several_parameters(parameter_ranges):
     os.makedirs(run_directory, exist_ok=True)
 
     keys, values = zip(*parameter_ranges.items())
-
     total_iterations = len(list(product(*values)))
     for i, value_combination in enumerate(product(*values)):
         if args.verbose:
@@ -591,8 +590,11 @@ def run_pipeline_for_several_parameters(parameter_ranges):
         print("intended degree", args.intended_av_degree)
         print("args_title", args.args_title)
         print("proximity mode", args.proximity_mode)
-
         graph, args = load_and_initialize_graph(args)
+
+        if args.num_points < 100:
+            warnings.warn("Discarding graph because it has less than 100 nodes")
+            continue
 
         print("param dict", param_dict)
         args, output_df = run_pipeline(graph, args)
@@ -716,17 +718,30 @@ if __name__ == "__main__":
         #                     "edge_list_title": mpx_edgelists}
         # run_pipeline_for_several_parameters(parameter_ranges=parameter_ranges)
 
-
-        ### Run chain of known edge lists:
-
-        edge_lists_known = [
-            'Sample01_human_pbmcs_unstimulated_component_RCVCMP0001392_edgelist.csv',
-            'Sample01_human_pbmcs_unstimulated_component_RCVCMP0002024_edgelist.csv',
-            'Sample01_human_pbmcs_unstimulated_component_RCVCMP0000120_edgelist.csv'
-        ]
+        ### Simon Slidetag with different beads
+        arguito = GraphArgs()
+        slidetag_directory = arguito.directory_map['slidetag_data']
+        slidetag_dataset = 'edge_list_nbead_9_filtering'       # 'Sample03_Raji_control_edge_t=8000', 'Sample03_Raji_control_edge_t=2000-8000'
+        mpx_dataset_dir = os.path.join(slidetag_directory, slidetag_dataset)
+        dir_path = Path(mpx_dataset_dir)
+        slidetag_edgelists = [entry.name for entry in dir_path.iterdir() if entry.is_file()]
         parameter_ranges = {"proximity_mode": ['experimental'],
-                            "edge_list_title": edge_lists_known}
+                            "edge_list_title": slidetag_edgelists}
         run_pipeline_for_several_parameters(parameter_ranges=parameter_ranges)
+
+
+        # ### Run chain of known edge lists:
+        #
+        # edge_lists_known = [
+        #     'Sample01_human_pbmcs_unstimulated_component_RCVCMP0001392_edgelist.csv',
+        #     'Sample01_human_pbmcs_unstimulated_component_RCVCMP0002024_edgelist.csv',
+        #     'Sample01_human_pbmcs_unstimulated_component_RCVCMP0000120_edgelist.csv'
+        # ]
+        # parameter_ranges = {"proximity_mode": ['experimental'],
+        #                     "edge_list_title": edge_lists_known}
+        # run_pipeline_for_several_parameters(parameter_ranges=parameter_ranges)
+
+
 
     else:
         ### Single run
