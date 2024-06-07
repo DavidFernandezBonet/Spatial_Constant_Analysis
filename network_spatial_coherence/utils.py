@@ -473,7 +473,7 @@ def load_graph(args, load_mode='sparse'):
         else:    # If we transform weights to distances
             if args.proximity_mode == "experimental":
                 # TODO: set properly the decay_rate in experimental case
-                args.weight_converter.decay_rate = 1   # seems to not matter a lot
+                args.weight_converter.decay_rate = 7/100000   # seems to not matter a lot, but would be nice with right units
 
                 # TODO: maybe the maximum weight should be even higher than the maximum observed weight!
                 # args.weight_converter.max_weight = np.quantile(largest_component.data, 0.95)  # choose 95% percentile for weight
