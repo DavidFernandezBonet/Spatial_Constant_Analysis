@@ -478,13 +478,11 @@ def load_graph(args, load_mode='sparse'):
                 # TODO: maybe the maximum weight should be even higher than the maximum observed weight!
                 # args.weight_converter.max_weight = np.quantile(largest_component.data, 0.95)  # choose 95% percentile for weight
 
-
-                args.weight_converter.max_weight = 1326  # maximum weight for all the dataset
-                # args.weight_converter.max_weight = np.max(largest_component.data)
+                if "weinstein" in args.edge_list_title:
+                    args.weight_converter.max_weight = 1326  # maximum weight for all the dataset
+                else:
+                    args.weight_converter.max_weight = np.max(largest_component.data)
                 print("Max weight", args.weight_converter.max_weight)
-
-
-
             # args.weight_converter.decay_rate = 0.01
             # args.weight_converter.max_weight = 100
             # args.weight_converter.max_weight = 10000000

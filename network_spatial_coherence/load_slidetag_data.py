@@ -2,6 +2,8 @@ import pandas as pd
 import os
 from structure_and_args import GraphArgs
 
+
+### Old code for loading slidetag data (basically outputting graph in my format with source and target
 args = GraphArgs()
 title_sample = 'edge_list_filtered_by_bed_n_connections_thresholds_2-16.csv'    ## SRR11, SRR07, edge_list_abundant_beads_cut_beadsum_thresholds_8_256_SRR11.csv
 data_folder = args.directory_map['slidetag_data']

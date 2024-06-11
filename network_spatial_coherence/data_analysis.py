@@ -722,8 +722,14 @@ def run_spatial_constant_continuous(args, graph, shortest_path_matrix, n_subgrap
                                      plot_spatial_constant_against_false_edges=False, return_simple_output=True,
                                     false_edge_list=[]):
     all_distances = shortest_path_matrix.flatten()
-    start_distance = np.quantile(all_distances, 0.1)
-    stop_distance = np.quantile(all_distances, 0.5)
+
+    if "weinstein" in args.edge_list_title:
+        # predefined start and stopping points for comparison against different thresholds
+        start_distance = 0.0005
+        stop_distance = 0.0012
+    else:
+        start_distance = np.quantile(all_distances, 0.1)
+        stop_distance = np.quantile(all_distances, 0.5)
     distance_intervals = np.linspace(start_distance, stop_distance, num=n_intervals)
 
 

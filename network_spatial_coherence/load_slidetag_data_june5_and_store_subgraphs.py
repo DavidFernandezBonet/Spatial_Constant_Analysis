@@ -7,6 +7,7 @@ import seaborn as sns
 from structure_and_args import GraphArgs
 import re
 
+### Used to process slidetag subgraphs and store them in a folder. This is done to make boxplots, one box for each filtering power
 def read_and_process_network(file_path):
     df = pd.read_csv(file_path)
     G = nx.from_pandas_edgelist(df, 'source', 'target')
