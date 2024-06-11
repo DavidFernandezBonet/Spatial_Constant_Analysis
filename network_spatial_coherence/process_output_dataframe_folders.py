@@ -475,6 +475,7 @@ def create_violin_plot_slidetag_nbeads(df, quantity_to_evaluate):
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     filename = f"{plot_folder}/violin_plot_slidetag_beads_{quantity_to_evaluate}_{current_time}"
     plt.savefig(filename + '.svg')
+    plt.savefig(filename + '.pdf')
     plt.show()
 
 args = GraphArgs()
@@ -670,17 +671,17 @@ dataframe_folder = args.directory_map['output_dataframe']
 # quantity_to_evaluate = 'gram_total_contribution'
 # create_violin_plot(folder_path, quantity_to_evaluate)
 
-# # # weinstein with different thresholds
-folder_path = "/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240610_145731_weinstein_all_filters/"
-quantity_to_evaluate = 'gram_total_contribution'
-create_violin_plot(folder_path, quantity_to_evaluate)
+# # # # weinstein with different thresholds
+# folder_path = "/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240610_145731_weinstein_all_filters/"
+# quantity_to_evaluate = 'gram_total_contribution'
+# create_violin_plot(folder_path, quantity_to_evaluate)
 
-# ### Merge individual dataframes into one. In this case this is done for the slidetag data
-# folder_paths = ['/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240605_170926_proximity_mode_edge_list_title_slidetag8',
-# '/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240605_165712_proximity_mode_edge_list_title_slidetag3',
-# '/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240605_171602_proximity_mode_edge_list_title_slidetag4',
-# '/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240605_164234_proximity_mode_edge_list_title_slidetag6',
-# '/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240605_170015_proximity_mode_edge_list_title_slidetag7',
-# '/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240605_165532_proximity_mode_edge_list_title_slidetag5']  # List of folder paths
-# merged_df = transform_dataframes_in_folders(folder_paths, new_folder_name='slidetag_different_nbeads')
-# create_violin_plot_slidetag_nbeads(df=merged_df, quantity_to_evaluate='gram_total_contribution')
+### Merge individual dataframes into one. In this case this is done for the slidetag data
+folder_paths = ['/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240605_170926_proximity_mode_edge_list_title_slidetag8',
+'/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240605_165712_proximity_mode_edge_list_title_slidetag3',
+'/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240605_171602_proximity_mode_edge_list_title_slidetag4',
+'/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240605_164234_proximity_mode_edge_list_title_slidetag6',
+'/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240605_170015_proximity_mode_edge_list_title_slidetag7',
+'/home/david/PycharmProjects/Spatial_Constant_Analysis/results/output_dataframe/20240605_165532_proximity_mode_edge_list_title_slidetag5']  # List of folder paths
+merged_df = transform_dataframes_in_folders(folder_paths, new_folder_name='slidetag_different_nbeads')
+create_violin_plot_slidetag_nbeads(df=merged_df, quantity_to_evaluate='gram_total_contribution')

@@ -764,7 +764,7 @@ if __name__ == "__main__":
 
         # # Weinstein different thresholds
         title_experimental = "DNA_Mic"
-        edge_list_titles_dict = {"weinstein_data_corrected_february.csv": ('DNA_M', np.arange(1, 10))}
+        edge_list_titles_dict = {"weinstein_data_corrected_february.csv": ('DNA_M', np.arange(1, 7))}
         title = title_experimental
         args_list = generate_experimental_graphs(edge_list_titles_dict=edge_list_titles_dict)
     else:

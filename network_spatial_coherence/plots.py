@@ -604,7 +604,10 @@ def plot_original_or_reconstructed_image(args, image_type="original", edges_df=N
 
 
 
-    format_extension = '.svg' if args.num_points < 1000 else '.png'
+    if "pbmc" in args.edge_list_title:
+        format_extension = '.svg'
+    else:
+        format_extension = '.svg' if args.num_points < 1000 else '.png'
     if image_type == "original":
         plot_folder = args.directory_map["plots_original_image"]
         plt.savefig(f"{plot_folder}/original_image_{args.args_title}{format_extension}")
