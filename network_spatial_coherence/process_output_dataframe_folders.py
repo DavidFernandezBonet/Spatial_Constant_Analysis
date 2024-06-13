@@ -461,7 +461,7 @@ def create_violin_plot_slidetag_nbeads(df, quantity_to_evaluate):
     # Sort the DataFrame by 'nbead' for ordered plotting
     df = df.sort_values('nbead')
     # Set up the plot
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(8, 8))
     ax = sns.boxplot(x='nbead', y=quantity_to_evaluate, data=df)
     # Add scatter plot on top of the violin plot
     sns.stripplot(x='nbead', y=quantity_to_evaluate, data=df, jitter=False, color='black', size=3, ax=ax)
@@ -469,6 +469,7 @@ def create_violin_plot_slidetag_nbeads(df, quantity_to_evaluate):
     plt.xlabel('Bead filter threshold')
     plt.ylabel(LABEL_MAPPINGS.get(quantity_to_evaluate, quantity_to_evaluate))
 
+    ax.set_box_aspect(1)
 
     args = GraphArgs()
     plot_folder = args.directory_map['dataframes']
@@ -476,6 +477,7 @@ def create_violin_plot_slidetag_nbeads(df, quantity_to_evaluate):
     filename = f"{plot_folder}/violin_plot_slidetag_beads_{quantity_to_evaluate}_{current_time}"
     plt.savefig(filename + '.svg')
     plt.savefig(filename + '.pdf')
+
     plt.show()
 
 args = GraphArgs()

@@ -101,7 +101,7 @@ def generate_several_graphs(from_one_graph=False, proximity_mode="knn"):
     else:
         args = GraphArgs()
         args.verbose = False
-        args.proximity_mode = "knn"
+        args.proximity_mode = proximity_mode
         args.dim = 2
         args.show_plots = False
         args.intended_av_degree = 10
@@ -321,6 +321,7 @@ def make_spatial_constant_comparative_plot(args_list, title=""):
                                                                         n_subgraphs=n_samples, graph=igraph_graph,
                                                                         add_false_edges=False, return_simple_output=False,
                                                                         all_depths=True)
+
 
 
         net_results_df_list.append(net_results_df)
@@ -762,11 +763,30 @@ if __name__ == "__main__":
         #     "Sample01_human_pbmcs_unstimulated_component_RCVCMP0000120_edgelist.csv": ('PBMC 3', None)
         # }
 
-        # # Weinstein different thresholds
-        title_experimental = "DNA_Mic"
-        edge_list_titles_dict = {"weinstein_data_corrected_february.csv": ('DNA_M', np.arange(1, 7))}
+        # # # Weinstein different thresholds
+        # title_experimental = "DNA_Mic"
+        # edge_list_titles_dict = {"weinstein_data_corrected_february.csv": ('DNA_M', np.arange(1, 7))}
+        # title = title_experimental
+        # args_list = generate_experimental_graphs(edge_list_titles_dict=edge_list_titles_dict)
+
+
+        # # Different proximity modes
+        title_experimental = "simulation_various_prox_modes"
+        edge_list_titles_dict = {
+            "edge_list_N=1000_dim=2_distance_decay_k=200_q=0.01.csv": ('Decay 1', None),
+            "edge_list_N=1000_dim=2_distance_decay_k=200_q=0.04.csv": ('Decay 2', None),
+            "edge_list_N=1000_dim=2_distance_decay_k=200_q=0.08.csv": ('Decay 3', None),
+            "edge_list_N=1000_dim=2_knn_bipartite_k=10.csv": ('Bip 2D', None),
+            "edge_list_N=1000_dim=2_knn_k=10.csv": ('Uni 2D', None),
+            "edge_list_N=1000_dim=3_knn_bipartite_k=10.csv": ('Bip 3D', None),
+            "edge_list_N=1000_dim=3_knn_k=10.csv": ('Uni 3D', None)
+        }
         title = title_experimental
         args_list = generate_experimental_graphs(edge_list_titles_dict=edge_list_titles_dict)
+
+
+
+
     else:
         raise ValueError("what_to_run must be 'simulation' or 'experimental'")
 

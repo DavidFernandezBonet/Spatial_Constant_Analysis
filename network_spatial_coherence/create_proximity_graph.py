@@ -559,18 +559,22 @@ def compute_proximity_graph(args, positions):
     elif base_proximity_mode == "distance_decay":
 
         # TODO: uncomment this if you don't want extra plots with different quantile scales
-        ### example plotting effects
-        start = 0.05
-        stop = 0.30
-        step = 0.05
+        # ### example plotting effects
+        # start = 0.05
+        # stop = 0.30
+        # step = 0.05
+        start = 0.005
+        stop = 0.08
+        step = 0.005
+        # num = int((stop - start) / step + 1)
+        # distance_decay_quantiles_list = np.linspace(start, stop, num)
+        # quantile_scales = distance_decay_quantiles_list
+        # # quantile_scales = [0.05, 0.15, 0.25, 0.35, 0.75, 0.95]
+        # decay_modes = ['power_law', 'decay_exp']
+        # # decay_modes = ['decay_exp']
+        # plot_decay_effects(args, positions, quantile_scales, decay_modes)
 
-        num = int((stop - start) / step + 1)
-        distance_decay_quantiles_list = np.linspace(start, stop, num)
-        quantile_scales = distance_decay_quantiles_list
-        # quantile_scales = [0.05, 0.15, 0.25, 0.35, 0.75, 0.95]
-        decay_modes = ['power_law', 'decay_exp']
-        # decay_modes = ['decay_exp']
-        plot_decay_effects(args, positions, quantile_scales, decay_modes)
+
         quantile_scale = args.distance_decay_quantile
         distances, indices = compute_proximity_decay_graph(positions, quantile_scale=quantile_scale)
     else:

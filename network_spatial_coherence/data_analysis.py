@@ -628,7 +628,9 @@ def run_simulation_subgraph_sampling_by_bfs_depth(args, graph, shortest_path_mat
         csv_filename = f"spatial_constant_subgraph_sampling_{args.args_title}.csv"
         results_df.to_csv(f"{args.directory_map['plots_spatial_constant_subgraph_sampling']}/{csv_filename}", index=False)
         # plot_sample_spatial_constant(args, results_df)  # This is an old barplot
-
+        print(results)
+        print("flat results", flat_results)
+        print("results_df", results_df)
         processed_spatial_constant = process_spatial_constant_false_edge_df(combined_df=[results_df],
                                                                             false_edge_list=[1], use_depth=True)
         if return_simple_output:
@@ -920,6 +922,8 @@ def process_spatial_constant_false_edge_df(combined_df, false_edge_list, use_dep
         s_constant = 'S_general'
 
     for dataframe, false_edge_count in zip(combined_df, false_edge_list):
+        print(dataframe.columns)
+        print(dataframe.head())
         unique_sizes = dataframe[size_magnitude].unique()
         means = []
         std_devs = []

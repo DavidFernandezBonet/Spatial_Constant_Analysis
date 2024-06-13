@@ -614,48 +614,50 @@ def run_pipeline_for_several_parameters(parameter_ranges):
 
 if __name__ == "__main__":
 
-    multiple_or_single_run = "single"  # single, multiple
+    multiple_or_single_run = "multiple"  # single, multiple
 
 
     if multiple_or_single_run == "multiple":
         ### Multiple runs
 
-
-        edge_lists_005 = [
-        "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.05.png_197_subgraph_5.csv",
-        "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.05.png_203_subgraph_4.csv",
-        "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.05.png_381_subgraph_3.csv",
-        "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.05.png_634_subgraph_2.csv",
-        "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.05.png_1112_subgraph_1.csv"
-        ]
-
-        edge_lists_02 = [
-        "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.2.png_423_subgraph_5.csv",
-        "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.2.png_1157_subgraph_4.csv",
-        "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.2.png_2152_subgraph_3.csv",
-        "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.2.png_2563_subgraph_2.csv",
-        "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.2.png_24803_subgraph_1.csv"
-        ]
-
-        edge_lists_01 = [
-        "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.1.png_746_subgraph_5.csv",
-        "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.1.png_918_subgraph_4.csv",
-        "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.1.png_1105_subgraph_3.csv",
-        "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.1.png_1149_subgraph_2.csv",
-        "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.1.png_1151_subgraph_1.csv"
-        ]
-
+        ## Filtered weinstein data by quantile rec distance
+        # edge_lists_005 = [
+        # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.05.png_197_subgraph_5.csv",
+        # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.05.png_203_subgraph_4.csv",
+        # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.05.png_381_subgraph_3.csv",
+        # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.05.png_634_subgraph_2.csv",
+        # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.05.png_1112_subgraph_1.csv"
+        # ]
+        #
+        # edge_lists_02 = [
+        # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.2.png_423_subgraph_5.csv",
+        # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.2.png_1157_subgraph_4.csv",
+        # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.2.png_2152_subgraph_3.csv",
+        # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.2.png_2563_subgraph_2.csv",
+        # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.2.png_24803_subgraph_1.csv"
+        # ]
+        #
+        # edge_lists_01 = [
+        # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.1.png_746_subgraph_5.csv",
+        # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.1.png_918_subgraph_4.csv",
+        # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.1.png_1105_subgraph_3.csv",
+        # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.1.png_1149_subgraph_2.csv",
+        # "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.1.png_1151_subgraph_1.csv"
+        # ]
+        #
+        # # edge_lists_015 = [
+        # #     "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_1156_subgraph_5.csv",
+        # #     "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_1880_subgraph_4.csv",
+        # #     "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_2211_subgraph_3.csv",
+        # #     "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_3796_subgraph_2.csv",
+        # #     "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_12893_subgraph_1.csv"
+        # # ]
+        #
         # edge_lists_015 = [
-        #     "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_1156_subgraph_5.csv",
-        #     "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_1880_subgraph_4.csv",
-        #     "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_2211_subgraph_3.csv",
-        #     "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_3796_subgraph_2.csv",
-        #     "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_12893_subgraph_1.csv"
+        #     "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_3796_subgraph_2.csv"
         # ]
 
-        edge_lists_015 = [
-            "weinstein_data_corrected_february_original_image_subgraphs_quantile=0.15.png_3796_subgraph_2.csv"
-        ]
+        ## End of filtered weinstein data by quantile rec distance
 
         #### Sparsity and false edge iterations
         # parameter_ranges = {
@@ -692,6 +694,26 @@ if __name__ == "__main__":
         # run_pipeline_for_several_parameters(parameter_ranges=parameter_ranges)
 
 
+        ### Different proximity modes and decays, to generate edge lists
+        proximity_mode_list = ["knn", "knn_bipartite",]
+        intended_degree_list = [10]
+        dimension_list = [2, 3]
+        parameter_ranges = {"proximity_mode": proximity_mode_list, "intended_av_degree": intended_degree_list, "dim": dimension_list}
+        run_pipeline_for_several_parameters(parameter_ranges=parameter_ranges)
+        ## small stop
+        start = 0.005
+        stop = 0.08
+        step = 0.005
+        num = int((stop - start) / step + 1)
+        distance_decay_quantiles_list = np.linspace(start, stop, num)
+        proximity_mode_list = ["distance_decay"]
+        intended_degree_list = [200]
+        parameter_ranges = {"distance_decay_quantile": distance_decay_quantiles_list, "proximity_mode": proximity_mode_list,
+                            "intended_av_degree": intended_degree_list,}
+        run_pipeline_for_several_parameters(parameter_ranges=parameter_ranges)
+
+        ### End of different proximity modes and decays
+
         # #### Pixelgen iterations   (uncomment these first 3, and then one of the types - Raji, Uropod, PBMC)
         # arguito = GraphArgs()
         # mpx_directory = arguito.directory_map['pixelgen_data']
@@ -718,16 +740,16 @@ if __name__ == "__main__":
         #                     "edge_list_title": mpx_edgelists}
         # run_pipeline_for_several_parameters(parameter_ranges=parameter_ranges)
 
-        ### Simon Slidetag with different beads
-        arguito = GraphArgs()
-        slidetag_directory = arguito.directory_map['slidetag_data']
-        slidetag_dataset = 'edge_list_nbead_9_filtering'       # 'Sample03_Raji_control_edge_t=8000', 'Sample03_Raji_control_edge_t=2000-8000'
-        mpx_dataset_dir = os.path.join(slidetag_directory, slidetag_dataset)
-        dir_path = Path(mpx_dataset_dir)
-        slidetag_edgelists = [entry.name for entry in dir_path.iterdir() if entry.is_file()]
-        parameter_ranges = {"proximity_mode": ['experimental'],
-                            "edge_list_title": slidetag_edgelists}
-        run_pipeline_for_several_parameters(parameter_ranges=parameter_ranges)
+        # ### Simon Slidetag with different beads  # TODO: this is the dataset for boxplot slidetags paper
+        # arguito = GraphArgs()
+        # slidetag_directory = arguito.directory_map['slidetag_data']
+        # slidetag_dataset = 'edge_list_nbead_9_filtering'
+        # mpx_dataset_dir = os.path.join(slidetag_directory, slidetag_dataset)
+        # dir_path = Path(mpx_dataset_dir)
+        # slidetag_edgelists = [entry.name for entry in dir_path.iterdir() if entry.is_file()]
+        # parameter_ranges = {"proximity_mode": ['experimental'],
+        #                     "edge_list_title": slidetag_edgelists}
+        # run_pipeline_for_several_parameters(parameter_ranges=parameter_ranges)
 
 
         # ### Run chain of known edge lists:

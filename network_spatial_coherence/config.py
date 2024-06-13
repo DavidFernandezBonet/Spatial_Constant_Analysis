@@ -1,6 +1,6 @@
 # Base settings common to all scenarios
 base = {
-    "proximity_mode": "experimental",  # Options 1) Simulation: knn, epsilon-ball, lattice, delaunay_corrected, distance_decay... 2) experimental
+    "proximity_mode": "knn",  # Options 1) Simulation: knn, epsilon-ball, lattice, delaunay_corrected, distance_decay... 2) experimental
     "dim": 2,
     "false_edges_count": 0,
     "true_edges_deletion_ratio": 0,
@@ -11,19 +11,19 @@ base = {
 
     "large_graph_subsampling": False,   # If the graph is large, subsample it to save time and memory. Cap at 3000 nodes  #TODO: implement this
     "max_subgraph_size": 4000,
-    "reconstruct": True,
+    "reconstruct": False,
     "reconstruction_mode": "STRND",  # STRND, ggvec, landmark_isomap, PyMDE, MDS
 
-    "spatial_coherence_validation": {"spatial_constant": True, "network_dimension": True, "gram_matrix": True},
+    "spatial_coherence_validation": {"spatial_constant": False, "network_dimension": False, "gram_matrix": False},
     "community_detection": False,
     "handle_all_subgraphs": False,
     'plot_original_image': True,
     'plot_reconstructed_image': True,
 
     # Make sure to tune the parameters for weighted graph (set everything to True, weight threshold nonzero maybe)
-    "weighted": True,
+    "weighted": False,
     "weight_threshold": 0,
-    "weight_to_distance": True,
+    "weight_to_distance": False,
     "weight_to_distance_fun": "exp",  #TODO: implement this (it is done for creation but not for regular)
     "verbose": True,
 }
